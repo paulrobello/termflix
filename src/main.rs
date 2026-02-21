@@ -216,14 +216,21 @@ fn run_loop(
 
         // Rebuild canvas if mode changed or terminal resized
         if rebuild_canvas && cols >= 10 && rows >= 5 {
+            // Re-read size to get the settled value
+            let (settled_cols, settled_rows) = terminal::size()?;
+            if settled_cols >= 10 && settled_rows >= 5 {
+                cols = settled_cols;
+                rows = settled_rows;
+            }
             let display_rows = if hide_status { rows as usize } else { (rows as usize).saturating_sub(1) };
             canvas = Canvas::new(cols as usize, display_rows, render_mode, color_mode);
             anim = animations::create(
                 animations::ANIMATION_NAMES[anim_index],
                 canvas.width, canvas.height, scale,
             );
-            // Clear screen to avoid artifacts from mode switch
-            execute!(stdout, terminal::Clear(terminal::ClearType::All))?;
+            // Reset terminal state completely
+            write!(stdout, "\x1b[2J\x1b[H")?;
+            stdout.flush()?;
             rebuild_canvas = false;
         }
 
@@ -256,8 +263,19 @@ fn run_loop(
             rec.capture(&frame);
         }
 
+        // Verify terminal size hasn't changed before writing
+        // If it changed, skip this frame to avoid writing wrong-sized data
+        let (check_cols, check_rows) = terminal::size()?;
+        if check_cols != cols || check_rows != rows {
+            cols = check_cols;
+            rows = check_rows;
+            rebuild_canvas = true;
+            // Sleep briefly to let terminal settle
+            std::thread::sleep(Duration::from_millis(50));
+            continue;
+        }
+
         // Build entire frame into buffer before flushing
-        // Move cursor to top
         stdout.write_all(b"\x1b[H")?;
         stdout.write_all(frame.as_bytes())?;
 
@@ -275,7 +293,6 @@ fn run_loop(
                 anim.name(), render_mode, color_mode, actual_fps, rec_indicator,
             );
             let padded = format!("{:<width$}", status, width = cols as usize);
-            // Move to last row and write status
             write!(stdout, "\x1b[{};1H\x1b[7m{}\x1b[0m", rows, padded)?;
         }
 
