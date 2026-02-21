@@ -11,7 +11,7 @@ use crossterm::{
     execute, terminal,
 };
 use render::{Canvas, ColorMode, RenderMode};
-use std::io::{self, Write};
+use std::io;
 use std::time::{Duration, Instant};
 
 #[derive(Parser)]
@@ -382,24 +382,38 @@ fn run_loop(cli: &Cli, initial_anim: &str, frame_dur: Duration) -> io::Result<()
         // End synchronized update
         frame_buf.extend_from_slice(b"\x1b[?2026l");
 
-        // Write frame — track duration to detect output backlog
-        let write_start = Instant::now();
-        let mut stdout = io::stdout().lock();
-        stdout.write_all(&frame_buf)?;
-        stdout.flush()?;
-        drop(stdout);
-
-        // If write took much longer than frame budget, output is backing up
-        // (e.g. tmux buffering while iTerm2 is in background).
-        // Discard pending output to prevent massive backlog that causes
-        // minutes-long freezes when the terminal comes back to foreground.
-        let write_dur = write_start.elapsed();
-        if write_dur > frame_dur * 3 {
-            #[cfg(unix)]
-            {
-                use std::os::unix::io::AsRawFd;
-                unsafe {
-                    libc::tcflush(io::stdout().as_raw_fd(), libc::TCOFLUSH);
+        // Write frame in chunks — check for quit between chunks so 'q' is responsive
+        // even when tmux's buffer is full and writes block.
+        {
+            use std::os::unix::io::AsRawFd;
+            let fd = io::stdout().as_raw_fd();
+            let mut written = 0;
+            let buf = &frame_buf;
+            while written < buf.len() {
+                // Check for quit keypress between chunks
+                if event::poll(Duration::ZERO)?
+                    && let Event::Key(KeyEvent { code, .. }) = event::read()?
+                    && matches!(code, KeyCode::Char('q') | KeyCode::Esc)
+                {
+                    return Ok(());
+                }
+                // Write a chunk — may block briefly but not for the whole frame
+                let chunk_end = (written + 16384).min(buf.len());
+                let n = unsafe {
+                    libc::write(
+                        fd,
+                        buf[written..chunk_end].as_ptr() as *const libc::c_void,
+                        chunk_end - written,
+                    )
+                };
+                if n > 0 {
+                    written += n as usize;
+                } else if n < 0 {
+                    let err = io::Error::last_os_error();
+                    if err.kind() == io::ErrorKind::Interrupted {
+                        continue;
+                    }
+                    return Err(err);
                 }
             }
         }
