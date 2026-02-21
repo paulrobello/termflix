@@ -2,107 +2,81 @@ use crate::render::Canvas;
 use super::Animation;
 use rand::RngExt;
 
-struct TextLine {
+struct LogLine {
     text: String,
     color: (u8, u8, u8),
     age: f64,
-    kind: LineKind,
 }
 
-enum LineKind {
-    Normal,
-    Banner,
-    Warning,
-    Progress { target: f64, current: f64 },
+struct ProgressBar {
+    label: String,
+    value: f64,
+    target: f64,
+    speed: f64,
+    color: (u8, u8, u8),
 }
 
-/// Fake hacker terminal with scrolling commands and output
+struct NetworkNode {
+    x: f64,
+    y: f64,
+    label: String,
+    active: bool,
+    pulse: f64,
+}
+
+/// Fake movie-style hacker HUD with multiple static panels
 pub struct Hackerman {
-    lines: Vec<TextLine>,
-    next_timer: f64,
     width: usize,
     height: usize,
+    // Scrolling log (bottom-left panel)
+    log_lines: Vec<LogLine>,
+    log_timer: f64,
+    // Progress bars (bottom-right panel)
+    bars: Vec<ProgressBar>,
+    bar_reset_timer: f64,
+    // Network map nodes (top-right panel)
+    nodes: Vec<NetworkNode>,
+    node_timer: f64,
+    active_connection: Option<(usize, usize)>,
+    conn_timer: f64,
+    // Top-left stats
+    stats_flicker: f64,
+    packets_count: u64,
+    bytes_count: u64,
+    threats_count: u32,
+    uptime_secs: f64,
 }
 
-const COMMANDS: &[&str] = &[
-    "$ ssh root@{} -p 22",
-    "$ nmap -sS -T4 {}/24",
-    "$ curl -X POST https://api.{}/v2/auth",
-    "$ hydra -l admin -P rockyou.txt {}",
-    "$ sqlmap -u \"http://{}/login?id=1\" --dump",
-    "$ john --wordlist=passwd.txt shadow.hash",
-    "$ tcpdump -i eth0 -n port 443",
-    "$ aircrack-ng -w dict.txt capture.cap",
-    "$ msfconsole -q -x \"use exploit/multi/handler\"",
-    "$ nc -lvnp 4444",
-    "$ python3 exploit.py --target {}",
-    "$ cat /etc/shadow | head -20",
-    "$ iptables -A INPUT -s {} -j DROP",
-    "$ openssl enc -aes-256-cbc -in secrets.db -out encrypted.bin",
-    "$ nikto -h https://{}:8443",
-    "$ gobuster dir -u http://{} -w common.txt -t 50",
-    "$ hashcat -m 1000 ntlm.hash rockyou.txt --force",
-    "$ wget http://{}:8080/shell.php -O /tmp/s.php",
-    "$ chmod +x payload && ./payload &",
-    "$ find / -perm -4000 -type f 2>/dev/null",
+const LOG_MSGS: &[&str] = &[
+    "[+] Session opened ({})",
+    "[*] Scanning port {}...",
+    "PORT {}/tcp open",
+    "[+] Credentials: admin:{}",
+    "[!] Firewall rule bypassed",
+    "$ cat /etc/shadow",
+    "root:$6$rX9:18291:0:99999:::",
+    "[*] Sending payload ({}b)",
+    "[+] Shell spawned on {}",
+    ">>> Pivoting to {}",
+    "[!] IDS alert suppressed",
+    "$ chmod +x exploit",
+    "[*] Extracting database...",
+    "[+] {} rows dumped",
+    "DNS: {} → 93.184.216.34",
+    "[+] Tunnel established",
+    "$ ssh -D 9050 root@{}",
+    "[*] ARP spoofing gateway",
+    "[+] MITM active on {}",
+    "TLS intercepted (RSA-2048)",
+    "[!] CVE-2024-21762 found",
+    "[+] Exploit successful!",
+    "uid=0(root) gid=0(root)",
+    "$ wget http://{}/shell.php",
+    "[*] Migrating to PID 1284",
 ];
 
-const OUTPUTS: &[&str] = &[
-    "Connection established.",
-    "PORT     STATE SERVICE",
-    "22/tcp   open  ssh        OpenSSH 8.9",
-    "80/tcp   open  http       Apache 2.4.52",
-    "443/tcp  open  https",
-    "3306/tcp open  mysql      MySQL 8.0.32",
-    "8080/tcp open  http-proxy",
-    "Discovered open port 445/tcp on {}",
-    "Host is up (0.023s latency). 997 ports filtered.",
-    "[+] Valid credentials found: admin:p@ssw0rd123",
-    "[+] Session 1 opened ({} -> {}:52431)",
-    "[*] Sending stage (175174 bytes) to {}",
-    "root:$6$rAnD0m$xYz:18291:0:99999:7:::",
-    "www-data:$6$aBcDeF$123:18452:0:99999:7:::",
-    "[!] Firewall rule added",
-    "sqlmap identified injection point(s):",
-    "  Parameter: id (GET)  Type: UNION query",
-    "  Database: users  Table: credentials  [47 entries]",
-    "[+] Cracked: admin:sunshine2024",
-    "SHA256: 9f86d08188...4f1b2b0b822cd15d6c15b0f00a08",
-    "  4,218,943 bytes transferred",
-    "[!] VULNERABLE -- CVE-2024-21762",
-    "[*] Exploit completed, but no session created.",
-    "[*] Exploit completed, session opened!",
-    "Packets captured: {} | Dropped: 0",
-    "DNS: {} -> 93.184.216.34",
-    "TLS 1.3 handshake complete",
-    "/var/log/auth.log: 247 failed login attempts from {}",
-    "uid=0(root) gid=0(root) groups=0(root)",
-    "[+] Reverse shell connected from {}",
-    "Exfiltrating... {} rows from credentials table",
-    "drwxr-xr-x  root root  /usr/bin/sudo",
-    "-rwsr-xr-x  root root  /usr/bin/passwd",
-    "[*] Meterpreter session 2 opened ({} -> {})",
-    "  -> Migrating to PID 1284 (svchost.exe)...",
-    "  -> Migration successful!",
-    "[+] Dumping SAM hashes...",
-    "  Administrator:500:aad3b435...::::",
-    "[*] Pivoting through {} to reach 10.10.0.0/16",
-    "PING {} - 64 bytes: icmp_seq=1 ttl=64 time=0.4ms",
-];
-
-const BANNERS: &[&str] = &[
-    ">>> ACCESS GRANTED <<<",
-    "*** FIREWALL BYPASSED ***",
-    "--- ROOT ACCESS OBTAINED ---",
-    "=== ENCRYPTED CHANNEL OPEN ===",
-    ">>> PAYLOAD DELIVERED <<<",
-    "+++ PRIVILEGE ESCALATION SUCCESS +++",
-];
-
-const WARNINGS: &[&str] = &[
-    "!!! INTRUSION DETECTED !!!",
-    "!!! ALERT: IDS TRIGGERED !!!",
-    "!!! CONNECTION RESET BY PEER !!!",
+const BAR_LABELS: &[&str] = &[
+    "DECRYPT", "CRACK", "UPLOAD", "EXFIL", "SCAN", "INJECT", "COMPILE", "BREACH",
 ];
 
 fn rand_ip(rng: &mut impl rand::RngExt) -> String {
@@ -111,72 +85,55 @@ fn rand_ip(rng: &mut impl rand::RngExt) -> String {
         rng.random_range(0u8..255), rng.random_range(1u8..254))
 }
 
+fn rand_word(rng: &mut impl rand::RngExt) -> String {
+    let words = ["alpha", "omega", "delta", "ghost", "nexus", "cipher", "shadow", "void", "zero", "root"];
+    words[rng.random_range(0..words.len())].to_string()
+}
+
 impl Hackerman {
     pub fn new(width: usize, height: usize, _scale: f64) -> Self {
-        Hackerman {
-            lines: Vec::new(),
-            next_timer: 0.0,
-            width,
-            height,
-        }
-    }
-
-    fn gen_line(&self, rng: &mut impl rand::RngExt) -> TextLine {
-        let r = rng.random_range(0.0f64..1.0);
-        let ip1 = rand_ip(rng);
-        let ip2 = rand_ip(rng);
-
-        if r < 0.18 {
-            // Command
-            let tmpl = COMMANDS[rng.random_range(0..COMMANDS.len())];
-            let text = tmpl.replace("{}", &ip1);
-            TextLine { text, color: (0, 255, 0), age: 0.0, kind: LineKind::Normal }
-        } else if r < 0.22 {
-            // Banner
-            let text = BANNERS[rng.random_range(0..BANNERS.len())].to_string();
-            TextLine { text, color: (50, 255, 50), age: 0.0, kind: LineKind::Banner }
-        } else if r < 0.25 {
-            // Warning
-            let text = WARNINGS[rng.random_range(0..WARNINGS.len())].to_string();
-            TextLine { text, color: (255, 50, 50), age: 0.0, kind: LineKind::Warning }
-        } else if r < 0.30 {
-            // Progress
-            let labels = ["Uploading payload", "Cracking hash", "Downloading DB",
-                         "Decrypting", "Scanning ports", "Brute forcing"];
-            let label = labels[rng.random_range(0..labels.len())];
-            TextLine {
-                text: label.to_string(),
-                color: (0, 200, 255), age: 0.0,
-                kind: LineKind::Progress { target: rng.random_range(0.6..1.0), current: 0.0 },
+        let mut rng = rand::rng();
+        let node_names = ["GATEWAY", "FIREWALL", "DB-01", "APP-SRV", "DNS", "PROXY", "TARGET", "C2"];
+        let nodes: Vec<NetworkNode> = node_names.iter().enumerate().map(|(i, name)| {
+            NetworkNode {
+                x: rng.random_range(0.1..0.9),
+                y: rng.random_range(0.1..0.9),
+                label: name.to_string(),
+                active: i == 0,
+                pulse: rng.random_range(0.0..std::f64::consts::TAU),
             }
-        } else if r < 0.33 {
-            // Blank
-            TextLine { text: String::new(), color: (0, 0, 0), age: 0.0, kind: LineKind::Normal }
-        } else {
-            // Output
-            let tmpl = OUTPUTS[rng.random_range(0..OUTPUTS.len())];
-            let num = rng.random_range(100u32..99999);
-            let text = tmpl.replace("{}", &if tmpl.matches("{}").count() > 1 {
-                ip1.clone()
-            } else if tmpl.contains("rows") || tmpl.contains("captured") {
-                num.to_string()
-            } else {
-                ip1.clone()
-            });
-            // Second pass for templates with multiple {}
-            let text = if text.contains("{}") { text.replacen("{}", &ip2, 1) } else { text };
+        }).collect();
 
-            let color = if text.contains("[+]") || text.contains("uid=0") {
-                (100, 255, 100)
-            } else if text.contains("[!]") || text.contains("VULNERABLE") {
-                (255, 200, 50)
-            } else if text.contains("[*]") || text.contains("->") {
-                (100, 180, 255)
-            } else {
-                let g = rng.random_range(120u8..180);
-                (g / 2, g, g / 3)
-            };
-            TextLine { text, color, age: 0.0, kind: LineKind::Normal }
+        let bars = (0..4).map(|_| {
+            let label = BAR_LABELS[rng.random_range(0..BAR_LABELS.len())];
+            ProgressBar {
+                label: label.to_string(),
+                value: 0.0,
+                target: rng.random_range(0.7..1.0),
+                speed: rng.random_range(0.05..0.25),
+                color: match rng.random_range(0u8..3) {
+                    0 => (0, 220, 180),
+                    1 => (0, 180, 255),
+                    _ => (0, 255, 100),
+                },
+            }
+        }).collect();
+
+        Hackerman {
+            width, height,
+            log_lines: Vec::new(),
+            log_timer: 0.0,
+            bars,
+            bar_reset_timer: 0.0,
+            nodes,
+            node_timer: 0.0,
+            active_connection: Some((0, 1)),
+            conn_timer: 0.0,
+            stats_flicker: 0.0,
+            packets_count: 48291,
+            bytes_count: 1_284_019,
+            threats_count: 3,
+            uptime_secs: 3847.0,
         }
     }
 }
@@ -192,141 +149,326 @@ impl Animation for Hackerman {
         let mut rng = rand::rng();
         self.width = canvas.width;
         self.height = canvas.height;
+        self.uptime_secs += dt;
 
-        // Update existing progress bars
-        let mut any_progress = false;
-        for line in &mut self.lines {
-            if let LineKind::Progress { target, ref mut current } = line.kind {
-                if *current < target {
-                    *current += dt * rng.random_range(0.2..0.8);
-                    if *current > target { *current = target; }
-                    any_progress = true;
-                }
-            }
-            line.age += dt;
-        }
-
-        // Add new lines
-        self.next_timer -= dt;
-        if self.next_timer <= 0.0 && !any_progress {
-            // Vary speed — fast bursts with pauses
-            self.next_timer = if rng.random_range(0.0f64..1.0) < 0.1 {
-                rng.random_range(0.3..0.8)
-            } else {
-                rng.random_range(0.02..0.10)
-            };
-
-            let line = self.gen_line(&mut rng);
-            self.lines.push(line);
-
-            // Trim old lines
-            let max = self.height + 20;
-            if self.lines.len() > max {
-                self.lines.drain(0..(self.lines.len() - max));
-            }
-        }
+        if self.width < 40 || self.height < 15 { return; }
 
         canvas.clear();
 
-        // Render from bottom — most recent lines at bottom
-        let visible = self.height;
-        let total = self.lines.len();
-        let start = total.saturating_sub(visible);
+        // Layout: split into quadrants
+        let mid_x = self.width / 2;
+        let mid_y = self.height / 2;
 
-        for (i, line) in self.lines[start..].iter().enumerate() {
-            if i >= canvas.height { break; }
+        // ── Draw borders ──
+        let border_color: (u8, u8, u8) = (0, 100, 60);
+        // Horizontal divider
+        for x in 0..self.width {
+            canvas.set_char(x, mid_y, '─', border_color.0, border_color.1, border_color.2);
+            canvas.set_char(x, 0, '─', border_color.0, border_color.1, border_color.2);
+            if self.height > 1 {
+                canvas.set_char(x, self.height - 1, '─', border_color.0, border_color.1, border_color.2);
+            }
+        }
+        // Vertical divider
+        for y in 0..self.height {
+            canvas.set_char(mid_x, y, '│', border_color.0, border_color.1, border_color.2);
+            canvas.set_char(0, y, '│', border_color.0, border_color.1, border_color.2);
+            if self.width > 1 {
+                canvas.set_char(self.width - 1, y, '│', border_color.0, border_color.1, border_color.2);
+            }
+        }
+        // Corners and intersections
+        canvas.set_char(0, 0, '┌', border_color.0, border_color.1, border_color.2);
+        canvas.set_char(self.width - 1, 0, '┐', border_color.0, border_color.1, border_color.2);
+        canvas.set_char(0, self.height - 1, '└', border_color.0, border_color.1, border_color.2);
+        canvas.set_char(self.width - 1, self.height - 1, '┘', border_color.0, border_color.1, border_color.2);
+        canvas.set_char(mid_x, 0, '┬', border_color.0, border_color.1, border_color.2);
+        canvas.set_char(mid_x, self.height - 1, '┴', border_color.0, border_color.1, border_color.2);
+        canvas.set_char(0, mid_y, '├', border_color.0, border_color.1, border_color.2);
+        canvas.set_char(self.width - 1, mid_y, '┤', border_color.0, border_color.1, border_color.2);
+        canvas.set_char(mid_x, mid_y, '┼', border_color.0, border_color.1, border_color.2);
 
-            let (cr, cg, cb) = line.color;
+        // ── Panel titles ──
+        draw_text(canvas, 2, 0, "[ SYSTEM STATUS ]", (0, 200, 100));
+        draw_text(canvas, mid_x + 2, 0, "[ NETWORK MAP ]", (0, 200, 100));
+        draw_text(canvas, 2, mid_y, "[ ACTIVITY LOG ]", (0, 200, 100));
+        draw_text(canvas, mid_x + 2, mid_y, "[ OPERATIONS ]", (0, 200, 100));
 
-            // Fade older lines
-            let age_fade = (1.0 - (line.age * 0.1).min(0.5)).max(0.5);
+        // ══════════════════════════════════════
+        // TOP-LEFT: System Status
+        // ══════════════════════════════════════
+        self.stats_flicker += dt;
+        self.packets_count += rng.random_range(10..200) as u64;
+        self.bytes_count += rng.random_range(500..50000) as u64;
+        if rng.random_range(0.0..1.0) < 0.005 { self.threats_count += 1; }
 
-            match &line.kind {
-                LineKind::Progress { target: _, current } => {
-                    // "[Label] [████████░░░░░░░░] 73%"
-                    let label = format!("[{}] [", line.text);
-                    let pct_str = format!("] {:.0}%", current * 100.0);
-                    let bar_w = self.width.saturating_sub(label.len() + pct_str.len() + 1);
-                    let filled = (*current * bar_w as f64) as usize;
+        let uptime_h = (self.uptime_secs / 3600.0) as u32;
+        let uptime_m = ((self.uptime_secs % 3600.0) / 60.0) as u32;
+        let uptime_s = (self.uptime_secs % 60.0) as u32;
 
-                    // Write label
-                    for (cx, ch) in label.chars().enumerate() {
-                        if cx < canvas.width {
-                            canvas.set_char(cx, i, ch, cr, cg, cb);
-                        }
-                    }
-                    // Write bar
-                    for bx in 0..bar_w {
-                        let px = label.len() + bx;
-                        if px < canvas.width {
-                            if bx < filled {
-                                canvas.set_char(px, i, '█', 0, 230, 200);
+        let stats_x = 2;
+        let stats_y = 2;
+        let dim_green: (u8, u8, u8) = (0, 160, 80);
+        let bright_green: (u8, u8, u8) = (0, 255, 120);
+
+        draw_text(canvas, stats_x, stats_y, "UPTIME:", dim_green);
+        draw_text(canvas, stats_x + 10, stats_y, &format!("{:02}:{:02}:{:02}", uptime_h, uptime_m, uptime_s), bright_green);
+
+        draw_text(canvas, stats_x, stats_y + 2, "PACKETS:", dim_green);
+        draw_text(canvas, stats_x + 10, stats_y + 2, &format!("{}", self.packets_count), bright_green);
+
+        draw_text(canvas, stats_x, stats_y + 4, "BYTES TX:", dim_green);
+        draw_text(canvas, stats_x + 10, stats_y + 4, &format!("{}", self.bytes_count), bright_green);
+
+        draw_text(canvas, stats_x, stats_y + 6, "THREATS:", dim_green);
+        let threat_color = if self.threats_count > 5 { (255, 50, 50) } else { (255, 200, 50) };
+        draw_text(canvas, stats_x + 10, stats_y + 6, &format!("{}", self.threats_count), threat_color);
+
+        draw_text(canvas, stats_x, stats_y + 8, "STATUS:", dim_green);
+        let blink = (time * 2.0).sin() > 0.0;
+        if blink {
+            draw_text(canvas, stats_x + 10, stats_y + 8, "● ACTIVE", (0, 255, 0));
+        } else {
+            draw_text(canvas, stats_x + 10, stats_y + 8, "● ACTIVE", (0, 120, 0));
+        }
+
+        // CPU/MEM bars
+        if stats_y + 11 < mid_y {
+            let cpu = 0.3 + (time * 0.7).sin().abs() * 0.5 + rng.random_range(0.0..0.1);
+            let mem = 0.6 + (time * 0.1).sin() * 0.1;
+            draw_text(canvas, stats_x, stats_y + 10, "CPU:", dim_green);
+            draw_mini_bar(canvas, stats_x + 6, stats_y + 10, 20, cpu.min(1.0), (0, 200, 100));
+            draw_text(canvas, stats_x, stats_y + 12, "MEM:", dim_green);
+            draw_mini_bar(canvas, stats_x + 6, stats_y + 12, 20, mem.min(1.0), (0, 180, 220));
+        }
+
+        // ══════════════════════════════════════
+        // TOP-RIGHT: Network Map
+        // ══════════════════════════════════════
+        let map_x = mid_x + 2;
+        let map_y = 2;
+        let map_w = self.width.saturating_sub(mid_x + 4);
+        let map_h = mid_y.saturating_sub(3);
+
+        // Update nodes
+        self.node_timer += dt;
+        for node in &mut self.nodes {
+            node.pulse += dt * 3.0;
+        }
+
+        // Cycle active connections
+        self.conn_timer += dt;
+        if self.conn_timer > 2.0 {
+            self.conn_timer = 0.0;
+            if rng.random_range(0.0..1.0) < 0.4 {
+                let a = rng.random_range(0..self.nodes.len());
+                let mut b = rng.random_range(0..self.nodes.len());
+                while b == a { b = rng.random_range(0..self.nodes.len()); }
+                self.active_connection = Some((a, b));
+                self.nodes[b].active = true;
+            }
+            // Randomly deactivate a node
+            if rng.random_range(0.0..1.0) < 0.2 && self.nodes.len() > 2 {
+                let idx = rng.random_range(1..self.nodes.len());
+                self.nodes[idx].active = rng.random_range(0.0..1.0) < 0.5;
+            }
+        }
+
+        // Draw connections (lines between nodes)
+        if let Some((a, b)) = self.active_connection {
+            if a < self.nodes.len() && b < self.nodes.len() {
+                let ax = map_x + (self.nodes[a].x * map_w as f64) as usize;
+                let ay = map_y + (self.nodes[a].y * map_h as f64) as usize;
+                let bx = map_x + (self.nodes[b].x * map_w as f64) as usize;
+                let by = map_y + (self.nodes[b].y * map_h as f64) as usize;
+                // Simple line drawing
+                let steps = ((bx as f64 - ax as f64).abs().max((by as f64 - ay as f64).abs())) as usize;
+                if steps > 0 {
+                    let pulse_pos = ((time * 4.0) % 1.0 * steps as f64) as usize;
+                    for s in 0..steps {
+                        let px = ax as f64 + (bx as f64 - ax as f64) * s as f64 / steps as f64;
+                        let py = ay as f64 + (by as f64 - ay as f64) * s as f64 / steps as f64;
+                        let px = px as usize;
+                        let py = py as usize;
+                        if px < self.width && py < self.height {
+                            let near_pulse = (s as i32 - pulse_pos as i32).unsigned_abs() < 3;
+                            if near_pulse {
+                                canvas.set_char(px, py, '●', 0, 255, 100);
                             } else {
-                                canvas.set_char(px, i, '░', 40, 40, 40);
+                                canvas.set_char(px, py, '·', 0, 80, 50);
                             }
                         }
                     }
-                    // Write percent
-                    for (cx, ch) in pct_str.chars().enumerate() {
-                        let px = label.len() + bar_w + cx;
-                        if px < canvas.width {
-                            canvas.set_char(px, i, ch, cr, cg, cb);
-                        }
-                    }
                 }
-                LineKind::Banner => {
-                    // Center the banner
-                    let pad = self.width.saturating_sub(line.text.len()) / 2;
-                    let flash = (1.0 - (line.age * 0.4).min(0.6)).max(0.4);
-                    for (cx, ch) in line.text.chars().enumerate() {
-                        let px = pad + cx;
-                        if px < canvas.width {
-                            canvas.set_char(px, i, ch,
-                                (cr as f64 * flash) as u8,
-                                (cg as f64 * flash) as u8,
-                                (cb as f64 * flash) as u8);
-                        }
-                    }
+            }
+        }
+
+        // Draw nodes
+        for node in &self.nodes {
+            let nx = map_x + (node.x * map_w as f64) as usize;
+            let ny = map_y + (node.y * map_h as f64) as usize;
+            if nx < self.width.saturating_sub(node.label.len() + 3) && ny < mid_y.saturating_sub(1) {
+                let pulse_bright = if node.active {
+                    0.6 + (node.pulse.sin() * 0.4).abs()
+                } else { 0.3 };
+                let (r, g, b) = if node.active {
+                    ((50.0 * pulse_bright) as u8, (255.0 * pulse_bright) as u8, (100.0 * pulse_bright) as u8)
+                } else {
+                    (80, 80, 80)
+                };
+                let icon = if node.active { '◉' } else { '○' };
+                canvas.set_char(nx, ny, icon, r, g, b);
+                draw_text(canvas, nx + 2, ny, &node.label, (r, g, b));
+            }
+        }
+
+        // ══════════════════════════════════════
+        // BOTTOM-LEFT: Activity Log (scrolling)
+        // ══════════════════════════════════════
+        let log_x = 2;
+        let log_y_start = mid_y + 2;
+        let log_h = self.height.saturating_sub(mid_y + 3);
+        let log_w = mid_x.saturating_sub(3);
+
+        // Add new log lines
+        self.log_timer -= dt;
+        if self.log_timer <= 0.0 {
+            self.log_timer = rng.random_range(0.1..0.5);
+            let tmpl = LOG_MSGS[rng.random_range(0..LOG_MSGS.len())];
+            let ip = rand_ip(&mut rng);
+            let num = rng.random_range(1000u32..65535);
+            let word = rand_word(&mut rng);
+            let text = tmpl.replace("{}", &if tmpl.contains("port") || tmpl.contains("bytes") || tmpl.contains("rows") {
+                num.to_string()
+            } else if tmpl.contains("admin:{}") {
+                word
+            } else {
+                ip
+            });
+
+            let color = if text.contains("[+]") { (100, 255, 100) }
+                else if text.contains("[!]") { (255, 200, 50) }
+                else if text.contains("[*]") { (100, 180, 255) }
+                else if text.starts_with("$") { (0, 255, 0) }
+                else { (0, 180, 80) };
+
+            self.log_lines.push(LogLine { text, color, age: 0.0 });
+            if self.log_lines.len() > 200 { self.log_lines.drain(0..100); }
+        }
+
+        for line in &mut self.log_lines { line.age += dt; }
+
+        // Render log (most recent at bottom)
+        let visible = log_h.min(self.log_lines.len());
+        let start = self.log_lines.len().saturating_sub(visible);
+        for (i, line) in self.log_lines[start..].iter().enumerate() {
+            let sy = log_y_start + i;
+            if sy >= self.height.saturating_sub(1) { break; }
+            let fade = (1.0 - (line.age * 0.08).min(0.4)).max(0.6);
+            let (cr, cg, cb) = line.color;
+            for (cx, ch) in line.text.chars().enumerate() {
+                if cx >= log_w { break; }
+                canvas.set_char(log_x + cx, sy, ch,
+                    (cr as f64 * fade) as u8,
+                    (cg as f64 * fade) as u8,
+                    (cb as f64 * fade) as u8);
+            }
+        }
+
+        // ══════════════════════════════════════
+        // BOTTOM-RIGHT: Operations (progress bars + status)
+        // ══════════════════════════════════════
+        let ops_x = mid_x + 2;
+        let ops_y = mid_y + 2;
+        let ops_w = self.width.saturating_sub(mid_x + 4);
+
+        // Update progress bars
+        self.bar_reset_timer += dt;
+        for bar in &mut self.bars {
+            if bar.value < bar.target {
+                bar.value += bar.speed * dt;
+                if bar.value > bar.target { bar.value = bar.target; }
+            }
+        }
+
+        // Reset completed bars periodically
+        if self.bar_reset_timer > 5.0 {
+            self.bar_reset_timer = 0.0;
+            for bar in &mut self.bars {
+                if bar.value >= bar.target {
+                    bar.label = BAR_LABELS[rng.random_range(0..BAR_LABELS.len())].to_string();
+                    bar.value = 0.0;
+                    bar.target = rng.random_range(0.6..1.0);
+                    bar.speed = rng.random_range(0.05..0.3);
+                    bar.color = match rng.random_range(0u8..3) {
+                        0 => (0, 220, 180),
+                        1 => (0, 180, 255),
+                        _ => (0, 255, 100),
+                    };
                 }
-                LineKind::Warning => {
-                    let pad = self.width.saturating_sub(line.text.len()) / 2;
-                    let blink = if ((time * 4.0).sin() > 0.0) || line.age > 1.5 { 1.0 } else { 0.3 };
-                    for (cx, ch) in line.text.chars().enumerate() {
-                        let px = pad + cx;
-                        if px < canvas.width {
-                            canvas.set_char(px, i, ch,
-                                (cr as f64 * blink) as u8,
-                                (cg as f64 * blink) as u8,
-                                (cb as f64 * blink) as u8);
-                        }
-                    }
-                }
-                LineKind::Normal => {
-                    for (cx, ch) in line.text.chars().enumerate() {
-                        if cx < canvas.width {
-                            canvas.set_char(cx, i, ch,
-                                (cr as f64 * age_fade) as u8,
-                                (cg as f64 * age_fade) as u8,
-                                (cb as f64 * age_fade) as u8);
-                        }
+            }
+        }
+
+        // Draw progress bars
+        for (i, bar) in self.bars.iter().enumerate() {
+            let by = ops_y + i * 3;
+            if by + 1 >= self.height.saturating_sub(1) { break; }
+
+            // Label + percentage
+            let pct = format!(" {:.0}%", bar.value * 100.0);
+            let status = if bar.value >= bar.target { " ✓" } else { "" };
+            draw_text(canvas, ops_x, by, &bar.label, bar.color);
+            let status_color = if bar.value >= bar.target { (0, 255, 0) } else { bar.color };
+            draw_text(canvas, ops_x + bar.label.len(), by, &format!("{}{}", pct, status), status_color);
+
+            // Bar
+            let bar_w = ops_w.saturating_sub(2);
+            let filled = (bar.value * bar_w as f64) as usize;
+            for bx in 0..bar_w {
+                let px = ops_x + bx;
+                if px < self.width.saturating_sub(1) {
+                    if bx < filled {
+                        canvas.set_char(px, by + 1, '█', bar.color.0, bar.color.1, bar.color.2);
+                    } else {
+                        canvas.set_char(px, by + 1, '░', 30, 30, 30);
                     }
                 }
             }
         }
 
-        // Blinking cursor
+        // Blinking cursor in log panel
         let blink = (time * 3.0).sin() > 0.0;
         if blink {
-            let cy = (total.saturating_sub(start)).min(canvas.height.saturating_sub(1));
-            let cursor_x = if let Some(last) = self.lines.last() {
-                match &last.kind {
-                    LineKind::Normal | LineKind::Banner | LineKind::Warning => last.text.len() + 1,
-                    LineKind::Progress { .. } => 0,
-                }
-            } else { 0 };
-            if cursor_x < canvas.width && cy < canvas.height {
-                canvas.set_char(cursor_x, cy, '█', 0, 255, 0);
+            let cy = log_y_start + visible.min(log_h.saturating_sub(1));
+            if cy < self.height.saturating_sub(1) {
+                canvas.set_char(log_x, cy, '█', 0, 255, 0);
             }
         }
     }
+}
+
+fn draw_text(canvas: &mut Canvas, x: usize, y: usize, text: &str, color: (u8, u8, u8)) {
+    for (i, ch) in text.chars().enumerate() {
+        let px = x + i;
+        if px < canvas.width && y < canvas.height {
+            canvas.set_char(px, y, ch, color.0, color.1, color.2);
+        }
+    }
+}
+
+fn draw_mini_bar(canvas: &mut Canvas, x: usize, y: usize, width: usize, value: f64, color: (u8, u8, u8)) {
+    let filled = (value * width as f64) as usize;
+    for i in 0..width {
+        let px = x + i;
+        if px < canvas.width && y < canvas.height {
+            if i < filled {
+                canvas.set_char(px, y, '▮', color.0, color.1, color.2);
+            } else {
+                canvas.set_char(px, y, '▯', 40, 40, 40);
+            }
+        }
+    }
+    // Percentage
+    let pct = format!(" {:.0}%", value * 100.0);
+    draw_text(canvas, x + width, y, &pct, color);
 }
