@@ -399,23 +399,22 @@ fn run_loop(cli: &Cli, initial_anim: &str, frame_dur: Duration) -> io::Result<()
         // End synchronized update
         frame_buf.extend_from_slice(b"\x1b[?2026l");
 
-        // Write frame in chunks — check for quit between chunks so 'q' is responsive
-        // even when tmux's buffer is full and writes block.
+        // Write frame — on Unix, write in chunks with quit checks between each
+        // so 'q' is responsive even when tmux's buffer is full.
         let write_start = Instant::now();
+        #[cfg(unix)]
         {
             use std::os::unix::io::AsRawFd;
             let fd = io::stdout().as_raw_fd();
             let mut written = 0;
             let buf = &frame_buf;
             while written < buf.len() {
-                // Check for quit keypress between chunks
                 if event::poll(Duration::ZERO)?
                     && let Event::Key(KeyEvent { code, .. }) = event::read()?
                     && matches!(code, KeyCode::Char('q') | KeyCode::Esc)
                 {
                     return Ok(());
                 }
-                // Write a chunk — may block briefly but not for the whole frame
                 let chunk_end = (written + 16384).min(buf.len());
                 let n = unsafe {
                     libc::write(
@@ -434,6 +433,13 @@ fn run_loop(cli: &Cli, initial_anim: &str, frame_dur: Duration) -> io::Result<()
                     return Err(err);
                 }
             }
+        }
+        #[cfg(not(unix))]
+        {
+            use std::io::Write;
+            let mut stdout = io::stdout().lock();
+            stdout.write_all(&frame_buf)?;
+            stdout.flush()?;
         }
 
         // Adaptive frame pacing: adjust frame duration based on actual write throughput.
