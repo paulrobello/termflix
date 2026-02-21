@@ -65,7 +65,11 @@ impl DeltaRenderer {
         if self.force_full || self.prev.is_empty() {
             self.prev = current;
             self.force_full = false;
-            return full_frame.to_string();
+            // Prepend cursor home — renderers assume cursor starts at (1,1)
+            let mut out = String::with_capacity(full_frame.len() + 4);
+            out.push_str("\x1b[H");
+            out.push_str(full_frame);
+            return out;
         }
 
         // Count total changed cells to decide if delta is worth it
@@ -85,7 +89,10 @@ impl DeltaRenderer {
         // If most cells changed, full frame is cheaper (no cursor moves needed)
         if total_cells > 0 && total_changed * 100 / total_cells > 70 {
             self.prev = current;
-            return full_frame.to_string();
+            let mut out = String::with_capacity(full_frame.len() + 4);
+            out.push_str("\x1b[H");
+            out.push_str(full_frame);
+            return out;
         }
 
         // Build delta output — stream sequentially, skip unchanged runs
