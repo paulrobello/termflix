@@ -342,10 +342,21 @@ fn run_loop(cli: &Cli, initial_anim: &str, frame_dur: Duration) -> io::Result<()
                     canvas.height,
                     scale,
                 );
-                // Clear screen
-                let mut stdout = io::stdout().lock();
-                stdout.write_all(b"\x1b[2J\x1b[H")?;
-                stdout.flush()?;
+                // Clear screen — use non-blocking path in tmux to prevent lockup during resize
+                #[cfg(unix)]
+                if is_tmux {
+                    let _ = nonblock::try_write_all(b"\x1b[2J\x1b[H");
+                } else {
+                    let mut stdout = io::stdout().lock();
+                    stdout.write_all(b"\x1b[2J\x1b[H")?;
+                    stdout.flush()?;
+                }
+                #[cfg(not(unix))]
+                {
+                    let mut stdout = io::stdout().lock();
+                    stdout.write_all(b"\x1b[2J\x1b[H")?;
+                    stdout.flush()?;
+                }
             }
             needs_rebuild = false;
             last_frame = Instant::now();
