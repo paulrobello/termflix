@@ -154,11 +154,15 @@ const COLOR_MODES: [ColorMode; 4] = [
 
 fn run_loop(cli: &Cli, initial_anim: &str, frame_dur: Duration) -> io::Result<()> {
     let (mut cols, mut rows) = terminal::size()?;
+    let is_tmux = std::env::var("TMUX").is_ok();
 
     let explicit_render = cli.render;
     let mut color_mode = cli.color;
     let mut hide_status = cli.clean;
     let scale = cli.scale.clamp(0.5, 2.0);
+    // Adaptive frame pacing — adjusts to actual terminal throughput
+    let mut adaptive_frame_dur = frame_dur;
+    let mut write_time_ema: f64 = 0.0; // exponential moving average of write time in secs
 
     let display_rows = if hide_status {
         rows as usize
@@ -196,7 +200,7 @@ fn run_loop(cli: &Cli, initial_anim: &str, frame_dur: Duration) -> io::Result<()
     let mut resize_cooldown = Instant::now();
     loop {
         // Use event::poll as frame timer — properly yields to OS for signal handling
-        let time_to_next = frame_dur.saturating_sub(last_frame.elapsed());
+        let time_to_next = adaptive_frame_dur.saturating_sub(last_frame.elapsed());
         if event::poll(time_to_next)? {
             // Drain all pending events
             loop {
@@ -397,6 +401,7 @@ fn run_loop(cli: &Cli, initial_anim: &str, frame_dur: Duration) -> io::Result<()
 
         // Write frame in chunks — check for quit between chunks so 'q' is responsive
         // even when tmux's buffer is full and writes block.
+        let write_start = Instant::now();
         {
             use std::os::unix::io::AsRawFd;
             let fd = io::stdout().as_raw_fd();
@@ -429,6 +434,19 @@ fn run_loop(cli: &Cli, initial_anim: &str, frame_dur: Duration) -> io::Result<()
                     return Err(err);
                 }
             }
+        }
+
+        // Adaptive frame pacing: adjust frame duration based on actual write throughput.
+        // In tmux, writes block when the buffer is full, so write time reflects
+        // how fast tmux can actually process our output.
+        if is_tmux {
+            let write_secs = write_start.elapsed().as_secs_f64();
+            write_time_ema = write_time_ema * 0.8 + write_secs * 0.2;
+            // Target: frame duration = write time + small margin for animation update
+            // This ensures we never write faster than tmux can process
+            let target =
+                Duration::from_secs_f64((write_time_ema * 1.1).max(frame_dur.as_secs_f64()));
+            adaptive_frame_dur = target.min(Duration::from_millis(200)); // cap at 5fps minimum
         }
     }
 }
