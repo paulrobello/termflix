@@ -105,14 +105,8 @@ const COLOR_MODES: [ColorMode; 4] = [
     ColorMode::Mono,
 ];
 
-/// Detect if we're running inside tmux
-fn in_tmux() -> bool {
-    std::env::var("TMUX").is_ok()
-}
-
 fn run_loop(cli: &Cli, initial_anim: &str, frame_dur: Duration) -> io::Result<()> {
     let (mut cols, mut rows) = terminal::size()?;
-    let is_tmux = in_tmux();
 
     let explicit_render = cli.render;
     let mut color_mode = cli.color;
@@ -134,9 +128,6 @@ fn run_loop(cli: &Cli, initial_anim: &str, frame_dur: Duration) -> io::Result<()
         animations::create(initial_anim, temp_canvas.width, temp_canvas.height, scale);
     let mut render_mode = explicit_render.unwrap_or_else(|| anim.preferred_render());
     let mut canvas = Canvas::new(cols as usize, display_rows, render_mode, color_mode);
-    if is_tmux {
-        canvas.color_quant = 8; // Quantize colors in tmux for better dedup
-    }
     anim = animations::create(initial_anim, canvas.width, canvas.height, scale);
 
     let mut anim_index = animations::ANIMATION_NAMES
@@ -264,9 +255,6 @@ fn run_loop(cli: &Cli, initial_anim: &str, frame_dur: Duration) -> io::Result<()
                     (rows as usize).saturating_sub(1)
                 };
                 canvas = Canvas::new(cols as usize, display_rows, render_mode, color_mode);
-                if is_tmux {
-                    canvas.color_quant = 8;
-                }
                 anim = animations::create(
                     animations::ANIMATION_NAMES[anim_index],
                     canvas.width,
