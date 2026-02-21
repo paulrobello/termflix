@@ -86,7 +86,7 @@ fn main() -> io::Result<()> {
 
     let result = run_loop(&cli, &anim_name, frame_dur);
 
-    // Discard any pending output before leaving — prevents slow drain on quit
+    // Discard any pending output in kernel PTY buffer
     #[cfg(unix)]
     {
         use std::os::unix::io::AsRawFd;
@@ -95,11 +95,22 @@ fn main() -> io::Result<()> {
         }
     }
 
-    let mut stdout = io::stdout();
-    execute!(stdout, cursor::Show, terminal::LeaveAlternateScreen)?;
+    // Restore terminal state
     terminal::disable_raw_mode()?;
+    let mut stdout = io::stdout();
+    // These writes are tiny and should get through even with backlog
+    let _ = execute!(stdout, cursor::Show, terminal::LeaveAlternateScreen);
 
-    result
+    // Force exit immediately — don't wait for tmux to drain its internal
+    // buffer of animation frames. Without this, quit can take over a minute
+    // as tmux slowly processes buffered output.
+    match &result {
+        Ok(()) => std::process::exit(0),
+        Err(_) => {
+            // Let the error propagate normally
+            result
+        }
+    }
 }
 
 const RENDER_MODES: [RenderMode; 3] = [
