@@ -71,6 +71,18 @@ A terminal animation player with 43 procedurally generated animations, multiple 
 
 ## Installation
 
+### Quick Install (Linux / macOS / WSL)
+
+```bash
+curl -sL https://raw.githubusercontent.com/paulrobello/termflix/main/install.sh | bash
+```
+
+Installs the latest release binary to `/usr/local/bin`. Custom install location:
+
+```bash
+INSTALL_DIR=~/.local/bin curl -sL https://raw.githubusercontent.com/paulrobello/termflix/main/install.sh | bash
+```
+
 ### From crates.io
 
 ```bash
@@ -84,8 +96,25 @@ Requires Rust 1.85+ (2024 edition):
 ```bash
 git clone https://github.com/paulrobello/termflix
 cd termflix
-cargo build --release
-./target/release/termflix
+make install
+```
+
+### Pre-built Binaries
+
+Download from [GitHub Releases](https://github.com/paulrobello/termflix/releases/latest):
+
+| Platform | Binary |
+|----------|--------|
+| Linux x86_64 | `termflix-linux-x86_64` |
+| Linux ARM64 | `termflix-linux-aarch64` |
+| macOS x86_64 | `termflix-macos-x86_64` |
+| macOS ARM64 (Apple Silicon) | `termflix-macos-aarch64` |
+| Windows x86_64 | `termflix-windows-x86_64.exe` |
+
+**macOS note:** After downloading manually, remove the quarantine flag:
+```bash
+xattr -cr termflix-macos-*
+chmod +x termflix-macos-*
 ```
 
 ## Usage
