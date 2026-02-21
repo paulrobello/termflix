@@ -10,7 +10,7 @@ use crossterm::{
     event::{self, Event, KeyCode, KeyEvent},
     execute, terminal,
 };
-use render::{Canvas, ColorMode, DeltaRenderer, RenderMode};
+use render::{Canvas, ColorMode, RenderMode};
 use std::io::{self, Write};
 use std::time::{Duration, Instant};
 
@@ -147,9 +147,6 @@ fn run_loop(cli: &Cli, initial_anim: &str, frame_dur: Duration) -> io::Result<()
     let mut frame_buf: Vec<u8> = Vec::with_capacity(256 * 1024);
     // Resize cooldown — skip frames after resize
     let mut resize_cooldown = Instant::now();
-    // Delta renderer — only redraws cells that changed between frames
-    let mut delta = DeltaRenderer::new();
-
     loop {
         // Use event::poll as frame timer — properly yields to OS for signal handling
         let time_to_next = frame_dur.saturating_sub(last_frame.elapsed());
@@ -264,8 +261,7 @@ fn run_loop(cli: &Cli, initial_anim: &str, frame_dur: Duration) -> io::Result<()
                     canvas.height,
                     scale,
                 );
-                // Clear screen and invalidate delta cache
-                delta.invalidate();
+                // Clear screen
                 let mut stdout = io::stdout().lock();
                 stdout.write_all(b"\x1b[2J\x1b[H")?;
                 stdout.flush()?;
@@ -308,19 +304,12 @@ fn run_loop(cli: &Cli, initial_anim: &str, frame_dur: Duration) -> io::Result<()
             rec.capture(&frame);
         }
 
-        // Apply delta rendering — only emit cells that changed since last frame
-        let display_rows = if hide_status {
-            rows as usize
-        } else {
-            (rows as usize).saturating_sub(1)
-        };
-        let delta_frame = delta.render_delta(&frame, cols as usize, display_rows);
-
         // Build frame buffer with synchronized output
         frame_buf.clear();
         // Begin synchronized update — terminal batches everything until end marker
         frame_buf.extend_from_slice(b"\x1b[?2026h");
-        frame_buf.extend_from_slice(delta_frame.as_bytes());
+        frame_buf.extend_from_slice(b"\x1b[H");
+        frame_buf.extend_from_slice(frame.as_bytes());
 
         // Status bar
         frame_count += 1;
