@@ -86,31 +86,45 @@ fn main() -> io::Result<()> {
 
     let result = run_loop(&cli, &anim_name, frame_dur);
 
-    // Discard any pending output in kernel PTY buffer
+    // Restore terminal — disable raw mode first (doesn't write to stdout)
+    let _ = terminal::disable_raw_mode();
+
+    // Flush kernel PTY buffer
     #[cfg(unix)]
     {
         use std::os::unix::io::AsRawFd;
         unsafe {
-            libc::tcflush(io::stdout().as_raw_fd(), libc::TCOFLUSH);
+            libc::tcflush(io::stdout().as_raw_fd(), libc::TCIOFLUSH);
         }
     }
 
-    // Restore terminal state
-    terminal::disable_raw_mode()?;
-    let mut stdout = io::stdout();
-    // These writes are tiny and should get through even with backlog
-    let _ = execute!(stdout, cursor::Show, terminal::LeaveAlternateScreen);
-
-    // Force exit immediately — don't wait for tmux to drain its internal
-    // buffer of animation frames. Without this, quit can take over a minute
-    // as tmux slowly processes buffered output.
-    match &result {
-        Ok(()) => std::process::exit(0),
-        Err(_) => {
-            // Let the error propagate normally
-            result
+    // Write restore sequences via raw fd write (non-blocking, bypasses Rust buffering).
+    // Then exit immediately. If tmux buffer is full, these may not get through,
+    // but the terminal will restore state when the PTY closes anyway.
+    #[cfg(unix)]
+    {
+        use std::os::unix::io::AsRawFd;
+        let fd = io::stdout().as_raw_fd();
+        // Make stdout non-blocking so these writes don't hang
+        unsafe {
+            let flags = libc::fcntl(fd, libc::F_GETFL);
+            libc::fcntl(fd, libc::F_SETFL, flags | libc::O_NONBLOCK);
+        }
+        let restore = b"\x1b[?25h\x1b[?1049l";
+        unsafe {
+            libc::write(fd, restore.as_ptr() as *const libc::c_void, restore.len());
         }
     }
+    #[cfg(not(unix))]
+    {
+        let mut stdout = io::stdout();
+        let _ = execute!(stdout, cursor::Show, terminal::LeaveAlternateScreen);
+    }
+
+    if result.is_ok() {
+        std::process::exit(0);
+    }
+    result
 }
 
 const RENDER_MODES: [RenderMode; 3] = [
