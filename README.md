@@ -5,7 +5,7 @@
 ![Arch x86-64 | ARM | AppleSilicon](https://img.shields.io/badge/arch-x86--64%20%7C%20ARM%20%7C%20AppleSilicon-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
-A terminal animation player with 43 procedurally generated animations, multiple render modes, and true color support. Low CPU impact, zero dependencies beyond your terminal.
+A terminal animation player with 43 procedurally generated animations, multiple render modes, and true color support. Low CPU impact, works great in tmux, zero dependencies beyond your terminal.
 
 [!["Buy Me A Coffee"](https://www.buymeacoffee.com/assets/img/custom_images/orange_img.png)](https://buymeacoffee.com/probello3)
 
@@ -91,7 +91,7 @@ cargo install termflix
 
 ### From Source
 
-Requires Rust 1.85+ (2024 edition):
+Requires Rust 1.85+ (edition 2024):
 
 ```bash
 git clone https://github.com/paulrobello/termflix
@@ -172,6 +172,20 @@ termflix uses a pixel-level canvas that gets rendered to terminal characters:
 Each animation implements the `Animation` trait, writing to the canvas at sub-cell resolution. The renderer converts the canvas to terminal escape sequences with cursor positioning (no newlines — eliminates flickering).
 
 A reusable `ParticleSystem` generator powers many of the particle-based animations with configurable emitters, gradients, gravity, and drag.
+
+## tmux Support
+
+termflix auto-detects tmux and adapts:
+
+- **Adaptive frame pacing** — Automatically adjusts frame rate to match tmux's throughput, preventing output backlog and input lag
+- **Responsive quit** — Runs `tmux clear-history` on exit to flush buffered output
+- **Split-safe** — No lockups when splitting panes; FPS scales with pane size
+- **Background-safe** — No output backlog when switching away from iTerm2
+
+Typical FPS in tmux (200×44, halfblock truecolor):
+- Full pane: ~10 fps (smooth)
+- Split pane: ~20 fps (less output per frame)
+- Outside tmux: 24 fps (full speed)
 
 ## Configuration
 
