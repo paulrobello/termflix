@@ -40,6 +40,9 @@ pub struct Canvas {
     /// Optional per-cell character override (ASCII mode only).
     /// When set (non-\0), this char is used instead of brightness-mapped ASCII.
     pub char_override: Vec<char>,
+    /// Color quantization step (0 = off, 4/8/16 = round RGB to nearest N).
+    /// Higher values = fewer unique colors = better dedup = less output.
+    pub color_quant: u8,
 }
 
 impl Canvas {
@@ -63,6 +66,7 @@ impl Canvas {
             char_override: vec!['\0'; size],
             render_mode,
             color_mode,
+            color_quant: 0,
         }
     }
 
@@ -163,6 +167,17 @@ impl Canvas {
     }
 
     pub fn map_color(&self, r: u8, g: u8, b: u8) -> Color {
+        // Apply color quantization if enabled (reduces unique colors for better dedup)
+        let (r, g, b) = if self.color_quant > 1 {
+            let q = self.color_quant as u16;
+            (
+                ((r as u16 + q / 2) / q * q).min(255) as u8,
+                ((g as u16 + q / 2) / q * q).min(255) as u8,
+                ((b as u16 + q / 2) / q * q).min(255) as u8,
+            )
+        } else {
+            (r, g, b)
+        };
         match self.color_mode {
             ColorMode::Mono => Color::White,
             ColorMode::TrueColor => Color::Rgb { r, g, b },

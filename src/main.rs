@@ -14,67 +14,6 @@ use render::{Canvas, ColorMode, RenderMode};
 use std::io::{self, Write};
 use std::time::{Duration, Instant};
 
-#[cfg(unix)]
-mod nonblock {
-    use std::io;
-    use std::os::unix::io::AsRawFd;
-
-    /// Set stdout to non-blocking mode. Returns the old flags for restoration.
-    pub fn set_nonblocking() -> io::Result<i32> {
-        let fd = io::stdout().as_raw_fd();
-        let flags = unsafe { libc::fcntl(fd, libc::F_GETFL) };
-        if flags < 0 {
-            return Err(io::Error::last_os_error());
-        }
-        let result = unsafe { libc::fcntl(fd, libc::F_SETFL, flags | libc::O_NONBLOCK) };
-        if result < 0 {
-            return Err(io::Error::last_os_error());
-        }
-        Ok(flags)
-    }
-
-    /// Restore stdout flags
-    pub fn restore_flags(flags: i32) {
-        let fd = io::stdout().as_raw_fd();
-        unsafe {
-            libc::fcntl(fd, libc::F_SETFL, flags);
-        }
-    }
-
-    /// Try to write all bytes, retrying on partial writes but giving up on WouldBlock.
-    /// Returns true if fully written, false if buffer was full (frame dropped).
-    pub fn try_write_all(buf: &[u8]) -> io::Result<bool> {
-        use std::io::Write;
-        let mut stdout = io::stdout().lock();
-        let mut written = 0;
-        while written < buf.len() {
-            match stdout.write(&buf[written..]) {
-                Ok(n) => written += n,
-                Err(e) if e.kind() == io::ErrorKind::WouldBlock => {
-                    if written == 0 {
-                        // Nothing written yet — clean drop
-                        return Ok(false);
-                    }
-                    // Partial write — must finish to avoid corruption.
-                    // Brief spin-wait for buffer to drain.
-                    std::thread::sleep(std::time::Duration::from_millis(1));
-                    continue;
-                }
-                Err(e) if e.kind() == io::ErrorKind::Interrupted => continue,
-                Err(e) => return Err(e),
-            }
-        }
-        match stdout.flush() {
-            Ok(()) => Ok(true),
-            Err(e) if e.kind() == io::ErrorKind::WouldBlock => {
-                // Data is written, just can't flush yet — that's fine
-                Ok(true)
-            }
-            Err(e) => Err(e),
-        }
-    }
-}
-
 #[derive(Parser)]
 #[command(name = "termflix", about = "Terminal animation player")]
 struct Cli {
@@ -145,21 +84,7 @@ fn main() -> io::Result<()> {
     let mut stdout = io::stdout();
     execute!(stdout, terminal::EnterAlternateScreen, cursor::Hide)?;
 
-    // In tmux, use non-blocking stdout to prevent lockups when buffer fills
-    #[cfg(unix)]
-    let saved_flags = if in_tmux() {
-        nonblock::set_nonblocking().ok()
-    } else {
-        None
-    };
-
     let result = run_loop(&cli, &anim_name, frame_dur);
-
-    // Restore blocking mode before cleanup (execute! needs blocking writes)
-    #[cfg(unix)]
-    if let Some(flags) = saved_flags {
-        nonblock::restore_flags(flags);
-    }
 
     let mut stdout = io::stdout();
     execute!(stdout, cursor::Show, terminal::LeaveAlternateScreen)?;
@@ -209,6 +134,9 @@ fn run_loop(cli: &Cli, initial_anim: &str, frame_dur: Duration) -> io::Result<()
         animations::create(initial_anim, temp_canvas.width, temp_canvas.height, scale);
     let mut render_mode = explicit_render.unwrap_or_else(|| anim.preferred_render());
     let mut canvas = Canvas::new(cols as usize, display_rows, render_mode, color_mode);
+    if is_tmux {
+        canvas.color_quant = 8; // Quantize colors in tmux for better dedup
+    }
     anim = animations::create(initial_anim, canvas.width, canvas.height, scale);
 
     let mut anim_index = animations::ANIMATION_NAMES
@@ -336,27 +264,19 @@ fn run_loop(cli: &Cli, initial_anim: &str, frame_dur: Duration) -> io::Result<()
                     (rows as usize).saturating_sub(1)
                 };
                 canvas = Canvas::new(cols as usize, display_rows, render_mode, color_mode);
+                if is_tmux {
+                    canvas.color_quant = 8;
+                }
                 anim = animations::create(
                     animations::ANIMATION_NAMES[anim_index],
                     canvas.width,
                     canvas.height,
                     scale,
                 );
-                // Clear screen — use non-blocking path in tmux to prevent lockup during resize
-                #[cfg(unix)]
-                if is_tmux {
-                    let _ = nonblock::try_write_all(b"\x1b[2J\x1b[H");
-                } else {
-                    let mut stdout = io::stdout().lock();
-                    stdout.write_all(b"\x1b[2J\x1b[H")?;
-                    stdout.flush()?;
-                }
-                #[cfg(not(unix))]
-                {
-                    let mut stdout = io::stdout().lock();
-                    stdout.write_all(b"\x1b[2J\x1b[H")?;
-                    stdout.flush()?;
-                }
+                // Clear screen
+                let mut stdout = io::stdout().lock();
+                stdout.write_all(b"\x1b[2J\x1b[H")?;
+                stdout.flush()?;
             }
             needs_rebuild = false;
             last_frame = Instant::now();
@@ -441,27 +361,9 @@ fn run_loop(cli: &Cli, initial_anim: &str, frame_dur: Duration) -> io::Result<()
         // End synchronized update
         frame_buf.extend_from_slice(b"\x1b[?2026l");
 
-        // Write frame — in tmux, use non-blocking to drop frames when buffer is full
-        #[cfg(unix)]
-        if is_tmux {
-            // Non-blocking: if buffer is full, silently drop this frame
-            match nonblock::try_write_all(&frame_buf) {
-                Ok(true) => {} // Written successfully
-                Ok(false) => {
-                    // Buffer full — frame dropped, terminal catches up
-                }
-                Err(e) => return Err(e),
-            }
-        } else {
-            let mut stdout = io::stdout().lock();
-            stdout.write_all(&frame_buf)?;
-            stdout.flush()?;
-        }
-        #[cfg(not(unix))]
-        {
-            let mut stdout = io::stdout().lock();
-            stdout.write_all(&frame_buf)?;
-            stdout.flush()?;
-        }
+        // Write entire frame in one syscall
+        let mut stdout = io::stdout().lock();
+        stdout.write_all(&frame_buf)?;
+        stdout.flush()?;
     }
 }
