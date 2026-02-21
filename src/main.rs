@@ -292,7 +292,9 @@ fn run_loop(
                 " {} | {:?} | {:?} | {:.0} fps{} | [←/→] anim  [r] render  [c] color  [h] hide  [q] quit ",
                 anim.name(), render_mode, color_mode, actual_fps, rec_indicator,
             );
-            let padded = format!("{:<width$}", status, width = cols as usize);
+            let w = cols as usize;
+            let truncated: String = status.chars().take(w).collect();
+            let padded = format!("{:<width$}", truncated, width = w);
             write!(stdout, "\x1b[{};1H\x1b[7m{}\x1b[0m", rows, padded)?;
         }
 
