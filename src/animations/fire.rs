@@ -1,5 +1,5 @@
-use crate::render::Canvas;
 use super::Animation;
+use crate::render::Canvas;
 use rand::RngExt;
 
 /// Classic Doom-style fire effect
@@ -18,7 +18,11 @@ impl Fire {
                 buffer[y * width + x] = 1.0;
             }
         }
-        Fire { width, height, buffer }
+        Fire {
+            width,
+            height,
+            buffer,
+        }
     }
 
     fn resize(&mut self, w: usize, h: usize) {
@@ -34,7 +38,9 @@ impl Fire {
 }
 
 impl Animation for Fire {
-    fn name(&self) -> &str { "fire" }
+    fn name(&self) -> &str {
+        "fire"
+    }
 
     fn update(&mut self, canvas: &mut Canvas, _dt: f64, _time: f64) {
         let mut rng = rand::rng();

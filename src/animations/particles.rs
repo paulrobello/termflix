@@ -1,5 +1,5 @@
-use crate::render::Canvas;
 use super::Animation;
+use crate::render::Canvas;
 use rand::RngExt;
 
 struct Particle {
@@ -52,14 +52,18 @@ impl Particles {
                 vy: angle.sin() * speed,
                 life,
                 max_life: life,
-                r, g, b,
+                r,
+                g,
+                b,
             });
         }
     }
 }
 
 impl Animation for Particles {
-    fn name(&self) -> &str { "particles" }
+    fn name(&self) -> &str {
+        "particles"
+    }
 
     fn preferred_render(&self) -> crate::render::RenderMode {
         crate::render::RenderMode::Braille
@@ -81,7 +85,7 @@ impl Animation for Particles {
             p.x += p.vx * dt;
             p.y += p.vy * dt;
             p.vy += 15.0 * dt; // gravity
-            p.vx *= 0.99;      // drag
+            p.vx *= 0.99; // drag
             p.life -= dt;
         }
 

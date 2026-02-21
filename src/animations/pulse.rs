@@ -1,5 +1,5 @@
-use crate::render::Canvas;
 use super::Animation;
+use crate::render::Canvas;
 
 /// Expanding pulse rings from center
 pub struct Pulse {
@@ -24,7 +24,9 @@ impl Pulse {
 }
 
 impl Animation for Pulse {
-    fn name(&self) -> &str { "pulse" }
+    fn name(&self) -> &str {
+        "pulse"
+    }
 
     fn update(&mut self, canvas: &mut Canvas, dt: f64, time: f64) {
         let w = canvas.width as f64;
@@ -107,5 +109,9 @@ fn hsv_to_rgb(h: f64, s: f64, v: f64) -> (u8, u8, u8) {
         4 => (x, 0.0, c),
         _ => (c, 0.0, x),
     };
-    (((r + m) * 255.0) as u8, ((g + m) * 255.0) as u8, ((b + m) * 255.0) as u8)
+    (
+        ((r + m) * 255.0) as u8,
+        ((g + m) * 255.0) as u8,
+        ((b + m) * 255.0) as u8,
+    )
 }

@@ -1,46 +1,46 @@
-pub mod fire;
-pub mod matrix;
-pub mod plasma;
-pub mod starfield;
-pub mod wave;
-pub mod life;
-pub mod particles;
-pub mod rain;
-pub mod fountain;
-pub mod flow_field;
-pub mod spiral;
-pub mod ocean;
-pub mod aurora;
-pub mod lightning;
-pub mod smoke;
-pub mod ripple;
-pub mod snow;
-pub mod fireflies;
-pub mod dna;
-pub mod pulse;
-pub mod boids;
-pub mod lava;
-pub mod sandstorm;
-pub mod petals;
-pub mod campfire;
-pub mod waterfall;
-pub mod eclipse;
-pub mod blackhole;
-pub mod radar;
-pub mod crystallize;
-pub mod hackerman;
-pub mod visualizer;
-pub mod cells;
 pub mod atom;
-pub mod globe;
+pub mod aurora;
+pub mod blackhole;
+pub mod boids;
+pub mod campfire;
+pub mod cells;
+pub mod crystallize;
+pub mod dna;
 pub mod dragon;
-pub mod sierpinski;
-pub mod mandelbrot;
-pub mod langton;
-pub mod sort;
-pub mod snake;
+pub mod eclipse;
+pub mod fire;
+pub mod fireflies;
+pub mod flow_field;
+pub mod fountain;
+pub mod globe;
+pub mod hackerman;
 pub mod invaders;
+pub mod langton;
+pub mod lava;
+pub mod life;
+pub mod lightning;
+pub mod mandelbrot;
+pub mod matrix;
+pub mod ocean;
+pub mod particles;
+pub mod petals;
+pub mod plasma;
 pub mod pong;
+pub mod pulse;
+pub mod radar;
+pub mod rain;
+pub mod ripple;
+pub mod sandstorm;
+pub mod sierpinski;
+pub mod smoke;
+pub mod snake;
+pub mod snow;
+pub mod sort;
+pub mod spiral;
+pub mod starfield;
+pub mod visualizer;
+pub mod waterfall;
+pub mod wave;
 
 use crate::render::{Canvas, RenderMode};
 
@@ -60,60 +60,96 @@ pub trait Animation {
 
 /// List of all available animation names with descriptions.
 pub const ANIMATIONS: &[(&str, &str)] = &[
-    ("fire",        "Doom-style fire effect with heat propagation"),
-    ("matrix",      "Matrix digital rain with trailing drops"),
-    ("plasma",      "Classic plasma with overlapping sine waves"),
-    ("starfield",   "3D starfield with depth parallax"),
-    ("wave",        "Sine wave interference from moving sources"),
-    ("life",        "Conway's Game of Life cellular automaton"),
-    ("particles",   "Fireworks bursting with physics and fade"),
-    ("rain",        "Raindrops with splash particles and wind"),
-    ("fountain",    "Water fountain with jets, splashes, and mist"),
-    ("flow",        "Perlin noise flow field with particle trails"),
-    ("spiral",      "Rotating multi-arm spiral pattern"),
-    ("ocean",       "Ocean waves with foam and depth shading"),
-    ("aurora",      "Aurora borealis with layered curtains"),
-    ("lightning",   "Lightning bolts with recursive branching"),
-    ("smoke",       "Smoke rising with Perlin turbulence"),
-    ("ripple",      "Ripple interference from random drop points"),
-    ("snow",        "Snowfall with accumulation on the ground"),
-    ("fireflies",   "Fireflies blinking with warm glow"),
-    ("dna",         "Rotating DNA double helix with base pairs"),
-    ("pulse",       "Expanding pulse rings from center"),
-    ("boids",       "Boids flocking simulation with trails"),
-    ("lava",        "Lava lamp blobs rising, merging, and splitting"),
-    ("sandstorm",   "Blowing sand with dune formation"),
-    ("petals",      "Cherry blossom petals drifting in wind"),
-    ("campfire",    "Campfire with rising ember sparks"),
-    ("waterfall",   "Cascading water with mist spray"),
-    ("eclipse",     "Moon crossing sun with corona rays"),
-    ("blackhole",   "Black hole with accretion disk and lensing"),
-    ("radar",       "Rotating radar sweep with fading blips"),
+    ("fire", "Doom-style fire effect with heat propagation"),
+    ("matrix", "Matrix digital rain with trailing drops"),
+    ("plasma", "Classic plasma with overlapping sine waves"),
+    ("starfield", "3D starfield with depth parallax"),
+    ("wave", "Sine wave interference from moving sources"),
+    ("life", "Conway's Game of Life cellular automaton"),
+    ("particles", "Fireworks bursting with physics and fade"),
+    ("rain", "Raindrops with splash particles and wind"),
+    ("fountain", "Water fountain with jets, splashes, and mist"),
+    ("flow", "Perlin noise flow field with particle trails"),
+    ("spiral", "Rotating multi-arm spiral pattern"),
+    ("ocean", "Ocean waves with foam and depth shading"),
+    ("aurora", "Aurora borealis with layered curtains"),
+    ("lightning", "Lightning bolts with recursive branching"),
+    ("smoke", "Smoke rising with Perlin turbulence"),
+    ("ripple", "Ripple interference from random drop points"),
+    ("snow", "Snowfall with accumulation on the ground"),
+    ("fireflies", "Fireflies blinking with warm glow"),
+    ("dna", "Rotating DNA double helix with base pairs"),
+    ("pulse", "Expanding pulse rings from center"),
+    ("boids", "Boids flocking simulation with trails"),
+    ("lava", "Lava lamp blobs rising, merging, and splitting"),
+    ("sandstorm", "Blowing sand with dune formation"),
+    ("petals", "Cherry blossom petals drifting in wind"),
+    ("campfire", "Campfire with rising ember sparks"),
+    ("waterfall", "Cascading water with mist spray"),
+    ("eclipse", "Moon crossing sun with corona rays"),
+    ("blackhole", "Black hole with accretion disk and lensing"),
+    ("radar", "Rotating radar sweep with fading blips"),
     ("crystallize", "DLA crystal growth from center seed"),
-    ("hackerman",   "Scrolling hex/binary hacker terminal"),
-    ("visualizer",  "Audio spectrum analyzer with bouncing bars"),
-    ("cells",       "Cell division and mitosis animation"),
-    ("atom",        "Electrons orbiting a nucleus in 3D"),
-    ("globe",       "Rotating wireframe Earth with continents"),
-    ("dragon",      "Dragon curve fractal with color cycling"),
-    ("sierpinski",  "Animated Sierpinski triangle with zoom"),
-    ("mandelbrot",  "Mandelbrot set with zoom and color cycling"),
-    ("langton",     "Langton's Ant cellular automaton"),
-    ("sort",        "Sorting algorithm visualizer"),
-    ("snake",       "Self-playing Snake game AI"),
-    ("invaders",    "Space Invaders attract mode demo"),
-    ("pong",        "Self-playing Pong with AI paddles"),
+    ("hackerman", "Scrolling hex/binary hacker terminal"),
+    ("visualizer", "Audio spectrum analyzer with bouncing bars"),
+    ("cells", "Cell division and mitosis animation"),
+    ("atom", "Electrons orbiting a nucleus in 3D"),
+    ("globe", "Rotating wireframe Earth with continents"),
+    ("dragon", "Dragon curve fractal with color cycling"),
+    ("sierpinski", "Animated Sierpinski triangle with zoom"),
+    ("mandelbrot", "Mandelbrot set with zoom and color cycling"),
+    ("langton", "Langton's Ant cellular automaton"),
+    ("sort", "Sorting algorithm visualizer"),
+    ("snake", "Self-playing Snake game AI"),
+    ("invaders", "Space Invaders attract mode demo"),
+    ("pong", "Self-playing Pong with AI paddles"),
 ];
 
 /// List of all available animation names.
 pub const ANIMATION_NAMES: &[&str] = &[
-    "fire", "matrix", "plasma", "starfield", "wave", "life", "particles",
-    "rain", "fountain", "flow", "spiral", "ocean", "aurora", "lightning",
-    "smoke", "ripple", "snow", "fireflies", "dna", "pulse", "boids",
-    "lava", "sandstorm", "petals", "campfire", "waterfall", "eclipse",
-    "blackhole", "radar", "crystallize", "hackerman", "visualizer", "cells",
-    "atom", "globe", "dragon", "sierpinski", "mandelbrot", "langton", "sort",
-    "snake", "invaders", "pong",
+    "fire",
+    "matrix",
+    "plasma",
+    "starfield",
+    "wave",
+    "life",
+    "particles",
+    "rain",
+    "fountain",
+    "flow",
+    "spiral",
+    "ocean",
+    "aurora",
+    "lightning",
+    "smoke",
+    "ripple",
+    "snow",
+    "fireflies",
+    "dna",
+    "pulse",
+    "boids",
+    "lava",
+    "sandstorm",
+    "petals",
+    "campfire",
+    "waterfall",
+    "eclipse",
+    "blackhole",
+    "radar",
+    "crystallize",
+    "hackerman",
+    "visualizer",
+    "cells",
+    "atom",
+    "globe",
+    "dragon",
+    "sierpinski",
+    "mandelbrot",
+    "langton",
+    "sort",
+    "snake",
+    "invaders",
+    "pong",
 ];
 
 /// Create an animation by name with scale factor for particle/element counts.

@@ -1,5 +1,5 @@
-use crate::render::Canvas;
 use super::Animation;
+use crate::render::Canvas;
 use rand::RngExt;
 
 struct Alien {

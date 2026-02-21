@@ -1,5 +1,5 @@
-use crate::render::Canvas;
 use super::Animation;
+use crate::render::Canvas;
 
 /// Moon crossing sun with corona rays radiating outward
 pub struct Eclipse {
@@ -85,10 +85,12 @@ impl Animation for Eclipse {
                         let angle = dy_sun.atan2(dx_sun);
                         let ray_count = 12.0;
                         let ray = ((angle * ray_count + time * 0.5).sin() * 0.5 + 0.5).powi(2);
-                        let ray2 = ((angle * ray_count * 0.5 - time * 0.3).sin() * 0.5 + 0.5).powi(3);
+                        let ray2 =
+                            ((angle * ray_count * 0.5 - time * 0.3).sin() * 0.5 + 0.5).powi(3);
 
                         let falloff = (1.0 - corona_dist / max_corona).powi(2);
-                        let corona_intensity = falloff * (0.3 + ray * 0.5 + ray2 * 0.3) * coverage.max(0.2);
+                        let corona_intensity =
+                            falloff * (0.3 + ray * 0.5 + ray2 * 0.3) * coverage.max(0.2);
 
                         if corona_intensity > 0.01 {
                             let r = (255.0 * corona_intensity.min(1.0)) as u8;

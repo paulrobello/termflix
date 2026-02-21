@@ -1,5 +1,5 @@
-use crate::render::Canvas;
 use super::Animation;
+use crate::render::Canvas;
 use rand::RngExt;
 
 struct Drop {
@@ -28,12 +28,18 @@ impl Matrix {
                 length: rng.random_range(5..height / 2),
             })
             .collect();
-        Matrix { width, height, drops }
+        Matrix {
+            width,
+            height,
+            drops,
+        }
     }
 }
 
 impl Animation for Matrix {
-    fn name(&self) -> &str { "matrix" }
+    fn name(&self) -> &str {
+        "matrix"
+    }
 
     fn preferred_render(&self) -> crate::render::RenderMode {
         crate::render::RenderMode::Ascii
@@ -60,7 +66,7 @@ impl Animation for Matrix {
                 if py >= 0 && (py as usize) < canvas.height && drop.x < canvas.width {
                     let fade = 1.0 - (i as f64 / drop.length as f64);
                     let brightness = fade * fade; // quadratic falloff
-                    let g = (100 + (155.0 * fade) as u8).min(255);
+                    let g = 100 + (155.0 * fade) as u8;
                     canvas.set_colored(drop.x, py as usize, brightness, 0, g, 0);
                 }
             }

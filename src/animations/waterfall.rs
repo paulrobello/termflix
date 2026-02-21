@@ -1,6 +1,6 @@
+use super::Animation;
 use crate::generators::{ColorGradient, ColorStop, EmitterConfig, ParticleSystem};
 use crate::render::Canvas;
-use super::Animation;
 use rand::RngExt;
 
 struct WaterDrop {
@@ -49,9 +49,24 @@ impl Waterfall {
             drag: 0.95,
             wind: 0.0,
             gradient: ColorGradient::new(vec![
-                ColorStop { t: 0.0, r: 200, g: 220, b: 255 },
-                ColorStop { t: 0.5, r: 150, g: 180, b: 220 },
-                ColorStop { t: 1.0, r: 100, g: 130, b: 180 },
+                ColorStop {
+                    t: 0.0,
+                    r: 200,
+                    g: 220,
+                    b: 255,
+                },
+                ColorStop {
+                    t: 0.5,
+                    r: 150,
+                    g: 180,
+                    b: 220,
+                },
+                ColorStop {
+                    t: 1.0,
+                    r: 100,
+                    g: 130,
+                    b: 180,
+                },
             ]),
         };
 
@@ -108,7 +123,8 @@ impl Animation for Waterfall {
             if drop.y >= pool_y {
                 // Splash at bottom
                 drop.y = rng.random_range(-5.0..0.0);
-                drop.x = self.fall_x + rng.random_range(-self.fall_width * 0.5..self.fall_width * 0.5);
+                drop.x =
+                    self.fall_x + rng.random_range(-self.fall_width * 0.5..self.fall_width * 0.5);
                 drop.vy = rng.random_range(15.0..35.0);
                 drop.brightness = rng.random_range(0.4..1.0);
             }
@@ -128,7 +144,14 @@ impl Animation for Waterfall {
                         let sy = py.wrapping_sub(s);
                         if sy < canvas.height {
                             let fade = 1.0 - s as f64 / streak_len as f64;
-                            canvas.set_colored(px, sy, drop.brightness * fade * 0.5, 160, 190, b_val);
+                            canvas.set_colored(
+                                px,
+                                sy,
+                                drop.brightness * fade * 0.5,
+                                160,
+                                190,
+                                b_val,
+                            );
                         }
                     }
                 }
@@ -149,7 +172,8 @@ impl Animation for Waterfall {
         }
 
         // Emit mist at base
-        self.mist.config.x = self.fall_x + rng.random_range(-self.fall_width * 0.5..self.fall_width * 0.5);
+        self.mist.config.x =
+            self.fall_x + rng.random_range(-self.fall_width * 0.5..self.fall_width * 0.5);
         self.mist.config.y = pool_y;
         self.mist.config.wind = (time * 0.3).sin() * 5.0;
         self.mist.emit(rng.random_range(4..10));

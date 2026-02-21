@@ -1,8 +1,9 @@
-use crate::render::Canvas;
 use super::Animation;
+use crate::render::Canvas;
 use rand::RngExt;
 
 #[derive(Clone, Copy, PartialEq)]
+#[allow(clippy::enum_variant_names)]
 enum SortAlgo {
     QuickSort,
     MergeSort,
@@ -49,9 +50,7 @@ impl Sort {
     pub fn new(width: usize, _height: usize, _scale: f64) -> Self {
         let size = (width / 2).clamp(16, 200);
         let mut rng = rand::rng();
-        let data: Vec<f64> = (0..size)
-            .map(|_| rng.random_range(0.05..1.0))
-            .collect();
+        let data: Vec<f64> = (0..size).map(|_| rng.random_range(0.05..1.0)).collect();
 
         let mut sort = Sort {
             data,
@@ -280,7 +279,11 @@ impl Animation for Sort {
                 } else if self.sorted {
                     // Green when sorted
                     let f = i as f64 / n as f64;
-                    ((50.0 + 100.0 * f) as u8, 200, (50.0 + 100.0 * (1.0 - f)) as u8)
+                    (
+                        (50.0 + 100.0 * f) as u8,
+                        200,
+                        (50.0 + 100.0 * (1.0 - f)) as u8,
+                    )
                 } else {
                     // Normal: color by value
                     let hue = self.data[i] * 0.7;

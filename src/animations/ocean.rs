@@ -1,15 +1,19 @@
-use crate::render::Canvas;
 use super::Animation;
+use crate::render::Canvas;
 
 /// Ocean waves with depth and foam
 pub struct Ocean;
 
 impl Ocean {
-    pub fn new() -> Self { Ocean }
+    pub fn new() -> Self {
+        Ocean
+    }
 }
 
 impl Animation for Ocean {
-    fn name(&self) -> &str { "ocean" }
+    fn name(&self) -> &str {
+        "ocean"
+    }
 
     fn update(&mut self, canvas: &mut Canvas, _dt: f64, time: f64) {
         let w = canvas.width as f64;

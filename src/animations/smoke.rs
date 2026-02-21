@@ -1,6 +1,6 @@
+use super::Animation;
 use crate::generators::{ColorGradient, ColorStop, EmitterConfig, ParticleSystem};
 use crate::render::Canvas;
-use super::Animation;
 use noise::{NoiseFn, Perlin};
 use rand::RngExt;
 
@@ -31,10 +31,30 @@ impl Smoke {
             drag: 0.99,
             wind: 0.0,
             gradient: ColorGradient::new(vec![
-                ColorStop { t: 0.0, r: 200, g: 180, b: 150 },
-                ColorStop { t: 0.3, r: 150, g: 140, b: 130 },
-                ColorStop { t: 0.6, r: 100, g: 95, b: 90 },
-                ColorStop { t: 1.0, r: 50, g: 48, b: 46 },
+                ColorStop {
+                    t: 0.0,
+                    r: 200,
+                    g: 180,
+                    b: 150,
+                },
+                ColorStop {
+                    t: 0.3,
+                    r: 150,
+                    g: 140,
+                    b: 130,
+                },
+                ColorStop {
+                    t: 0.6,
+                    r: 100,
+                    g: 95,
+                    b: 90,
+                },
+                ColorStop {
+                    t: 1.0,
+                    r: 50,
+                    g: 48,
+                    b: 46,
+                },
             ]),
         };
 
@@ -49,7 +69,9 @@ impl Smoke {
 }
 
 impl Animation for Smoke {
-    fn name(&self) -> &str { "smoke" }
+    fn name(&self) -> &str {
+        "smoke"
+    }
 
     fn update(&mut self, canvas: &mut Canvas, dt: f64, time: f64) {
         let mut rng = rand::rng();
@@ -97,7 +119,7 @@ impl Animation for Smoke {
                     if px < canvas.width && py < canvas.height {
                         let dist = (((dx as f64 - size as f64 / 2.0).powi(2)
                             + (dy as f64 - size as f64 / 2.0).powi(2))
-                            .sqrt()
+                        .sqrt()
                             / (size as f64 / 2.0))
                             .clamp(0.0, 1.0);
                         let b_val = brightness * (1.0 - dist);

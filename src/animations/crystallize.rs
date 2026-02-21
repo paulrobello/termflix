@@ -1,5 +1,5 @@
-use crate::render::Canvas;
 use super::Animation;
+use crate::render::Canvas;
 use rand::RngExt;
 
 /// Diffusion-limited aggregation crystal growth from center seed
@@ -59,10 +59,13 @@ impl Crystallize {
                 }
                 let nx = x as i32 + dx;
                 let ny = y as i32 + dy;
-                if nx >= 0 && nx < w as i32 && ny >= 0 && ny < h as i32 {
-                    if self.grid[ny as usize * w + nx as usize] > 0 {
-                        return true;
-                    }
+                if nx >= 0
+                    && nx < w as i32
+                    && ny >= 0
+                    && ny < h as i32
+                    && self.grid[ny as usize * w + nx as usize] > 0
+                {
+                    return true;
                 }
             }
         }
@@ -144,24 +147,30 @@ impl Animation for Crystallize {
                     let mut found = false;
                     for dy in -1i32..=1 {
                         for dx in -1i32..=1 {
-                            if dx == 0 && dy == 0 { continue; }
+                            if dx == 0 && dy == 0 {
+                                continue;
+                            }
                             let nx = ix as i32 + dx;
                             let ny = iy as i32 + dy;
-                            if nx >= 0 && nx < w as i32 && ny >= 0 && ny < h as i32 {
-                                if self.grid[ny as usize * w + nx as usize] > 0 {
-                                    found = true;
-                                    break;
-                                }
+                            if nx >= 0
+                                && nx < w as i32
+                                && ny >= 0
+                                && ny < h as i32
+                                && self.grid[ny as usize * w + nx as usize] > 0
+                            {
+                                found = true;
+                                break;
                             }
                         }
-                        if found { break; }
+                        if found {
+                            break;
+                        }
                     }
                     found
                 };
                 if has_nb && self.grid[iy * w + ix] == 0 {
                     // Attach to crystal
-                    let color_val = ((self.color_cycle + (ix as f64 + iy as f64) * 0.01)
-                        .sin()
+                    let color_val = ((self.color_cycle + (ix as f64 + iy as f64) * 0.01).sin()
                         * 127.0
                         + 128.0) as u8;
                     self.grid[iy * w + ix] = color_val.max(1);

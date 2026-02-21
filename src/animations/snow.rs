@@ -1,5 +1,5 @@
-use crate::render::Canvas;
 use super::Animation;
+use crate::render::Canvas;
 use rand::RngExt;
 
 struct Snowflake {
@@ -44,7 +44,9 @@ impl Snow {
 }
 
 impl Animation for Snow {
-    fn name(&self) -> &str { "snow" }
+    fn name(&self) -> &str {
+        "snow"
+    }
 
     fn update(&mut self, canvas: &mut Canvas, dt: f64, time: f64) {
         let mut rng = rand::rng();
@@ -67,8 +69,12 @@ impl Animation for Snow {
             flake.x += (wind + (time * 2.0 + flake.wobble_phase).sin() * flake.wobble_amp) * dt;
 
             // Wrap horizontally
-            if flake.x < 0.0 { flake.x += self.width as f64; }
-            if flake.x >= self.width as f64 { flake.x -= self.width as f64; }
+            if flake.x < 0.0 {
+                flake.x += self.width as f64;
+            }
+            if flake.x >= self.width as f64 {
+                flake.x -= self.width as f64;
+            }
 
             let col = (flake.x as usize).min(self.width.saturating_sub(1));
             let ground_level = self.height as f64 - self.accumulation[col];
@@ -83,7 +89,8 @@ impl Animation for Snow {
                     self.accumulation[col] -= 0.5;
                     self.accumulation[col - 1] += 0.5;
                 }
-                if col + 1 < self.width && self.accumulation[col] > self.accumulation[col + 1] + 2.0 {
+                if col + 1 < self.width && self.accumulation[col] > self.accumulation[col + 1] + 2.0
+                {
                     self.accumulation[col] -= 0.5;
                     self.accumulation[col + 1] += 0.5;
                 }

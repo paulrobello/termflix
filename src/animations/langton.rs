@@ -1,5 +1,5 @@
-use crate::render::Canvas;
 use super::Animation;
+use crate::render::Canvas;
 use rand::RngExt;
 
 #[derive(Clone, Copy)]
@@ -64,8 +64,10 @@ impl Langton {
         let mut rng = rand::rng();
         let grid = vec![false; width * height];
         let dir = match rng.random_range(0u8..4) {
-            0 => Direction::Up, 1 => Direction::Right,
-            2 => Direction::Down, _ => Direction::Left,
+            0 => Direction::Up,
+            1 => Direction::Right,
+            2 => Direction::Down,
+            _ => Direction::Left,
         };
         // Randomize start position within central region
         let ant_x = rng.random_range(width as i32 / 3..width as i32 * 2 / 3);
@@ -89,8 +91,10 @@ impl Langton {
         self.ant_x = rng.random_range(self.width as i32 / 3..self.width as i32 * 2 / 3);
         self.ant_y = rng.random_range(self.height as i32 / 3..self.height as i32 * 2 / 3);
         self.ant_dir = match rng.random_range(0u8..4) {
-            0 => Direction::Up, 1 => Direction::Right,
-            2 => Direction::Down, _ => Direction::Left,
+            0 => Direction::Up,
+            1 => Direction::Right,
+            2 => Direction::Down,
+            _ => Direction::Left,
         };
         self.steps = 0;
         self.total_steps = 0;
@@ -164,9 +168,8 @@ impl Animation for Langton {
             for x in 0..self.width.min(canvas.width) {
                 if self.grid[y * self.width + x] {
                     // Colored based on position for visual interest
-                    let hue = ((x as f64 / self.width as f64)
-                        + (y as f64 / self.height as f64))
-                        * 0.5;
+                    let hue =
+                        ((x as f64 / self.width as f64) + (y as f64 / self.height as f64)) * 0.5;
                     let (r, g, b) = hsv_to_rgb(hue, 0.7, 0.8);
                     canvas.set_colored(x, y, 0.7, r, g, b);
                 }

@@ -1,15 +1,19 @@
-use crate::render::Canvas;
 use super::Animation;
+use crate::render::Canvas;
 
 /// Sine wave interference pattern
 pub struct Wave;
 
 impl Wave {
-    pub fn new() -> Self { Wave }
+    pub fn new() -> Self {
+        Wave
+    }
 }
 
 impl Animation for Wave {
-    fn name(&self) -> &str { "wave" }
+    fn name(&self) -> &str {
+        "wave"
+    }
 
     fn update(&mut self, canvas: &mut Canvas, _dt: f64, time: f64) {
         let w = canvas.width as f64;

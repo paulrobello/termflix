@@ -1,5 +1,5 @@
-use crate::render::Canvas;
 use super::Animation;
+use crate::render::Canvas;
 use rand::RngExt;
 
 struct SandParticle {
@@ -89,8 +89,12 @@ impl Animation for Sandstorm {
                 // Deposit sand — spread across neighbors for natural look
                 let amt = 0.08;
                 self.dunes[ix] = (self.dunes[ix] + amt).min(h * 0.4);
-                if ix > 0 { self.dunes[ix - 1] = (self.dunes[ix - 1] + amt * 0.5).min(h * 0.4); }
-                if ix + 1 < self.width { self.dunes[ix + 1] = (self.dunes[ix + 1] + amt * 0.5).min(h * 0.4); }
+                if ix > 0 {
+                    self.dunes[ix - 1] = (self.dunes[ix - 1] + amt * 0.5).min(h * 0.4);
+                }
+                if ix + 1 < self.width {
+                    self.dunes[ix + 1] = (self.dunes[ix + 1] + amt * 0.5).min(h * 0.4);
+                }
                 // Reset particle
                 p.x = rng.random_range(-10.0..0.0);
                 p.y = rng.random_range(0.0..h * 0.8);
@@ -131,9 +135,18 @@ impl Animation for Sandstorm {
         // Smooth dunes — diffusion pass to prevent spiky columns
         let mut new_dunes = self.dunes.clone();
         let len = self.dunes.len();
+        #[allow(clippy::needless_range_loop)]
         for i in 0..len {
-            let left = if i > 0 { self.dunes[i - 1] } else { self.dunes[i] };
-            let right = if i + 1 < len { self.dunes[i + 1] } else { self.dunes[i] };
+            let left = if i > 0 {
+                self.dunes[i - 1]
+            } else {
+                self.dunes[i]
+            };
+            let right = if i + 1 < len {
+                self.dunes[i + 1]
+            } else {
+                self.dunes[i]
+            };
             // Blend with neighbors
             new_dunes[i] = self.dunes[i] * 0.5 + (left + right) * 0.25;
         }

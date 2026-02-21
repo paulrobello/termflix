@@ -1,6 +1,6 @@
+use super::Animation;
 use crate::generators::{ColorGradient, ColorStop, EmitterConfig, ParticleSystem};
 use crate::render::Canvas;
-use super::Animation;
 use rand::RngExt;
 
 /// Water fountain shooting up from center bottom
@@ -31,10 +31,30 @@ impl Fountain {
             drag: 0.995,
             wind: 0.0,
             gradient: ColorGradient::new(vec![
-                ColorStop { t: 0.0, r: 200, g: 220, b: 255 },
-                ColorStop { t: 0.3, r: 100, g: 160, b: 255 },
-                ColorStop { t: 0.7, r: 60, g: 120, b: 220 },
-                ColorStop { t: 1.0, r: 30, g: 60, b: 140 },
+                ColorStop {
+                    t: 0.0,
+                    r: 200,
+                    g: 220,
+                    b: 255,
+                },
+                ColorStop {
+                    t: 0.3,
+                    r: 100,
+                    g: 160,
+                    b: 255,
+                },
+                ColorStop {
+                    t: 0.7,
+                    r: 60,
+                    g: 120,
+                    b: 220,
+                },
+                ColorStop {
+                    t: 1.0,
+                    r: 30,
+                    g: 60,
+                    b: 140,
+                },
             ]),
         };
 
@@ -51,8 +71,18 @@ impl Fountain {
             drag: 0.96,
             wind: 0.0,
             gradient: ColorGradient::new(vec![
-                ColorStop { t: 0.0, r: 180, g: 210, b: 255 },
-                ColorStop { t: 1.0, r: 80, g: 100, b: 180 },
+                ColorStop {
+                    t: 0.0,
+                    r: 180,
+                    g: 210,
+                    b: 255,
+                },
+                ColorStop {
+                    t: 1.0,
+                    r: 80,
+                    g: 100,
+                    b: 180,
+                },
             ]),
         };
 
@@ -69,8 +99,18 @@ impl Fountain {
             drag: 0.98,
             wind: 0.0,
             gradient: ColorGradient::new(vec![
-                ColorStop { t: 0.0, r: 150, g: 180, b: 220 },
-                ColorStop { t: 1.0, r: 80, g: 100, b: 140 },
+                ColorStop {
+                    t: 0.0,
+                    r: 150,
+                    g: 180,
+                    b: 220,
+                },
+                ColorStop {
+                    t: 1.0,
+                    r: 80,
+                    g: 100,
+                    b: 140,
+                },
             ]),
         };
 
@@ -86,7 +126,9 @@ impl Fountain {
 }
 
 impl Animation for Fountain {
-    fn name(&self) -> &str { "fountain" }
+    fn name(&self) -> &str {
+        "fountain"
+    }
 
     fn update(&mut self, canvas: &mut Canvas, dt: f64, time: f64) {
         let mut rng = rand::rng();

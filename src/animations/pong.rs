@@ -1,5 +1,5 @@
-use crate::render::Canvas;
 use super::Animation;
+use crate::render::Canvas;
 use rand::RngExt;
 
 /// Self-playing Pong with AI paddles
@@ -21,7 +21,11 @@ impl Pong {
         let mut rng = rand::rng();
         let w = width as f64;
         let h = height as f64;
-        let dir: f64 = if rng.random_range(0u8..2) == 0 { 1.0 } else { -1.0 };
+        let dir: f64 = if rng.random_range(0u8..2) == 0 {
+            1.0
+        } else {
+            -1.0
+        };
         Pong {
             ball_x: w * 0.5,
             ball_y: h * 0.5,
@@ -40,7 +44,11 @@ impl Pong {
         let mut rng = rand::rng();
         self.ball_x = w * 0.5;
         self.ball_y = h * 0.5;
-        let dir: f64 = if rng.random_range(0u8..2) == 0 { 1.0 } else { -1.0 };
+        let dir: f64 = if rng.random_range(0u8..2) == 0 {
+            1.0
+        } else {
+            -1.0
+        };
         self.ball_vx = dir * 30.0;
         self.ball_vy = rng.random_range(-15.0..15.0);
         self.serve_timer = 0.5;
@@ -143,10 +151,8 @@ impl Animation for Pong {
         // Center line
         let cx = (w * 0.5) as usize;
         for y in 0..canvas.height {
-            if y % 3 != 0 {
-                if cx < canvas.width {
-                    canvas.set_colored(cx, y, 0.2, 100, 100, 100);
-                }
+            if y % 3 != 0 && cx < canvas.width {
+                canvas.set_colored(cx, y, 0.2, 100, 100, 100);
             }
         }
 

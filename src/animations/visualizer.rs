@@ -1,5 +1,5 @@
-use crate::render::Canvas;
 use super::Animation;
+use crate::render::Canvas;
 use rand::RngExt;
 
 /// Fake audio spectrum analyzer bars bouncing to imaginary music
@@ -59,8 +59,8 @@ impl Animation for Visualizer {
                 let bass = (1.0 - freq).powi(2) * self.energy;
                 let mid = (-(freq - 0.4).powi(2) * 10.0).exp() * self.energy * 0.7;
                 let treble = freq.powi(3) * rng.random_range(0.0..self.energy * 0.5);
-                self.targets[i] = (bass + mid + treble + rng.random_range(0.0..0.2))
-                    .clamp(0.0, 1.0);
+                self.targets[i] =
+                    (bass + mid + treble + rng.random_range(0.0..0.2)).clamp(0.0, 1.0);
             }
         }
 

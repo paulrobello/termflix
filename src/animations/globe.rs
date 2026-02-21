@@ -1,5 +1,5 @@
-use crate::render::Canvas;
 use super::Animation;
+use crate::render::Canvas;
 
 /// Rotating wireframe Earth with simplified continents
 pub struct Globe {

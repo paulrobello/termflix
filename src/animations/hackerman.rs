@@ -1,5 +1,5 @@
-use crate::render::Canvas;
 use super::Animation;
+use crate::render::Canvas;
 use rand::RngExt;
 
 struct LogLine {
@@ -80,47 +80,60 @@ const BAR_LABELS: &[&str] = &[
 ];
 
 fn rand_ip(rng: &mut impl rand::RngExt) -> String {
-    format!("{}.{}.{}.{}",
-        rng.random_range(10u8..220), rng.random_range(0u8..255),
-        rng.random_range(0u8..255), rng.random_range(1u8..254))
+    format!(
+        "{}.{}.{}.{}",
+        rng.random_range(10u8..220),
+        rng.random_range(0u8..255),
+        rng.random_range(0u8..255),
+        rng.random_range(1u8..254)
+    )
 }
 
 fn rand_word(rng: &mut impl rand::RngExt) -> String {
-    let words = ["alpha", "omega", "delta", "ghost", "nexus", "cipher", "shadow", "void", "zero", "root"];
+    let words = [
+        "alpha", "omega", "delta", "ghost", "nexus", "cipher", "shadow", "void", "zero", "root",
+    ];
     words[rng.random_range(0..words.len())].to_string()
 }
 
 impl Hackerman {
     pub fn new(width: usize, height: usize, _scale: f64) -> Self {
         let mut rng = rand::rng();
-        let node_names = ["GATEWAY", "FIREWALL", "DB-01", "APP-SRV", "DNS", "PROXY", "TARGET", "C2"];
-        let nodes: Vec<NetworkNode> = node_names.iter().enumerate().map(|(i, name)| {
-            NetworkNode {
+        let node_names = [
+            "GATEWAY", "FIREWALL", "DB-01", "APP-SRV", "DNS", "PROXY", "TARGET", "C2",
+        ];
+        let nodes: Vec<NetworkNode> = node_names
+            .iter()
+            .enumerate()
+            .map(|(i, name)| NetworkNode {
                 x: rng.random_range(0.1..0.9),
                 y: rng.random_range(0.1..0.9),
                 label: name.to_string(),
                 active: i == 0,
                 pulse: rng.random_range(0.0..std::f64::consts::TAU),
-            }
-        }).collect();
+            })
+            .collect();
 
-        let bars = (0..4).map(|_| {
-            let label = BAR_LABELS[rng.random_range(0..BAR_LABELS.len())];
-            ProgressBar {
-                label: label.to_string(),
-                value: 0.0,
-                target: rng.random_range(0.7..1.0),
-                speed: rng.random_range(0.05..0.25),
-                color: match rng.random_range(0u8..3) {
-                    0 => (0, 220, 180),
-                    1 => (0, 180, 255),
-                    _ => (0, 255, 100),
-                },
-            }
-        }).collect();
+        let bars = (0..4)
+            .map(|_| {
+                let label = BAR_LABELS[rng.random_range(0..BAR_LABELS.len())];
+                ProgressBar {
+                    label: label.to_string(),
+                    value: 0.0,
+                    target: rng.random_range(0.7..1.0),
+                    speed: rng.random_range(0.05..0.25),
+                    color: match rng.random_range(0u8..3) {
+                        0 => (0, 220, 180),
+                        1 => (0, 180, 255),
+                        _ => (0, 255, 100),
+                    },
+                }
+            })
+            .collect();
 
         Hackerman {
-            width, height,
+            width,
+            height,
             log_lines: Vec::new(),
             log_timer: 0.0,
             bars,
@@ -139,7 +152,9 @@ impl Hackerman {
 }
 
 impl Animation for Hackerman {
-    fn name(&self) -> &str { "hackerman" }
+    fn name(&self) -> &str {
+        "hackerman"
+    }
 
     fn preferred_render(&self) -> crate::render::RenderMode {
         crate::render::RenderMode::Ascii
@@ -151,7 +166,9 @@ impl Animation for Hackerman {
         self.height = canvas.height;
         self.uptime_secs += dt;
 
-        if self.width < 40 || self.height < 15 { return; }
+        if self.width < 40 || self.height < 15 {
+            return;
+        }
 
         canvas.clear();
 
@@ -163,30 +180,114 @@ impl Animation for Hackerman {
         let border_color: (u8, u8, u8) = (0, 100, 60);
         // Horizontal divider
         for x in 0..self.width {
-            canvas.set_char(x, mid_y, '─', border_color.0, border_color.1, border_color.2);
+            canvas.set_char(
+                x,
+                mid_y,
+                '─',
+                border_color.0,
+                border_color.1,
+                border_color.2,
+            );
             canvas.set_char(x, 0, '─', border_color.0, border_color.1, border_color.2);
             if self.height > 1 {
-                canvas.set_char(x, self.height - 1, '─', border_color.0, border_color.1, border_color.2);
+                canvas.set_char(
+                    x,
+                    self.height - 1,
+                    '─',
+                    border_color.0,
+                    border_color.1,
+                    border_color.2,
+                );
             }
         }
         // Vertical divider
         for y in 0..self.height {
-            canvas.set_char(mid_x, y, '│', border_color.0, border_color.1, border_color.2);
+            canvas.set_char(
+                mid_x,
+                y,
+                '│',
+                border_color.0,
+                border_color.1,
+                border_color.2,
+            );
             canvas.set_char(0, y, '│', border_color.0, border_color.1, border_color.2);
             if self.width > 1 {
-                canvas.set_char(self.width - 1, y, '│', border_color.0, border_color.1, border_color.2);
+                canvas.set_char(
+                    self.width - 1,
+                    y,
+                    '│',
+                    border_color.0,
+                    border_color.1,
+                    border_color.2,
+                );
             }
         }
         // Corners and intersections
         canvas.set_char(0, 0, '┌', border_color.0, border_color.1, border_color.2);
-        canvas.set_char(self.width - 1, 0, '┐', border_color.0, border_color.1, border_color.2);
-        canvas.set_char(0, self.height - 1, '└', border_color.0, border_color.1, border_color.2);
-        canvas.set_char(self.width - 1, self.height - 1, '┘', border_color.0, border_color.1, border_color.2);
-        canvas.set_char(mid_x, 0, '┬', border_color.0, border_color.1, border_color.2);
-        canvas.set_char(mid_x, self.height - 1, '┴', border_color.0, border_color.1, border_color.2);
-        canvas.set_char(0, mid_y, '├', border_color.0, border_color.1, border_color.2);
-        canvas.set_char(self.width - 1, mid_y, '┤', border_color.0, border_color.1, border_color.2);
-        canvas.set_char(mid_x, mid_y, '┼', border_color.0, border_color.1, border_color.2);
+        canvas.set_char(
+            self.width - 1,
+            0,
+            '┐',
+            border_color.0,
+            border_color.1,
+            border_color.2,
+        );
+        canvas.set_char(
+            0,
+            self.height - 1,
+            '└',
+            border_color.0,
+            border_color.1,
+            border_color.2,
+        );
+        canvas.set_char(
+            self.width - 1,
+            self.height - 1,
+            '┘',
+            border_color.0,
+            border_color.1,
+            border_color.2,
+        );
+        canvas.set_char(
+            mid_x,
+            0,
+            '┬',
+            border_color.0,
+            border_color.1,
+            border_color.2,
+        );
+        canvas.set_char(
+            mid_x,
+            self.height - 1,
+            '┴',
+            border_color.0,
+            border_color.1,
+            border_color.2,
+        );
+        canvas.set_char(
+            0,
+            mid_y,
+            '├',
+            border_color.0,
+            border_color.1,
+            border_color.2,
+        );
+        canvas.set_char(
+            self.width - 1,
+            mid_y,
+            '┤',
+            border_color.0,
+            border_color.1,
+            border_color.2,
+        );
+        canvas.set_char(
+            mid_x,
+            mid_y,
+            '┼',
+            border_color.0,
+            border_color.1,
+            border_color.2,
+        );
 
         // ── Panel titles ──
         draw_text(canvas, 2, 0, "[ SYSTEM STATUS ]", (0, 200, 100));
@@ -200,7 +301,9 @@ impl Animation for Hackerman {
         self.stats_flicker += dt;
         self.packets_count += rng.random_range(10..200) as u64;
         self.bytes_count += rng.random_range(500..50000) as u64;
-        if rng.random_range(0.0..1.0) < 0.005 { self.threats_count += 1; }
+        if rng.random_range(0.0..1.0) < 0.005 {
+            self.threats_count += 1;
+        }
 
         let uptime_h = (self.uptime_secs / 3600.0) as u32;
         let uptime_m = ((self.uptime_secs % 3600.0) / 60.0) as u32;
@@ -212,17 +315,45 @@ impl Animation for Hackerman {
         let bright_green: (u8, u8, u8) = (0, 255, 120);
 
         draw_text(canvas, stats_x, stats_y, "UPTIME:", dim_green);
-        draw_text(canvas, stats_x + 10, stats_y, &format!("{:02}:{:02}:{:02}", uptime_h, uptime_m, uptime_s), bright_green);
+        draw_text(
+            canvas,
+            stats_x + 10,
+            stats_y,
+            &format!("{:02}:{:02}:{:02}", uptime_h, uptime_m, uptime_s),
+            bright_green,
+        );
 
         draw_text(canvas, stats_x, stats_y + 2, "PACKETS:", dim_green);
-        draw_text(canvas, stats_x + 10, stats_y + 2, &format!("{}", self.packets_count), bright_green);
+        draw_text(
+            canvas,
+            stats_x + 10,
+            stats_y + 2,
+            &format!("{}", self.packets_count),
+            bright_green,
+        );
 
         draw_text(canvas, stats_x, stats_y + 4, "BYTES TX:", dim_green);
-        draw_text(canvas, stats_x + 10, stats_y + 4, &format!("{}", self.bytes_count), bright_green);
+        draw_text(
+            canvas,
+            stats_x + 10,
+            stats_y + 4,
+            &format!("{}", self.bytes_count),
+            bright_green,
+        );
 
         draw_text(canvas, stats_x, stats_y + 6, "THREATS:", dim_green);
-        let threat_color = if self.threats_count > 5 { (255, 50, 50) } else { (255, 200, 50) };
-        draw_text(canvas, stats_x + 10, stats_y + 6, &format!("{}", self.threats_count), threat_color);
+        let threat_color = if self.threats_count > 5 {
+            (255, 50, 50)
+        } else {
+            (255, 200, 50)
+        };
+        draw_text(
+            canvas,
+            stats_x + 10,
+            stats_y + 6,
+            &format!("{}", self.threats_count),
+            threat_color,
+        );
 
         draw_text(canvas, stats_x, stats_y + 8, "STATUS:", dim_green);
         let blink = (time * 2.0).sin() > 0.0;
@@ -237,9 +368,23 @@ impl Animation for Hackerman {
             let cpu = 0.3 + (time * 0.7).sin().abs() * 0.5 + rng.random_range(0.0..0.1);
             let mem = 0.6 + (time * 0.1).sin() * 0.1;
             draw_text(canvas, stats_x, stats_y + 10, "CPU:", dim_green);
-            draw_mini_bar(canvas, stats_x + 6, stats_y + 10, 20, cpu.min(1.0), (0, 200, 100));
+            draw_mini_bar(
+                canvas,
+                stats_x + 6,
+                stats_y + 10,
+                20,
+                cpu.min(1.0),
+                (0, 200, 100),
+            );
             draw_text(canvas, stats_x, stats_y + 12, "MEM:", dim_green);
-            draw_mini_bar(canvas, stats_x + 6, stats_y + 12, 20, mem.min(1.0), (0, 180, 220));
+            draw_mini_bar(
+                canvas,
+                stats_x + 6,
+                stats_y + 12,
+                20,
+                mem.min(1.0),
+                (0, 180, 220),
+            );
         }
 
         // ══════════════════════════════════════
@@ -263,7 +408,9 @@ impl Animation for Hackerman {
             if rng.random_range(0.0..1.0) < 0.4 {
                 let a = rng.random_range(0..self.nodes.len());
                 let mut b = rng.random_range(0..self.nodes.len());
-                while b == a { b = rng.random_range(0..self.nodes.len()); }
+                while b == a {
+                    b = rng.random_range(0..self.nodes.len());
+                }
                 self.active_connection = Some((a, b));
                 self.nodes[b].active = true;
             }
@@ -275,28 +422,31 @@ impl Animation for Hackerman {
         }
 
         // Draw connections (lines between nodes)
-        if let Some((a, b)) = self.active_connection {
-            if a < self.nodes.len() && b < self.nodes.len() {
-                let ax = map_x + (self.nodes[a].x * map_w as f64) as usize;
-                let ay = map_y + (self.nodes[a].y * map_h as f64) as usize;
-                let bx = map_x + (self.nodes[b].x * map_w as f64) as usize;
-                let by = map_y + (self.nodes[b].y * map_h as f64) as usize;
-                // Simple line drawing
-                let steps = ((bx as f64 - ax as f64).abs().max((by as f64 - ay as f64).abs())) as usize;
-                if steps > 0 {
-                    let pulse_pos = ((time * 4.0) % 1.0 * steps as f64) as usize;
-                    for s in 0..steps {
-                        let px = ax as f64 + (bx as f64 - ax as f64) * s as f64 / steps as f64;
-                        let py = ay as f64 + (by as f64 - ay as f64) * s as f64 / steps as f64;
-                        let px = px as usize;
-                        let py = py as usize;
-                        if px < self.width && py < self.height {
-                            let near_pulse = (s as i32 - pulse_pos as i32).unsigned_abs() < 3;
-                            if near_pulse {
-                                canvas.set_char(px, py, '●', 0, 255, 100);
-                            } else {
-                                canvas.set_char(px, py, '·', 0, 80, 50);
-                            }
+        if let Some((a, b)) = self.active_connection
+            && a < self.nodes.len()
+            && b < self.nodes.len()
+        {
+            let ax = map_x + (self.nodes[a].x * map_w as f64) as usize;
+            let ay = map_y + (self.nodes[a].y * map_h as f64) as usize;
+            let bx = map_x + (self.nodes[b].x * map_w as f64) as usize;
+            let by = map_y + (self.nodes[b].y * map_h as f64) as usize;
+            // Simple line drawing
+            let steps = ((bx as f64 - ax as f64)
+                .abs()
+                .max((by as f64 - ay as f64).abs())) as usize;
+            if steps > 0 {
+                let pulse_pos = ((time * 4.0) % 1.0 * steps as f64) as usize;
+                for s in 0..steps {
+                    let px = ax as f64 + (bx as f64 - ax as f64) * s as f64 / steps as f64;
+                    let py = ay as f64 + (by as f64 - ay as f64) * s as f64 / steps as f64;
+                    let px = px as usize;
+                    let py = py as usize;
+                    if px < self.width && py < self.height {
+                        let near_pulse = (s as i32 - pulse_pos as i32).unsigned_abs() < 3;
+                        if near_pulse {
+                            canvas.set_char(px, py, '●', 0, 255, 100);
+                        } else {
+                            canvas.set_char(px, py, '·', 0, 80, 50);
                         }
                     }
                 }
@@ -307,12 +457,19 @@ impl Animation for Hackerman {
         for node in &self.nodes {
             let nx = map_x + (node.x * map_w as f64) as usize;
             let ny = map_y + (node.y * map_h as f64) as usize;
-            if nx < self.width.saturating_sub(node.label.len() + 3) && ny < mid_y.saturating_sub(1) {
+            if nx < self.width.saturating_sub(node.label.len() + 3) && ny < mid_y.saturating_sub(1)
+            {
                 let pulse_bright = if node.active {
                     0.6 + (node.pulse.sin() * 0.4).abs()
-                } else { 0.3 };
+                } else {
+                    0.3
+                };
                 let (r, g, b) = if node.active {
-                    ((50.0 * pulse_bright) as u8, (255.0 * pulse_bright) as u8, (100.0 * pulse_bright) as u8)
+                    (
+                        (50.0 * pulse_bright) as u8,
+                        (255.0 * pulse_bright) as u8,
+                        (100.0 * pulse_bright) as u8,
+                    )
                 } else {
                     (80, 80, 80)
                 };
@@ -338,40 +495,65 @@ impl Animation for Hackerman {
             let ip = rand_ip(&mut rng);
             let num = rng.random_range(1000u32..65535);
             let word = rand_word(&mut rng);
-            let text = tmpl.replace("{}", &if tmpl.contains("port") || tmpl.contains("bytes") || tmpl.contains("rows") {
-                num.to_string()
-            } else if tmpl.contains("admin:{}") {
-                word
+            let text = tmpl.replace(
+                "{}",
+                &if tmpl.contains("port") || tmpl.contains("bytes") || tmpl.contains("rows") {
+                    num.to_string()
+                } else if tmpl.contains("admin:{}") {
+                    word
+                } else {
+                    ip
+                },
+            );
+
+            let color = if text.contains("[+]") {
+                (100, 255, 100)
+            } else if text.contains("[!]") {
+                (255, 200, 50)
+            } else if text.contains("[*]") {
+                (100, 180, 255)
+            } else if text.starts_with("$") {
+                (0, 255, 0)
             } else {
-                ip
+                (0, 180, 80)
+            };
+
+            self.log_lines.push(LogLine {
+                text,
+                color,
+                age: 0.0,
             });
-
-            let color = if text.contains("[+]") { (100, 255, 100) }
-                else if text.contains("[!]") { (255, 200, 50) }
-                else if text.contains("[*]") { (100, 180, 255) }
-                else if text.starts_with("$") { (0, 255, 0) }
-                else { (0, 180, 80) };
-
-            self.log_lines.push(LogLine { text, color, age: 0.0 });
-            if self.log_lines.len() > 200 { self.log_lines.drain(0..100); }
+            if self.log_lines.len() > 200 {
+                self.log_lines.drain(0..100);
+            }
         }
 
-        for line in &mut self.log_lines { line.age += dt; }
+        for line in &mut self.log_lines {
+            line.age += dt;
+        }
 
         // Render log (most recent at bottom)
         let visible = log_h.min(self.log_lines.len());
         let start = self.log_lines.len().saturating_sub(visible);
         for (i, line) in self.log_lines[start..].iter().enumerate() {
             let sy = log_y_start + i;
-            if sy >= self.height.saturating_sub(1) { break; }
+            if sy >= self.height.saturating_sub(1) {
+                break;
+            }
             let fade = (1.0 - (line.age * 0.08).min(0.4)).max(0.6);
             let (cr, cg, cb) = line.color;
             for (cx, ch) in line.text.chars().enumerate() {
-                if cx >= log_w { break; }
-                canvas.set_char(log_x + cx, sy, ch,
+                if cx >= log_w {
+                    break;
+                }
+                canvas.set_char(
+                    log_x + cx,
+                    sy,
+                    ch,
                     (cr as f64 * fade) as u8,
                     (cg as f64 * fade) as u8,
-                    (cb as f64 * fade) as u8);
+                    (cb as f64 * fade) as u8,
+                );
             }
         }
 
@@ -387,7 +569,9 @@ impl Animation for Hackerman {
         for bar in &mut self.bars {
             if bar.value < bar.target {
                 bar.value += bar.speed * dt;
-                if bar.value > bar.target { bar.value = bar.target; }
+                if bar.value > bar.target {
+                    bar.value = bar.target;
+                }
             }
         }
 
@@ -412,14 +596,26 @@ impl Animation for Hackerman {
         // Draw progress bars
         for (i, bar) in self.bars.iter().enumerate() {
             let by = ops_y + i * 3;
-            if by + 1 >= self.height.saturating_sub(1) { break; }
+            if by + 1 >= self.height.saturating_sub(1) {
+                break;
+            }
 
             // Label + percentage
             let pct = format!(" {:.0}%", bar.value * 100.0);
             let status = if bar.value >= bar.target { " ✓" } else { "" };
             draw_text(canvas, ops_x, by, &bar.label, bar.color);
-            let status_color = if bar.value >= bar.target { (0, 255, 0) } else { bar.color };
-            draw_text(canvas, ops_x + bar.label.len(), by, &format!("{}{}", pct, status), status_color);
+            let status_color = if bar.value >= bar.target {
+                (0, 255, 0)
+            } else {
+                bar.color
+            };
+            draw_text(
+                canvas,
+                ops_x + bar.label.len(),
+                by,
+                &format!("{}{}", pct, status),
+                status_color,
+            );
 
             // Bar
             let bar_w = ops_w.saturating_sub(2);
@@ -456,7 +652,14 @@ fn draw_text(canvas: &mut Canvas, x: usize, y: usize, text: &str, color: (u8, u8
     }
 }
 
-fn draw_mini_bar(canvas: &mut Canvas, x: usize, y: usize, width: usize, value: f64, color: (u8, u8, u8)) {
+fn draw_mini_bar(
+    canvas: &mut Canvas,
+    x: usize,
+    y: usize,
+    width: usize,
+    value: f64,
+    color: (u8, u8, u8),
+) {
     let filled = (value * width as f64) as usize;
     for i in 0..width {
         let px = x + i;

@@ -1,6 +1,6 @@
+use super::Animation;
 use crate::generators::{ColorGradient, ColorStop, EmitterConfig, ParticleSystem};
 use crate::render::Canvas;
-use super::Animation;
 use rand::RngExt;
 
 struct Raindrop {
@@ -33,8 +33,8 @@ impl Rain {
                 Raindrop {
                     x: rng.random_range(0.0..width as f64),
                     y: rng.random_range(-(height as f64)..height as f64),
-                    speed: 15.0 + depth * 50.0,       // back: 15, front: 65
-                    length: 1.0 + depth * 5.0,         // back: short, front: long
+                    speed: 15.0 + depth * 50.0, // back: 15, front: 65
+                    length: 1.0 + depth * 5.0,  // back: short, front: long
                     wind_offset: rng.random_range(-0.5..0.5),
                     depth,
                 }
@@ -54,9 +54,24 @@ impl Rain {
             drag: 0.98,
             wind: 0.0,
             gradient: ColorGradient::new(vec![
-                ColorStop { t: 0.0, r: 200, g: 220, b: 255 },
-                ColorStop { t: 0.5, r: 150, g: 180, b: 255 },
-                ColorStop { t: 1.0, r: 80, g: 120, b: 200 },
+                ColorStop {
+                    t: 0.0,
+                    r: 200,
+                    g: 220,
+                    b: 255,
+                },
+                ColorStop {
+                    t: 0.5,
+                    r: 150,
+                    g: 180,
+                    b: 255,
+                },
+                ColorStop {
+                    t: 1.0,
+                    r: 80,
+                    g: 120,
+                    b: 200,
+                },
             ]),
         };
 
@@ -73,7 +88,9 @@ impl Rain {
 }
 
 impl Animation for Rain {
-    fn name(&self) -> &str { "rain" }
+    fn name(&self) -> &str {
+        "rain"
+    }
 
     fn preferred_render(&self) -> crate::render::RenderMode {
         crate::render::RenderMode::HalfBlock

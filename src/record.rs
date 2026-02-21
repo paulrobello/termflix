@@ -86,9 +86,9 @@ impl Player {
         let mut lines = reader.lines();
 
         // Parse header
-        let header = lines.next().ok_or_else(|| {
-            io::Error::new(io::ErrorKind::InvalidData, "Missing header")
-        })??;
+        let header = lines
+            .next()
+            .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "Missing header"))??;
         if !header.starts_with("ASCIIANIM v1") {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidData,
@@ -96,15 +96,13 @@ impl Player {
             ));
         }
 
-        let frame_count_line = lines.next().ok_or_else(|| {
-            io::Error::new(io::ErrorKind::InvalidData, "Missing frame count")
-        })??;
+        let frame_count_line = lines
+            .next()
+            .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "Missing frame count"))??;
         let _frame_count: usize = frame_count_line
             .strip_prefix("FRAMES ")
             .and_then(|s| s.parse().ok())
-            .ok_or_else(|| {
-                io::Error::new(io::ErrorKind::InvalidData, "Invalid frame count")
-            })?;
+            .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "Invalid frame count"))?;
 
         let mut frames = Vec::new();
 
@@ -121,9 +119,7 @@ impl Player {
             let timestamp_ms: u64 = t_line
                 .strip_prefix("T ")
                 .and_then(|s| s.parse().ok())
-                .ok_or_else(|| {
-                    io::Error::new(io::ErrorKind::InvalidData, "Invalid timestamp")
-                })?;
+                .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "Invalid timestamp"))?;
 
             // Read base64 encoded content
             let encoded = lines.next().ok_or_else(|| {
@@ -131,7 +127,10 @@ impl Player {
             })??;
 
             let content_bytes = base64_decode(&encoded).map_err(|e| {
-                io::Error::new(io::ErrorKind::InvalidData, format!("Base64 decode error: {}", e))
+                io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    format!("Base64 decode error: {}", e),
+                )
             })?;
             let content = String::from_utf8(content_bytes).map_err(|e| {
                 io::Error::new(io::ErrorKind::InvalidData, format!("UTF-8 error: {}", e))
@@ -168,15 +167,14 @@ impl Player {
             }
 
             // Check for quit
-            if crossterm::event::poll(Duration::ZERO)? {
-                if let crossterm::event::Event::Key(key) = crossterm::event::read()? {
-                    if matches!(
-                        key.code,
-                        crossterm::event::KeyCode::Char('q') | crossterm::event::KeyCode::Esc
-                    ) {
-                        break;
-                    }
-                }
+            if crossterm::event::poll(Duration::ZERO)?
+                && let crossterm::event::Event::Key(key) = crossterm::event::read()?
+                && matches!(
+                    key.code,
+                    crossterm::event::KeyCode::Char('q') | crossterm::event::KeyCode::Esc
+                )
+            {
+                break;
             }
 
             execute!(stdout, cursor::MoveTo(0, 0))?;
@@ -202,7 +200,7 @@ impl Player {
 const B64_CHARS: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 
 fn base64_encode(data: &[u8]) -> String {
-    let mut result = String::with_capacity((data.len() + 2) / 3 * 4);
+    let mut result = String::with_capacity(data.len().div_ceil(3) * 4);
     for chunk in data.chunks(3) {
         let b0 = chunk[0] as u32;
         let b1 = if chunk.len() > 1 { chunk[1] as u32 } else { 0 };
@@ -227,7 +225,7 @@ fn base64_encode(data: &[u8]) -> String {
 
 fn base64_decode(data: &str) -> Result<Vec<u8>, String> {
     let data: Vec<u8> = data.bytes().filter(|&b| b != b'\n' && b != b'\r').collect();
-    if data.len() % 4 != 0 {
+    if !data.len().is_multiple_of(4) {
         return Err("Invalid base64 length".to_string());
     }
 

@@ -1,5 +1,5 @@
-use crate::render::Canvas;
 use super::Animation;
+use crate::render::Canvas;
 
 /// Dragon curve fractal iteratively drawn and colored
 pub struct Dragon {
@@ -105,8 +105,8 @@ impl Animation for Dragon {
         let offset_y = (h - range_y * scale) * 0.5 - min_y * scale;
 
         // Draw the curve progressively
-        let points_to_draw = ((self.points.len() as f64 * self.draw_progress) as usize)
-            .min(self.points.len());
+        let points_to_draw =
+            ((self.points.len() as f64 * self.draw_progress) as usize).min(self.points.len());
 
         for i in 0..points_to_draw.saturating_sub(1) {
             let (x0, y0) = self.points[i];

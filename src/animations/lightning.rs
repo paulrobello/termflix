@@ -1,5 +1,5 @@
-use crate::render::Canvas;
 use super::Animation;
+use crate::render::Canvas;
 use rand::RngExt;
 
 struct Bolt {
@@ -33,7 +33,14 @@ impl Lightning {
         let start_x = rng.random_range(self.width as f64 * 0.1..self.width as f64 * 0.9);
         let mut segments = Vec::new();
 
-        self.branch(&mut segments, start_x, 0.0, self.height as f64 * 0.8, 0, &mut rng);
+        self.branch(
+            &mut segments,
+            start_x,
+            0.0,
+            self.height as f64 * 0.8,
+            0,
+            &mut rng,
+        );
 
         Bolt {
             segments,
@@ -68,7 +75,14 @@ impl Lightning {
             if depth < 3 && rng.random_range(0.0..1.0) < 0.15 {
                 let branch_target = ny + rng.random_range(step * 2.0..step * 5.0);
                 let branch_x = nx + rng.random_range(-step * 3.0..step * 3.0);
-                self.branch(segments, nx, ny, branch_target.min(target_y), depth + 1, rng);
+                self.branch(
+                    segments,
+                    nx,
+                    ny,
+                    branch_target.min(target_y),
+                    depth + 1,
+                    rng,
+                );
                 // Continue the main bolt slightly offset
                 let _ = branch_x; // branch direction already applied via recursive call
             }
@@ -80,7 +94,9 @@ impl Lightning {
 }
 
 impl Animation for Lightning {
-    fn name(&self) -> &str { "lightning" }
+    fn name(&self) -> &str {
+        "lightning"
+    }
 
     fn preferred_render(&self) -> crate::render::RenderMode {
         crate::render::RenderMode::Braille

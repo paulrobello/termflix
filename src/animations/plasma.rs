@@ -1,15 +1,19 @@
-use crate::render::Canvas;
 use super::Animation;
+use crate::render::Canvas;
 
 /// Classic plasma effect using overlapping sine waves
 pub struct Plasma;
 
 impl Plasma {
-    pub fn new() -> Self { Plasma }
+    pub fn new() -> Self {
+        Plasma
+    }
 }
 
 impl Animation for Plasma {
-    fn name(&self) -> &str { "plasma" }
+    fn name(&self) -> &str {
+        "plasma"
+    }
 
     fn update(&mut self, canvas: &mut Canvas, _dt: f64, time: f64) {
         let w = canvas.width as f64;

@@ -1,5 +1,5 @@
-use crate::render::Canvas;
 use super::Animation;
+use crate::render::Canvas;
 use rand::RngExt;
 
 struct Boid {
@@ -35,12 +35,18 @@ impl Boids {
             })
             .collect();
 
-        Boids { width, height, boids }
+        Boids {
+            width,
+            height,
+            boids,
+        }
     }
 }
 
 impl Animation for Boids {
-    fn name(&self) -> &str { "boids" }
+    fn name(&self) -> &str {
+        "boids"
+    }
 
     fn update(&mut self, canvas: &mut Canvas, dt: f64, _time: f64) {
         self.width = canvas.width;
@@ -52,9 +58,8 @@ impl Animation for Boids {
         let min_speed = 10.0;
 
         // Collect positions for rule calculations
-        let positions: Vec<(f64, f64, f64, f64)> = self.boids.iter()
-            .map(|b| (b.x, b.y, b.vx, b.vy))
-            .collect();
+        let positions: Vec<(f64, f64, f64, f64)> =
+            self.boids.iter().map(|b| (b.x, b.y, b.vx, b.vy)).collect();
 
         for (i, boid) in self.boids.iter_mut().enumerate() {
             let mut sep_x = 0.0;
@@ -66,7 +71,9 @@ impl Animation for Boids {
             let mut neighbors = 0;
 
             for (j, &(ox, oy, ovx, ovy)) in positions.iter().enumerate() {
-                if i == j { continue; }
+                if i == j {
+                    continue;
+                }
                 let dx = ox - boid.x;
                 let dy = oy - boid.y;
                 let dist = (dx * dx + dy * dy).sqrt();
@@ -105,10 +112,18 @@ impl Animation for Boids {
             // Edge avoidance
             let margin = 10.0;
             let turn_force = 3.0;
-            if boid.x < margin { boid.vx += turn_force; }
-            if boid.x > self.width as f64 - margin { boid.vx -= turn_force; }
-            if boid.y < margin { boid.vy += turn_force; }
-            if boid.y > self.height as f64 - margin { boid.vy -= turn_force; }
+            if boid.x < margin {
+                boid.vx += turn_force;
+            }
+            if boid.x > self.width as f64 - margin {
+                boid.vx -= turn_force;
+            }
+            if boid.y < margin {
+                boid.vy += turn_force;
+            }
+            if boid.y > self.height as f64 - margin {
+                boid.vy -= turn_force;
+            }
 
             // Speed limits
             let speed = (boid.vx * boid.vx + boid.vy * boid.vy).sqrt();
@@ -124,10 +139,18 @@ impl Animation for Boids {
             boid.y += boid.vy * dt;
 
             // Wrap
-            if boid.x < 0.0 { boid.x += self.width as f64; }
-            if boid.x >= self.width as f64 { boid.x -= self.width as f64; }
-            if boid.y < 0.0 { boid.y += self.height as f64; }
-            if boid.y >= self.height as f64 { boid.y -= self.height as f64; }
+            if boid.x < 0.0 {
+                boid.x += self.width as f64;
+            }
+            if boid.x >= self.width as f64 {
+                boid.x -= self.width as f64;
+            }
+            if boid.y < 0.0 {
+                boid.y += self.height as f64;
+            }
+            if boid.y >= self.height as f64 {
+                boid.y -= self.height as f64;
+            }
 
             // Update hue based on heading
             let heading = boid.vy.atan2(boid.vx);
@@ -172,5 +195,9 @@ fn hsv_to_rgb(h: f64, s: f64, v: f64) -> (u8, u8, u8) {
         4 => (x, 0.0, c),
         _ => (c, 0.0, x),
     };
-    (((r + m) * 255.0) as u8, ((g + m) * 255.0) as u8, ((b + m) * 255.0) as u8)
+    (
+        ((r + m) * 255.0) as u8,
+        ((g + m) * 255.0) as u8,
+        ((b + m) * 255.0) as u8,
+    )
 }

@@ -1,5 +1,5 @@
-use crate::render::Canvas;
 use super::Animation;
+use crate::render::Canvas;
 
 /// Animated Sierpinski triangle with zoom
 pub struct Sierpinski {
@@ -61,7 +61,7 @@ impl Animation for Sierpinski {
                 let rel_x = (fx - (cx - half)) / size;
                 let rel_y = (fy - (cy - half * 0.866)) / (size * 0.866);
 
-                if rel_x < 0.0 || rel_x >= 1.0 || rel_y < 0.0 || rel_y >= 1.0 {
+                if !(0.0..1.0).contains(&rel_x) || !(0.0..1.0).contains(&rel_y) {
                     continue;
                 }
 
@@ -81,7 +81,7 @@ impl Animation for Sierpinski {
                         // Top region
                         px = sx - 0.5;
                         py = sy - 1.0;
-                        if px < 0.0 || px > 1.0 {
+                        if !(0.0..=1.0).contains(&px) {
                             in_set = false;
                             break;
                         }
@@ -98,7 +98,7 @@ impl Animation for Sierpinski {
                     // Check if we're in the empty middle triangle
                     // The middle triangle is roughly where sx in [0.5, 1.5] and sy in [0, 1]
                     // and above the line from (0.5, 0) to (1.0, 1.0) and (1.0, 1.0) to (1.5, 0)
-                    if sy <= 1.0 && sx >= 0.5 && sx <= 1.5 {
+                    if sy <= 1.0 && (0.5..=1.5).contains(&sx) {
                         let mid = sx - 0.5;
                         if mid <= 1.0 && sy < 1.0 - (mid - 0.5).abs() * 2.0 {
                             // In the gap
@@ -122,21 +122,21 @@ impl Animation for Sierpinski {
         }
 
         // Alternative: draw using recursive triangles for cleaner result
-        draw_sierpinski_recursive(
-            canvas,
-            ax, ay, bx, by, _cx_t, _cy_t,
-            6, 0, color_offset,
-        );
+        draw_sierpinski_recursive(canvas, ax, ay, bx, by, _cx_t, _cy_t, 6, 0, color_offset);
 
         let _ = self.zoom;
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn draw_sierpinski_recursive(
     canvas: &mut Canvas,
-    ax: f64, ay: f64,
-    bx: f64, by: f64,
-    cx: f64, cy: f64,
+    ax: f64,
+    ay: f64,
+    bx: f64,
+    by: f64,
+    cx: f64,
+    cy: f64,
     depth: usize,
     current_depth: usize,
     color_offset: f64,
@@ -156,16 +156,53 @@ fn draw_sierpinski_recursive(
     let mac_y = (ay + cy) * 0.5;
 
     // Three sub-triangles (skip the middle one)
-    draw_sierpinski_recursive(canvas, ax, ay, mab_x, mab_y, mac_x, mac_y, depth - 1, current_depth + 1, color_offset);
-    draw_sierpinski_recursive(canvas, mab_x, mab_y, bx, by, mbc_x, mbc_y, depth - 1, current_depth + 1, color_offset);
-    draw_sierpinski_recursive(canvas, mac_x, mac_y, mbc_x, mbc_y, cx, cy, depth - 1, current_depth + 1, color_offset);
+    draw_sierpinski_recursive(
+        canvas,
+        ax,
+        ay,
+        mab_x,
+        mab_y,
+        mac_x,
+        mac_y,
+        depth - 1,
+        current_depth + 1,
+        color_offset,
+    );
+    draw_sierpinski_recursive(
+        canvas,
+        mab_x,
+        mab_y,
+        bx,
+        by,
+        mbc_x,
+        mbc_y,
+        depth - 1,
+        current_depth + 1,
+        color_offset,
+    );
+    draw_sierpinski_recursive(
+        canvas,
+        mac_x,
+        mac_y,
+        mbc_x,
+        mbc_y,
+        cx,
+        cy,
+        depth - 1,
+        current_depth + 1,
+        color_offset,
+    );
 }
 
+#[allow(clippy::too_many_arguments)]
 fn fill_triangle(
     canvas: &mut Canvas,
-    ax: f64, ay: f64,
-    bx: f64, by: f64,
-    cx: f64, cy: f64,
+    ax: f64,
+    ay: f64,
+    bx: f64,
+    by: f64,
+    cx: f64,
+    cy: f64,
     depth: usize,
     color_offset: f64,
 ) {
@@ -187,7 +224,17 @@ fn fill_triangle(
     }
 }
 
-fn point_in_triangle(px: f64, py: f64, ax: f64, ay: f64, bx: f64, by: f64, cx: f64, cy: f64) -> bool {
+#[allow(clippy::too_many_arguments)]
+fn point_in_triangle(
+    px: f64,
+    py: f64,
+    ax: f64,
+    ay: f64,
+    bx: f64,
+    by: f64,
+    cx: f64,
+    cy: f64,
+) -> bool {
     let d1 = sign(px, py, ax, ay, bx, by);
     let d2 = sign(px, py, bx, by, cx, cy);
     let d3 = sign(px, py, cx, cy, ax, ay);

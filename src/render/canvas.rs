@@ -43,7 +43,12 @@ pub struct Canvas {
 }
 
 impl Canvas {
-    pub fn new(term_cols: usize, term_rows: usize, render_mode: RenderMode, color_mode: ColorMode) -> Self {
+    pub fn new(
+        term_cols: usize,
+        term_rows: usize,
+        render_mode: RenderMode,
+        color_mode: ColorMode,
+    ) -> Self {
         let (px_w, px_h) = match render_mode {
             RenderMode::Braille => (term_cols * 2, term_rows * 4),
             RenderMode::HalfBlock => (term_cols, term_rows * 2),
@@ -172,13 +177,27 @@ impl Canvas {
                 if brightness < 64 {
                     Color::Black
                 } else if r > g && r > b {
-                    if brightness > 180 { Color::Red } else { Color::DarkRed }
+                    if brightness > 180 {
+                        Color::Red
+                    } else {
+                        Color::DarkRed
+                    }
                 } else if g > r && g > b {
-                    if brightness > 180 { Color::Green } else { Color::DarkGreen }
+                    if brightness > 180 {
+                        Color::Green
+                    } else {
+                        Color::DarkGreen
+                    }
                 } else if b > r && b > g {
-                    if brightness > 180 { Color::Blue } else { Color::DarkBlue }
+                    if brightness > 180 {
+                        Color::Blue
+                    } else {
+                        Color::DarkBlue
+                    }
+                } else if brightness > 180 {
+                    Color::White
                 } else {
-                    if brightness > 180 { Color::White } else { Color::Grey }
+                    Color::Grey
                 }
             }
         }

@@ -1,10 +1,10 @@
-use crate::render::Canvas;
 use super::Animation;
+use crate::render::Canvas;
 use rand::RngExt;
 
 struct Organelle {
     angle: f64,
-    dist: f64,     // fraction of cell radius
+    dist: f64, // fraction of cell radius
     speed: f64,
     size: f64,
     hue_shift: f64,
@@ -18,7 +18,7 @@ struct Cell {
     hue: f64,
     split_progress: f64,
     splitting: bool,
-    elongation: f64,  // 0=circle, >0=oval
+    elongation: f64, // 0=circle, >0=oval
     elong_angle: f64,
     organelles: Vec<Organelle>,
     trail: Vec<(f64, f64, f64)>, // x, y, age
@@ -38,7 +38,9 @@ impl Cells {
     pub fn new(width: usize, height: usize, scale: f64) -> Self {
         let mut rng = rand::rng();
         let initial = 5;
-        let cells = (0..initial).map(|_| make_cell(&mut rng, width, height)).collect();
+        let cells = (0..initial)
+            .map(|_| make_cell(&mut rng, width, height))
+            .collect();
 
         Cells {
             width,
@@ -53,13 +55,15 @@ impl Cells {
 fn make_cell(rng: &mut impl rand::RngExt, width: usize, height: usize) -> Cell {
     let radius = rng.random_range(5.0..14.0);
     let num_org = rng.random_range(2..6);
-    let organelles = (0..num_org).map(|_| Organelle {
-        angle: rng.random_range(0.0..std::f64::consts::TAU),
-        dist: rng.random_range(0.2..0.7),
-        speed: rng.random_range(-2.0..2.0),
-        size: rng.random_range(0.8..2.0),
-        hue_shift: rng.random_range(-0.15..0.15),
-    }).collect();
+    let organelles = (0..num_org)
+        .map(|_| Organelle {
+            angle: rng.random_range(0.0..std::f64::consts::TAU),
+            dist: rng.random_range(0.2..0.7),
+            speed: rng.random_range(-2.0..2.0),
+            size: rng.random_range(0.8..2.0),
+            hue_shift: rng.random_range(-0.15..0.15),
+        })
+        .collect();
 
     Cell {
         x: rng.random_range(width as f64 * 0.2..width as f64 * 0.8),
@@ -82,13 +86,16 @@ impl Cells {
         let mut rng = rand::rng();
         self.cells.clear();
         for _ in 0..5 {
-            self.cells.push(make_cell(&mut rng, self.width, self.height));
+            self.cells
+                .push(make_cell(&mut rng, self.width, self.height));
         }
     }
 }
 
 impl Animation for Cells {
-    fn name(&self) -> &str { "cells" }
+    fn name(&self) -> &str {
+        "cells"
+    }
 
     fn update(&mut self, canvas: &mut Canvas, dt: f64, time: f64) {
         let mut rng = rand::rng();
@@ -114,10 +121,10 @@ impl Animation for Cells {
         let mut new_cells = Vec::new();
         for cell in &mut self.cells {
             // Brownian + drift movement
-            let drift_x = (time * 0.3 + cell.phase).cos() * 3.0
-                + (time * 0.7 + cell.phase * 2.3).sin() * 1.5;
-            let drift_y = (time * 0.4 + cell.phase).sin() * 2.5
-                + (time * 0.6 + cell.phase * 1.7).cos() * 1.2;
+            let drift_x =
+                (time * 0.3 + cell.phase).cos() * 3.0 + (time * 0.7 + cell.phase * 2.3).sin() * 1.5;
+            let drift_y =
+                (time * 0.4 + cell.phase).sin() * 2.5 + (time * 0.6 + cell.phase * 1.7).cos() * 1.2;
             cell.x += (drift_x + rng.random_range(-1.0..1.0)) * dt;
             cell.y += (drift_y + rng.random_range(-0.8..0.8)) * dt;
             cell.phase += dt * 0.5;
@@ -126,10 +133,18 @@ impl Animation for Cells {
             // Soft wall repulsion — keep cells well within bounds
             let margin = cell.radius + 4.0;
             let wall_force = 5.0;
-            if cell.x < margin { cell.x += (margin - cell.x) * wall_force * dt; }
-            if cell.x > w - margin { cell.x -= (cell.x - (w - margin)) * wall_force * dt; }
-            if cell.y < margin { cell.y += (margin - cell.y) * wall_force * dt; }
-            if cell.y > h - margin { cell.y -= (cell.y - (h - margin)) * wall_force * dt; }
+            if cell.x < margin {
+                cell.x += (margin - cell.x) * wall_force * dt;
+            }
+            if cell.x > w - margin {
+                cell.x -= (cell.x - (w - margin)) * wall_force * dt;
+            }
+            if cell.y < margin {
+                cell.y += (margin - cell.y) * wall_force * dt;
+            }
+            if cell.y > h - margin {
+                cell.y -= (cell.y - (h - margin)) * wall_force * dt;
+            }
             cell.x = cell.x.clamp(2.0, w - 2.0);
             cell.y = cell.y.clamp(2.0, h - 2.0);
 
@@ -140,7 +155,9 @@ impl Animation for Cells {
 
             // Trail
             cell.trail.push((cell.x, cell.y, 0.0));
-            for t in &mut cell.trail { t.2 += dt; }
+            for t in &mut cell.trail {
+                t.2 += dt;
+            }
             cell.trail.retain(|t| t.2 < 3.0);
 
             if cell.splitting {
@@ -170,10 +187,13 @@ impl Animation for Cells {
         self.cells.extend(new_cells);
 
         // Repulsion
-        let positions: Vec<(f64, f64, f64)> = self.cells.iter().map(|c| (c.x, c.y, c.radius)).collect();
+        let positions: Vec<(f64, f64, f64)> =
+            self.cells.iter().map(|c| (c.x, c.y, c.radius)).collect();
         for (i, cell) in self.cells.iter_mut().enumerate() {
             for (j, &(ox, oy, or)) in positions.iter().enumerate() {
-                if i == j { continue; }
+                if i == j {
+                    continue;
+                }
                 let dx = cell.x - ox;
                 let dy = cell.y - oy;
                 let dist = (dx * dx + dy * dy).sqrt();
@@ -195,7 +215,8 @@ impl Animation for Cells {
                 let fy = y as f64 * 0.06;
                 let t = self.fluid_time * 0.15;
                 let n = ((fx + t).sin() * (fy - t * 0.7).cos()
-                    + (fx * 0.7 - t * 0.5).cos() * (fy * 1.3 + t).sin()) * 0.5;
+                    + (fx * 0.7 - t * 0.5).cos() * (fy * 1.3 + t).sin())
+                    * 0.5;
                 let v = (n * 0.5 + 0.5).clamp(0.0, 1.0);
                 if v > 0.4 {
                     let b = (v - 0.4) * 0.08;
@@ -239,7 +260,19 @@ impl Animation for Cells {
                     let lx = cell.x + angle.cos() * sep * sign;
                     let ly = cell.y + angle.sin() * sep * sign;
                     let lr = base_r * (1.0 - t * 0.25);
-                    draw_membrane_cell(canvas, lx, ly, lr, 0.0, 0.0, cr, cg, cb, cell.membrane_wobble, time);
+                    draw_membrane_cell(
+                        canvas,
+                        lx,
+                        ly,
+                        lr,
+                        0.0,
+                        0.0,
+                        cr,
+                        cg,
+                        cb,
+                        cell.membrane_wobble,
+                        time,
+                    );
                 }
                 // Bridge between lobes
                 if t < 0.85 {
@@ -247,25 +280,36 @@ impl Animation for Cells {
                     let steps = (sep * 3.0) as usize;
                     for s in 0..steps.max(1) {
                         let frac = s as f64 / steps as f64;
-                        let bx = (cell.x - angle.cos() * sep + angle.cos() * sep * 2.0 * frac) as usize;
-                        let by = (cell.y - angle.sin() * sep + angle.sin() * sep * 2.0 * frac) as usize;
+                        let bx =
+                            (cell.x - angle.cos() * sep + angle.cos() * sep * 2.0 * frac) as usize;
+                        let by =
+                            (cell.y - angle.sin() * sep + angle.sin() * sep * 2.0 * frac) as usize;
                         if bx < canvas.width && by < canvas.height {
                             canvas.set_colored(bx, by, bridge_alpha, cr, cg, cb);
                         }
                     }
                 }
             } else {
-                draw_membrane_cell(canvas, cell.x, cell.y, base_r,
-                    cell.elongation, cell.elong_angle, cr, cg, cb, cell.membrane_wobble, time);
+                draw_membrane_cell(
+                    canvas,
+                    cell.x,
+                    cell.y,
+                    base_r,
+                    cell.elongation,
+                    cell.elong_angle,
+                    cr,
+                    cg,
+                    cb,
+                    cell.membrane_wobble,
+                    time,
+                );
 
                 // Draw organelles
                 for org in &cell.organelles {
                     let ox = cell.x + (org.angle.cos() * org.dist * base_r);
                     let oy = cell.y + (org.angle.sin() * org.dist * base_r);
-                    let (or, og, ob) = hsv_to_rgb(
-                        (cell.hue + org.hue_shift).fract().abs(),
-                        0.6, 0.9
-                    );
+                    let (or, og, ob) =
+                        hsv_to_rgb((cell.hue + org.hue_shift).fract().abs(), 0.6, 0.9);
                     let orad = org.size;
                     let min_x = (ox - orad).max(0.0) as usize;
                     let max_x = (ox + orad + 1.0).min(canvas.width as f64) as usize;
@@ -330,10 +374,19 @@ impl Animation for Cells {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn draw_membrane_cell(
-    canvas: &mut Canvas, cx: f64, cy: f64, radius: f64,
-    elongation: f64, elong_angle: f64,
-    r: u8, g: u8, b: u8, wobble_freq: f64, time: f64,
+    canvas: &mut Canvas,
+    cx: f64,
+    cy: f64,
+    radius: f64,
+    elongation: f64,
+    elong_angle: f64,
+    r: u8,
+    g: u8,
+    b: u8,
+    wobble_freq: f64,
+    time: f64,
 ) {
     let scan_r = radius * (1.0 + elongation) + 2.0;
     let min_x = (cx - scan_r).max(0.0) as usize;
@@ -362,7 +415,9 @@ fn draw_membrane_cell(
             let wobble = (angle * 5.0 * wobble_freq + time * 2.0).sin() * 0.06;
             let norm_dist = norm_dist + wobble;
 
-            if norm_dist > 1.05 { continue; }
+            if norm_dist > 1.05 {
+                continue;
+            }
 
             if norm_dist > 0.85 {
                 // Membrane edge — bright glow
@@ -376,10 +431,14 @@ fn draw_membrane_cell(
             } else {
                 // Interior — translucent fill
                 let interior = 0.15 + (1.0 - norm_dist / 0.85) * 0.15;
-                canvas.set_colored(x, y, interior,
+                canvas.set_colored(
+                    x,
+                    y,
+                    interior,
                     (r as f64 * 0.7) as u8,
                     (g as f64 * 0.7) as u8,
-                    (b as f64 * 0.7) as u8);
+                    (b as f64 * 0.7) as u8,
+                );
             }
         }
     }
@@ -398,5 +457,9 @@ fn hsv_to_rgb(h: f64, s: f64, v: f64) -> (u8, u8, u8) {
         4 => (x, 0.0, c),
         _ => (c, 0.0, x),
     };
-    (((r + m) * 255.0) as u8, ((g + m) * 255.0) as u8, ((b + m) * 255.0) as u8)
+    (
+        ((r + m) * 255.0) as u8,
+        ((g + m) * 255.0) as u8,
+        ((b + m) * 255.0) as u8,
+    )
 }

@@ -1,5 +1,5 @@
-use crate::render::Canvas;
 use super::Animation;
+use crate::render::Canvas;
 
 /// Slowly zooming into the Mandelbrot set with color cycling
 pub struct Mandelbrot {

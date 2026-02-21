@@ -1,5 +1,5 @@
-use crate::render::Canvas;
 use super::Animation;
+use crate::render::Canvas;
 use noise::{NoiseFn, Perlin};
 use rand::RngExt;
 
@@ -52,7 +52,9 @@ impl FlowField {
 }
 
 impl Animation for FlowField {
-    fn name(&self) -> &str { "flow" }
+    fn name(&self) -> &str {
+        "flow"
+    }
 
     fn preferred_render(&self) -> crate::render::RenderMode {
         crate::render::RenderMode::Braille
@@ -92,9 +94,7 @@ impl Animation for FlowField {
             }
 
             // Wrap around edges
-            if p.x < 0.0 || p.x >= self.width as f64
-                || p.y < 0.0 || p.y >= self.height as f64
-            {
+            if p.x < 0.0 || p.x >= self.width as f64 || p.y < 0.0 || p.y >= self.height as f64 {
                 p.x = rng.random_range(0.0..self.width as f64);
                 p.y = rng.random_range(0.0..self.height as f64);
                 p.prev_x = p.x;
@@ -133,5 +133,9 @@ fn hue_to_rgb(h: f64) -> (u8, u8, u8) {
         4 => (x, 0.0, c),
         _ => (c, 0.0, x),
     };
-    (((r + m) * 255.0) as u8, ((g + m) * 255.0) as u8, ((b + m) * 255.0) as u8)
+    (
+        ((r + m) * 255.0) as u8,
+        ((g + m) * 255.0) as u8,
+        ((b + m) * 255.0) as u8,
+    )
 }

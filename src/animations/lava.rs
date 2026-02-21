@@ -1,5 +1,5 @@
-use crate::render::Canvas;
 use super::Animation;
+use crate::render::Canvas;
 use rand::RngExt;
 
 struct Blob {
@@ -32,7 +32,11 @@ impl Lava {
                 radius: rng.random_range(4.0..10.0),
             })
             .collect();
-        Lava { width, height, blobs }
+        Lava {
+            width,
+            height,
+            blobs,
+        }
     }
 }
 

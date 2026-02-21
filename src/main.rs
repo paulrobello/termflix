@@ -3,15 +3,16 @@ pub mod generators;
 mod record;
 mod render;
 
+use animations::Animation;
+use clap::Parser;
+use crossterm::{
+    cursor,
+    event::{self, Event, KeyCode, KeyEvent},
+    execute, terminal,
+};
+use render::{Canvas, ColorMode, DeltaRenderer, RenderMode};
 use std::io::{self, Write};
 use std::time::{Duration, Instant};
-use crossterm::{
-    cursor, execute, terminal,
-    event::{self, Event, KeyCode, KeyEvent},
-};
-use clap::Parser;
-use render::{Canvas, ColorMode, RenderMode};
-use animations::Animation;
 
 #[derive(Parser)]
 #[command(name = "termflix", about = "Terminal animation player")]
@@ -92,14 +93,19 @@ fn main() -> io::Result<()> {
     result
 }
 
-const RENDER_MODES: [RenderMode; 3] = [RenderMode::Braille, RenderMode::HalfBlock, RenderMode::Ascii];
-const COLOR_MODES: [ColorMode; 4] = [ColorMode::TrueColor, ColorMode::Ansi256, ColorMode::Ansi16, ColorMode::Mono];
+const RENDER_MODES: [RenderMode; 3] = [
+    RenderMode::Braille,
+    RenderMode::HalfBlock,
+    RenderMode::Ascii,
+];
+const COLOR_MODES: [ColorMode; 4] = [
+    ColorMode::TrueColor,
+    ColorMode::Ansi256,
+    ColorMode::Ansi16,
+    ColorMode::Mono,
+];
 
-fn run_loop(
-    cli: &Cli,
-    initial_anim: &str,
-    frame_dur: Duration,
-) -> io::Result<()> {
+fn run_loop(cli: &Cli, initial_anim: &str, frame_dur: Duration) -> io::Result<()> {
     let (mut cols, mut rows) = terminal::size()?;
 
     let explicit_render = cli.render;
@@ -107,14 +113,25 @@ fn run_loop(
     let mut hide_status = cli.clean;
     let scale = cli.scale.clamp(0.5, 2.0);
 
-    let display_rows = if hide_status { rows as usize } else { (rows as usize).saturating_sub(1) };
-    let temp_canvas = Canvas::new(cols as usize, display_rows, RenderMode::HalfBlock, color_mode);
-    let mut anim: Box<dyn Animation> = animations::create(initial_anim, temp_canvas.width, temp_canvas.height, scale);
+    let display_rows = if hide_status {
+        rows as usize
+    } else {
+        (rows as usize).saturating_sub(1)
+    };
+    let temp_canvas = Canvas::new(
+        cols as usize,
+        display_rows,
+        RenderMode::HalfBlock,
+        color_mode,
+    );
+    let mut anim: Box<dyn Animation> =
+        animations::create(initial_anim, temp_canvas.width, temp_canvas.height, scale);
     let mut render_mode = explicit_render.unwrap_or_else(|| anim.preferred_render());
     let mut canvas = Canvas::new(cols as usize, display_rows, render_mode, color_mode);
     anim = animations::create(initial_anim, canvas.width, canvas.height, scale);
 
-    let mut anim_index = animations::ANIMATION_NAMES.iter()
+    let mut anim_index = animations::ANIMATION_NAMES
+        .iter()
         .position(|&n| n == initial_anim)
         .unwrap_or(0);
 
@@ -130,6 +147,8 @@ fn run_loop(
     let mut frame_buf: Vec<u8> = Vec::with_capacity(256 * 1024);
     // Resize cooldown — skip frames after resize
     let mut resize_cooldown = Instant::now();
+    // Delta renderer — only redraws cells that changed between frames
+    let mut delta = DeltaRenderer::new();
 
     loop {
         // Use event::poll as frame timer — properly yields to OS for signal handling
@@ -161,7 +180,9 @@ fn run_loop(
                             anim_index = (anim_index + 1) % animations::ANIMATION_NAMES.len();
                             anim = animations::create(
                                 animations::ANIMATION_NAMES[anim_index],
-                                canvas.width, canvas.height, scale,
+                                canvas.width,
+                                canvas.height,
+                                scale,
                             );
                             if explicit_render.is_none() {
                                 render_mode = anim.preferred_render();
@@ -177,7 +198,9 @@ fn run_loop(
                             };
                             anim = animations::create(
                                 animations::ANIMATION_NAMES[anim_index],
-                                canvas.width, canvas.height, scale,
+                                canvas.width,
+                                canvas.height,
+                                scale,
                             );
                             if explicit_render.is_none() {
                                 render_mode = anim.preferred_render();
@@ -186,12 +209,18 @@ fn run_loop(
                             cycle_start = Instant::now();
                         }
                         KeyCode::Char('r') => {
-                            let idx = RENDER_MODES.iter().position(|&m| m == render_mode).unwrap_or(0);
+                            let idx = RENDER_MODES
+                                .iter()
+                                .position(|&m| m == render_mode)
+                                .unwrap_or(0);
                             render_mode = RENDER_MODES[(idx + 1) % RENDER_MODES.len()];
                             needs_rebuild = true;
                         }
                         KeyCode::Char('c') => {
-                            let idx = COLOR_MODES.iter().position(|&m| m == color_mode).unwrap_or(0);
+                            let idx = COLOR_MODES
+                                .iter()
+                                .position(|&m| m == color_mode)
+                                .unwrap_or(0);
                             color_mode = COLOR_MODES[(idx + 1) % COLOR_MODES.len()];
                             needs_rebuild = true;
                         }
@@ -200,7 +229,7 @@ fn run_loop(
                             needs_rebuild = true;
                         }
                         _ => {}
-                    }
+                    },
                     _ => {}
                 }
                 // Check for more events without blocking
@@ -223,13 +252,20 @@ fn run_loop(
             if cur_cols >= 10 && cur_rows >= 5 {
                 cols = cur_cols;
                 rows = cur_rows;
-                let display_rows = if hide_status { rows as usize } else { (rows as usize).saturating_sub(1) };
+                let display_rows = if hide_status {
+                    rows as usize
+                } else {
+                    (rows as usize).saturating_sub(1)
+                };
                 canvas = Canvas::new(cols as usize, display_rows, render_mode, color_mode);
                 anim = animations::create(
                     animations::ANIMATION_NAMES[anim_index],
-                    canvas.width, canvas.height, scale,
+                    canvas.width,
+                    canvas.height,
+                    scale,
                 );
-                // Clear screen
+                // Clear screen and invalidate delta cache
+                delta.invalidate();
                 let mut stdout = io::stdout().lock();
                 stdout.write_all(b"\x1b[2J\x1b[H")?;
                 stdout.flush()?;
@@ -244,7 +280,9 @@ fn run_loop(
             anim_index = (anim_index + 1) % animations::ANIMATION_NAMES.len();
             anim = animations::create(
                 animations::ANIMATION_NAMES[anim_index],
-                canvas.width, canvas.height, scale,
+                canvas.width,
+                canvas.height,
+                scale,
             );
             if explicit_render.is_none() {
                 render_mode = anim.preferred_render();
@@ -270,12 +308,19 @@ fn run_loop(
             rec.capture(&frame);
         }
 
+        // Apply delta rendering — only emit cells that changed since last frame
+        let display_rows = if hide_status {
+            rows as usize
+        } else {
+            (rows as usize).saturating_sub(1)
+        };
+        let delta_frame = delta.render_delta(&frame, cols as usize, display_rows);
+
         // Build frame buffer with synchronized output
         frame_buf.clear();
         // Begin synchronized update — terminal batches everything until end marker
         frame_buf.extend_from_slice(b"\x1b[?2026h");
-        frame_buf.extend_from_slice(b"\x1b[H");
-        frame_buf.extend_from_slice(frame.as_bytes());
+        frame_buf.extend_from_slice(delta_frame.as_bytes());
 
         // Status bar
         frame_count += 1;
@@ -288,12 +333,17 @@ fn run_loop(
             let rec_indicator = if recorder.is_some() { " [REC]" } else { "" };
             let status = format!(
                 " {} | {:?} | {:?} | {:.0} fps{} | [←/→] anim  [r] render  [c] color  [h] hide  [q] quit ",
-                anim.name(), render_mode, color_mode, actual_fps, rec_indicator,
+                anim.name(),
+                render_mode,
+                color_mode,
+                actual_fps,
+                rec_indicator,
             );
             let w = cols as usize;
             let truncated: String = status.chars().take(w).collect();
             let padded = format!("{:<width$}", truncated, width = w);
-            frame_buf.extend_from_slice(format!("\x1b[{};1H\x1b[7m{}\x1b[0m", rows, padded).as_bytes());
+            frame_buf
+                .extend_from_slice(format!("\x1b[{};1H\x1b[7m{}\x1b[0m", rows, padded).as_bytes());
         }
 
         // Final size check — if terminal changed since we started rendering, discard frame

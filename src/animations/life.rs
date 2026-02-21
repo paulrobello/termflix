@@ -1,5 +1,5 @@
-use crate::render::Canvas;
 use super::Animation;
+use crate::render::Canvas;
 use rand::RngExt;
 
 /// Conway's Game of Life at sub-cell resolution
@@ -23,7 +23,9 @@ impl GameOfLife {
         let mut rng = rand::rng();
         let size = width * height;
         let density = rng.random_range(0.2..0.5); // vary initial density
-        let cells: Vec<bool> = (0..size).map(|_| rng.random_range(0.0..1.0) > (1.0 - density)).collect();
+        let cells: Vec<bool> = (0..size)
+            .map(|_| rng.random_range(0.0..1.0) > (1.0 - density))
+            .collect();
         let pop = cells.iter().filter(|&&c| c).count();
         GameOfLife {
             width,
@@ -45,11 +47,8 @@ impl GameOfLife {
             for x in 0..self.width {
                 let neighbors = self.count_neighbors(x, y);
                 let alive = self.cells[y * self.width + x];
-                next[y * self.width + x] = match (alive, neighbors) {
-                    (true, 2) | (true, 3) => true,
-                    (false, 3) => true,
-                    _ => false,
-                };
+                next[y * self.width + x] =
+                    matches!((alive, neighbors), (true, 2) | (true, 3) | (false, 3));
             }
         }
         self.cells = next;
@@ -78,13 +77,13 @@ impl GameOfLife {
             *self = GameOfLife::new(self.width, self.height);
         }
         // Inject chaos periodically to keep things interesting
-        else if self.generation % 300 == 0 {
+        else if self.generation.is_multiple_of(300) {
             let mut rng = rand::rng();
             // Spawn a random pattern (glider gun, r-pentomino, etc)
             let cx = rng.random_range(10..self.width.saturating_sub(10).max(11));
             let cy = rng.random_range(10..self.height.saturating_sub(10).max(11));
             // R-pentomino — classic long-lived pattern
-            let pattern = [(0,0), (1,0), (-1,1), (0,1), (0,2)];
+            let pattern = [(0, 0), (1, 0), (-1, 1), (0, 1), (0, 2)];
             for (dx, dy) in pattern {
                 let x = (cx as i32 + dx).rem_euclid(self.width as i32) as usize;
                 let y = (cy as i32 + dy).rem_euclid(self.height as i32) as usize;
@@ -102,10 +101,14 @@ impl GameOfLife {
         let mut count = 0u8;
         for dy in [-1i32, 0, 1] {
             for dx in [-1i32, 0, 1] {
-                if dx == 0 && dy == 0 { continue; }
+                if dx == 0 && dy == 0 {
+                    continue;
+                }
                 let nx = (x as i32 + dx).rem_euclid(self.width as i32) as usize;
                 let ny = (y as i32 + dy).rem_euclid(self.height as i32) as usize;
-                if self.cells[ny * self.width + nx] { count += 1; }
+                if self.cells[ny * self.width + nx] {
+                    count += 1;
+                }
             }
         }
         count
@@ -113,7 +116,9 @@ impl GameOfLife {
 }
 
 impl Animation for GameOfLife {
-    fn name(&self) -> &str { "life" }
+    fn name(&self) -> &str {
+        "life"
+    }
 
     fn preferred_render(&self) -> crate::render::RenderMode {
         crate::render::RenderMode::Braille

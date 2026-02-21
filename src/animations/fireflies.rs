@@ -1,5 +1,5 @@
-use crate::render::Canvas;
 use super::Animation;
+use crate::render::Canvas;
 use rand::RngExt;
 
 struct Firefly {
@@ -8,7 +8,7 @@ struct Firefly {
     vx: f64,
     vy: f64,
     phase: f64,       // blink phase
-    blink_speed: f64,  // how fast it blinks
+    blink_speed: f64, // how fast it blinks
     glow_radius: f64,
 }
 
@@ -44,7 +44,9 @@ impl Fireflies {
 }
 
 impl Animation for Fireflies {
-    fn name(&self) -> &str { "fireflies" }
+    fn name(&self) -> &str {
+        "fireflies"
+    }
 
     fn update(&mut self, canvas: &mut Canvas, dt: f64, time: f64) {
         let mut rng = rand::rng();
@@ -70,10 +72,18 @@ impl Animation for Fireflies {
             fly.y += fly.vy * dt * 5.0;
 
             // Wrap around
-            if fly.x < 0.0 { fly.x += self.width as f64; }
-            if fly.x >= self.width as f64 { fly.x -= self.width as f64; }
-            if fly.y < 0.0 { fly.y += self.height as f64; }
-            if fly.y >= self.height as f64 { fly.y -= self.height as f64; }
+            if fly.x < 0.0 {
+                fly.x += self.width as f64;
+            }
+            if fly.x >= self.width as f64 {
+                fly.x -= self.width as f64;
+            }
+            if fly.y < 0.0 {
+                fly.y += self.height as f64;
+            }
+            if fly.y >= self.height as f64 {
+                fly.y -= self.height as f64;
+            }
 
             // Blink pattern: sharp on/off with smooth glow
             let blink = ((time * fly.blink_speed + fly.phase).sin() + 0.3).clamp(0.0, 1.0);

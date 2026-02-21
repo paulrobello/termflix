@@ -1,6 +1,6 @@
+use super::Animation;
 use crate::generators::{ColorGradient, ColorStop, EmitterConfig, ParticleSystem};
 use crate::render::Canvas;
-use super::Animation;
 use rand::RngExt;
 
 /// Realistic campfire with rising ember sparks
@@ -26,10 +26,30 @@ impl Campfire {
             drag: 0.98,
             wind: 0.0,
             gradient: ColorGradient::new(vec![
-                ColorStop { t: 0.0, r: 255, g: 200, b: 50 },
-                ColorStop { t: 0.3, r: 255, g: 120, b: 0 },
-                ColorStop { t: 0.7, r: 200, g: 50, b: 0 },
-                ColorStop { t: 1.0, r: 80, g: 20, b: 0 },
+                ColorStop {
+                    t: 0.0,
+                    r: 255,
+                    g: 200,
+                    b: 50,
+                },
+                ColorStop {
+                    t: 0.3,
+                    r: 255,
+                    g: 120,
+                    b: 0,
+                },
+                ColorStop {
+                    t: 0.7,
+                    r: 200,
+                    g: 50,
+                    b: 0,
+                },
+                ColorStop {
+                    t: 1.0,
+                    r: 80,
+                    g: 20,
+                    b: 0,
+                },
             ]),
         };
 

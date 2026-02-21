@@ -1,5 +1,5 @@
-use crate::render::Canvas;
 use super::Animation;
+use crate::render::Canvas;
 use rand::RngExt;
 
 struct RippleSource {
@@ -25,7 +25,9 @@ impl Ripple {
 }
 
 impl Animation for Ripple {
-    fn name(&self) -> &str { "ripple" }
+    fn name(&self) -> &str {
+        "ripple"
+    }
 
     fn update(&mut self, canvas: &mut Canvas, dt: f64, time: f64) {
         let mut rng = rand::rng();

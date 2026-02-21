@@ -70,8 +70,10 @@ pub fn render(canvas: &Canvas) -> String {
                 let (br, bg, bb) = canvas.colors[bot_idx];
 
                 let scale = |c: u8, v: f64| -> u8 { (c as f64 * v.clamp(0.0, 1.0)) as u8 };
-                let top_color = canvas.map_color(scale(tr, top_v), scale(tg, top_v), scale(tb, top_v));
-                let bot_color = canvas.map_color(scale(br, bot_v), scale(bg, bot_v), scale(bb, bot_v));
+                let top_color =
+                    canvas.map_color(scale(tr, top_v), scale(tg, top_v), scale(tb, top_v));
+                let bot_color =
+                    canvas.map_color(scale(br, bot_v), scale(bg, bot_v), scale(bb, bot_v));
 
                 let fg = color_to_fg(top_color);
                 let bg_s = color_to_bg(bot_color);
@@ -95,8 +97,12 @@ pub fn render(canvas: &Canvas) -> String {
                     out.push('m');
                 }
 
-                if fg_changed { last_fg = fg; }
-                if bg_changed { last_bg = bg_s; }
+                if fg_changed {
+                    last_fg = fg;
+                }
+                if bg_changed {
+                    last_bg = bg_s;
+                }
                 in_color = true;
 
                 out.push('▀');

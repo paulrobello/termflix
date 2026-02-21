@@ -1,5 +1,5 @@
-use crate::render::Canvas;
 use super::Animation;
+use crate::render::Canvas;
 
 /// Accretion disk with gravitational lensing distortion, M87-inspired
 pub struct Blackhole {
@@ -62,7 +62,8 @@ impl Animation for Blackhole {
                     let doppler = (angle - time * 0.3).cos() * 0.4 + 0.6;
 
                     // Spiral structure in the disk
-                    let spiral = ((angle * 3.0 - dist * 0.2 + time * 0.8).sin() * 0.3 + 0.7).max(0.0);
+                    let spiral =
+                        ((angle * 3.0 - dist * 0.2 + time * 0.8).sin() * 0.3 + 0.7).max(0.0);
 
                     // Temperature gradient: hotter near center
                     let temperature = 1.0 - disk_frac * 0.7;
@@ -103,7 +104,8 @@ impl Animation for Blackhole {
                         } else {
                             0.3
                         };
-                        let twinkle = ((time * 2.0 + star_hash * 50.0).sin() * 0.5 + 0.5) * star_bright;
+                        let twinkle =
+                            ((time * 2.0 + star_hash * 50.0).sin() * 0.5 + 0.5) * star_bright;
                         canvas.set_colored(x, y, twinkle, 200, 200, 230);
                     }
                 }
@@ -132,10 +134,18 @@ fn accretion_color(v: f64, temperature: f64) -> (u8, u8, u8) {
     } else if t > 0.4 {
         // Mid: orange-red
         let f = (t - 0.4) / 0.3;
-        ((200.0 + 55.0 * f) as u8, (80.0 + 100.0 * f) as u8, (10.0 + 30.0 * f) as u8)
+        (
+            (200.0 + 55.0 * f) as u8,
+            (80.0 + 100.0 * f) as u8,
+            (10.0 + 30.0 * f) as u8,
+        )
     } else {
         // Cool outer: dark red
         let f = t / 0.4;
-        ((80.0 + 120.0 * f) as u8, (20.0 + 60.0 * f) as u8, (5.0 + 5.0 * f) as u8)
+        (
+            (80.0 + 120.0 * f) as u8,
+            (20.0 + 60.0 * f) as u8,
+            (5.0 + 5.0 * f) as u8,
+        )
     }
 }
