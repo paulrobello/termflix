@@ -153,8 +153,9 @@ fn run_loop(cli: &Cli, initial_anim: &str, frame_dur: Duration) -> io::Result<()
     let mut frame_buf: Vec<u8> = Vec::with_capacity(256 * 1024);
     // Resize cooldown — skip frames after resize
     let mut resize_cooldown = Instant::now();
-    // Track write duration for adaptive frame dropping
-    let mut last_write_dur = Duration::ZERO;
+    // Adaptive frame pacing for tmux — track write times and skip frames proportionally
+    let mut write_time_avg_us: f64 = 0.0;
+    let frame_budget_us = frame_dur.as_micros() as f64;
     loop {
         // Use event::poll as frame timer — properly yields to OS for signal handling
         let time_to_next = frame_dur.saturating_sub(last_frame.elapsed());
@@ -304,14 +305,26 @@ fn run_loop(cli: &Cli, initial_anim: &str, frame_dur: Duration) -> io::Result<()
         // Update animation
         anim.update(&mut canvas, dt, time);
 
-        // Adaptive frame dropping: if last write took longer than frame budget,
-        // skip rendering this frame to let the terminal catch up.
-        // This prevents output backlog that causes tmux/iTerm2 lockups.
-        // Reset after skipping so we don't get stuck in a permanent skip loop.
-        if is_tmux && last_write_dur > frame_dur {
-            last_write_dur = Duration::ZERO;
-            frame_count += 1;
-            continue;
+        // Adaptive frame pacing for tmux: if writes are slow, skip frames
+        // proportionally. E.g. if write takes 80ms and budget is 41ms, skip 1 frame.
+        // If write takes 160ms, skip 3 frames. Uses exponential moving average
+        // to smooth out spikes.
+        if is_tmux && write_time_avg_us > frame_budget_us * 1.2 {
+            // Calculate how many frames to skip to stay under budget
+            let skip_count = ((write_time_avg_us / frame_budget_us) as u32)
+                .saturating_sub(1)
+                .min(4);
+            // Skip by waiting through the frame intervals (still processing events)
+            for _ in 0..skip_count {
+                let wait = frame_dur.saturating_sub(last_frame.elapsed());
+                if event::poll(wait)?
+                    && let Event::Key(KeyEvent { code, .. }) = event::read()?
+                    && matches!(code, KeyCode::Char('q') | KeyCode::Esc)
+                {
+                    return Ok(());
+                }
+                last_frame = Instant::now();
+            }
         }
 
         // Render to string
@@ -325,12 +338,8 @@ fn run_loop(cli: &Cli, initial_anim: &str, frame_dur: Duration) -> io::Result<()
         // Build frame buffer with synchronized output
         frame_buf.clear();
         // Begin synchronized update — terminal batches everything until end marker
-        // In tmux, wrap in DCS passthrough so the real terminal (iTerm2) sees it
-        if is_tmux {
-            frame_buf.extend_from_slice(b"\x1bPtmux;\x1b\x1b[?2026h\x1b\\");
-        } else {
-            frame_buf.extend_from_slice(b"\x1b[?2026h");
-        }
+        // tmux strips these but they're harmless; direct terminals benefit from them
+        frame_buf.extend_from_slice(b"\x1b[?2026h");
         frame_buf.extend_from_slice(b"\x1b[H");
         frame_buf.extend_from_slice(frame.as_bytes());
 
@@ -369,17 +378,15 @@ fn run_loop(cli: &Cli, initial_anim: &str, frame_dur: Duration) -> io::Result<()
         }
 
         // End synchronized update
-        if is_tmux {
-            frame_buf.extend_from_slice(b"\x1bPtmux;\x1b\x1b[?2026l\x1b\\");
-        } else {
-            frame_buf.extend_from_slice(b"\x1b[?2026l");
-        }
+        frame_buf.extend_from_slice(b"\x1b[?2026l");
 
-        // Write entire frame in one syscall, track duration for adaptive dropping
+        // Write entire frame in one syscall, track duration for adaptive pacing
         let write_start = Instant::now();
         let mut stdout = io::stdout().lock();
         stdout.write_all(&frame_buf)?;
         stdout.flush()?;
-        last_write_dur = write_start.elapsed();
+        let write_us = write_start.elapsed().as_micros() as f64;
+        // Exponential moving average (alpha=0.3) to smooth out spikes
+        write_time_avg_us = write_time_avg_us * 0.7 + write_us * 0.3;
     }
 }
