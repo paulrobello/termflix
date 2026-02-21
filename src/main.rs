@@ -445,7 +445,7 @@ fn run_loop(cli: &Cli, initial_anim: &str, frame_dur: Duration) -> io::Result<()
             // Target: frame duration = write time + small margin for animation update
             // This ensures we never write faster than tmux can process
             let target =
-                Duration::from_secs_f64((write_time_ema * 1.1).max(frame_dur.as_secs_f64()));
+                Duration::from_secs_f64((write_time_ema * 1.02).max(frame_dur.as_secs_f64()));
             adaptive_frame_dur = target.min(Duration::from_millis(200)); // cap at 5fps minimum
         }
     }
