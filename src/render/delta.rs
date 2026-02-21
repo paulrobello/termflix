@@ -1,6 +1,9 @@
-/// Delta renderer — only emits escape sequences for cells that changed since last frame.
-/// Works with any render mode by parsing the rendered output into a cell grid,
-/// then diffing against the previous frame.
+/// Delta renderer — streams cells sequentially but skips over unchanged runs.
+///
+/// Instead of per-cell cursor positioning (expensive), this renders sequentially
+/// like the normal renderers but detects contiguous unchanged cells and skips
+/// them with a single cursor move. Best of both worlds: sequential streaming
+/// for dense changes, skip-ahead for static regions.
 
 #[derive(Clone, PartialEq)]
 struct Cell {
@@ -25,6 +28,10 @@ pub struct DeltaRenderer {
     /// Force full redraw on next frame
     force_full: bool,
 }
+
+/// Minimum run of unchanged cells worth skipping.
+/// A cursor move costs ~8 bytes (\x1b[rr;ccH), so only skip if we save more than that.
+const MIN_SKIP_RUN: usize = 4;
 
 impl DeltaRenderer {
     pub fn new() -> Self {
@@ -58,40 +65,81 @@ impl DeltaRenderer {
         if self.force_full || self.prev.is_empty() {
             self.prev = current;
             self.force_full = false;
-            // Return original frame as-is
             return full_frame.to_string();
         }
 
-        // Build delta output
-        let mut out = String::with_capacity(term_cols * term_rows * 4);
-        let mut last_sgr = String::new();
-        let mut changed = 0u32;
-        let total = (term_cols * term_rows) as u32;
+        // Count total changed cells to decide if delta is worth it
+        let mut total_changed = 0usize;
+        let total_cells = term_cols * term_rows;
+        let rows_to_check = term_rows.min(current.len()).min(self.prev.len());
 
-        for (row, (cur_row, prev_row)) in current
-            .iter()
-            .zip(self.prev.iter())
-            .take(term_rows)
-            .enumerate()
-        {
-            for (col, (cur, prev)) in cur_row
-                .iter()
-                .zip(prev_row.iter())
-                .take(term_cols)
-                .enumerate()
-            {
+        for (cur_row, prev_row) in current.iter().zip(self.prev.iter()).take(rows_to_check) {
+            let cols_to_check = term_cols.min(cur_row.len()).min(prev_row.len());
+            for (cur, prev) in cur_row.iter().zip(prev_row.iter()).take(cols_to_check) {
                 if cur != prev {
-                    changed += 1;
-                    // Move cursor to position (1-indexed)
-                    out.push_str("\x1b[");
-                    // row+1 for 1-indexed, +1 for the \x1b[H offset used by renderers
-                    let screen_row = row + 1;
-                    out.push_str(&screen_row.to_string());
-                    out.push(';');
-                    out.push_str(&(col + 1).to_string());
-                    out.push('H');
+                    total_changed += 1;
+                }
+            }
+        }
 
-                    // Set color if different from last emitted
+        // If most cells changed, full frame is cheaper (no cursor moves needed)
+        if total_cells > 0 && total_changed * 100 / total_cells > 70 {
+            self.prev = current;
+            return full_frame.to_string();
+        }
+
+        // Build delta output — stream sequentially, skip unchanged runs
+        let mut out = String::with_capacity(total_changed * 20);
+        let mut last_sgr = String::new();
+
+        #[allow(clippy::needless_range_loop)]
+        for row in 0..rows_to_check {
+            let cur_row = &current[row];
+            let prev_row = &self.prev[row];
+            let cols_to_check = term_cols.min(cur_row.len()).min(prev_row.len());
+
+            let mut col = 0;
+            while col < cols_to_check {
+                // Skip unchanged cells
+                if cur_row[col] == prev_row[col] {
+                    col += 1;
+                    continue;
+                }
+
+                // Stream this changed cell and any subsequent changed cells
+                // (or cells within a short gap of unchanged ones, to avoid cursor thrash)
+                let mut cursor_placed = false;
+
+                while col < cols_to_check {
+                    let changed = cur_row[col] != prev_row[col];
+
+                    if !changed {
+                        // Look ahead: if the next few cells are also unchanged, break out
+                        let mut skip_len = 0;
+                        while col + skip_len < cols_to_check
+                            && cur_row[col + skip_len] == prev_row[col + skip_len]
+                        {
+                            skip_len += 1;
+                        }
+                        if skip_len >= MIN_SKIP_RUN || col + skip_len >= cols_to_check {
+                            // Worth skipping this run
+                            break;
+                        }
+                        // Gap is too small — cheaper to just re-emit these cells
+                    }
+
+                    // Position cursor at start of changed segment
+                    if !cursor_placed {
+                        out.push_str("\x1b[");
+                        out.push_str(&(row + 1).to_string());
+                        out.push(';');
+                        out.push_str(&(col + 1).to_string());
+                        out.push('H');
+                        cursor_placed = true;
+                    }
+
+                    // Emit color if changed
+                    let cur = &cur_row[col];
                     if cur.sgr != last_sgr {
                         if cur.sgr.is_empty() {
                             out.push_str("\x1b[0m");
@@ -103,14 +151,9 @@ impl DeltaRenderer {
                         last_sgr.clone_from(&cur.sgr);
                     }
                     out.push(cur.ch);
+                    col += 1;
                 }
             }
-        }
-
-        // If more than 60% of cells changed, full frame is likely smaller
-        if changed > total * 3 / 5 {
-            self.prev = current;
-            return full_frame.to_string();
         }
 
         // Reset colors at end
@@ -161,18 +204,15 @@ fn parse_frame(frame: &str, cols: usize, rows: usize) -> Vec<Vec<Cell>> {
 
             match terminator {
                 b'm' => {
-                    // SGR (color) sequence
                     if params == "0" || params.is_empty() {
                         current_sgr.clear();
                     } else if params == "7" {
-                        // Reverse video (status bar) — treat as special SGR
                         current_sgr = "7".to_string();
                     } else {
                         current_sgr = params.to_string();
                     }
                 }
                 b'H' => {
-                    // Cursor position: row;colH
                     if let Some(semi) = params.find(';') {
                         let r: usize = params[..semi].parse().unwrap_or(1);
                         let c: usize = params[semi + 1..].parse().unwrap_or(1);
@@ -182,25 +222,16 @@ fn parse_frame(frame: &str, cols: usize, rows: usize) -> Vec<Vec<Cell>> {
                         row = 0;
                         col = 0;
                     } else {
-                        // Just row, col=0 — shouldn't happen often
                         let r: usize = params.parse().unwrap_or(1);
                         row = r.saturating_sub(1);
                         col = 0;
                     }
                 }
-                b'J' => {
-                    // Clear screen — ignore for parsing
-                }
-                b'h' | b'l' => {
-                    // Private mode set/reset (synchronized output) — ignore
-                }
+                b'J' | b'h' | b'l' => {}
                 _ => {}
             }
         } else {
-            // Regular character — could be multi-byte UTF-8
-            let ch_start = i;
-            // Decode one UTF-8 character
-            let remaining = &frame[ch_start..];
+            let remaining = &frame[i..];
             if let Some(ch) = remaining.chars().next() {
                 if row < rows && col < cols {
                     grid[row][col] = Cell {
