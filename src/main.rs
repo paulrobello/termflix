@@ -105,8 +105,14 @@ const COLOR_MODES: [ColorMode; 4] = [
     ColorMode::Mono,
 ];
 
+/// Detect if we're running inside tmux
+fn in_tmux() -> bool {
+    std::env::var("TMUX").is_ok()
+}
+
 fn run_loop(cli: &Cli, initial_anim: &str, frame_dur: Duration) -> io::Result<()> {
     let (mut cols, mut rows) = terminal::size()?;
+    let is_tmux = in_tmux();
 
     let explicit_render = cli.render;
     let mut color_mode = cli.color;
@@ -147,6 +153,8 @@ fn run_loop(cli: &Cli, initial_anim: &str, frame_dur: Duration) -> io::Result<()
     let mut frame_buf: Vec<u8> = Vec::with_capacity(256 * 1024);
     // Resize cooldown — skip frames after resize
     let mut resize_cooldown = Instant::now();
+    // Track write duration for adaptive frame dropping
+    let mut last_write_dur = Duration::ZERO;
     loop {
         // Use event::poll as frame timer — properly yields to OS for signal handling
         let time_to_next = frame_dur.saturating_sub(last_frame.elapsed());
@@ -296,6 +304,15 @@ fn run_loop(cli: &Cli, initial_anim: &str, frame_dur: Duration) -> io::Result<()
         // Update animation
         anim.update(&mut canvas, dt, time);
 
+        // Adaptive frame dropping: if last write took longer than frame budget,
+        // skip rendering this frame to let the terminal catch up.
+        // This prevents output backlog that causes tmux/iTerm2 lockups.
+        if is_tmux && last_write_dur > frame_dur {
+            // Still count the frame for FPS tracking but don't render
+            frame_count += 1;
+            continue;
+        }
+
         // Render to string
         let frame = canvas.render();
 
@@ -307,7 +324,12 @@ fn run_loop(cli: &Cli, initial_anim: &str, frame_dur: Duration) -> io::Result<()
         // Build frame buffer with synchronized output
         frame_buf.clear();
         // Begin synchronized update — terminal batches everything until end marker
-        frame_buf.extend_from_slice(b"\x1b[?2026h");
+        // In tmux, wrap in DCS passthrough so the real terminal (iTerm2) sees it
+        if is_tmux {
+            frame_buf.extend_from_slice(b"\x1bPtmux;\x1b\x1b[?2026h\x1b\\");
+        } else {
+            frame_buf.extend_from_slice(b"\x1b[?2026h");
+        }
         frame_buf.extend_from_slice(b"\x1b[H");
         frame_buf.extend_from_slice(frame.as_bytes());
 
@@ -346,11 +368,17 @@ fn run_loop(cli: &Cli, initial_anim: &str, frame_dur: Duration) -> io::Result<()
         }
 
         // End synchronized update
-        frame_buf.extend_from_slice(b"\x1b[?2026l");
+        if is_tmux {
+            frame_buf.extend_from_slice(b"\x1bPtmux;\x1b\x1b[?2026l\x1b\\");
+        } else {
+            frame_buf.extend_from_slice(b"\x1b[?2026l");
+        }
 
-        // Write entire frame in one syscall
+        // Write entire frame in one syscall, track duration for adaptive dropping
+        let write_start = Instant::now();
         let mut stdout = io::stdout().lock();
         stdout.write_all(&frame_buf)?;
         stdout.flush()?;
+        last_write_dur = write_start.elapsed();
     }
 }
