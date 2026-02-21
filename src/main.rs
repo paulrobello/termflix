@@ -86,6 +86,15 @@ fn main() -> io::Result<()> {
 
     let result = run_loop(&cli, &anim_name, frame_dur);
 
+    // Discard any pending output before leaving — prevents slow drain on quit
+    #[cfg(unix)]
+    {
+        use std::os::unix::io::AsRawFd;
+        unsafe {
+            libc::tcflush(io::stdout().as_raw_fd(), libc::TCOFLUSH);
+        }
+    }
+
     let mut stdout = io::stdout();
     execute!(stdout, cursor::Show, terminal::LeaveAlternateScreen)?;
     terminal::disable_raw_mode()?;
