@@ -357,9 +357,26 @@ fn run_loop(cli: &Cli, initial_anim: &str, frame_dur: Duration) -> io::Result<()
         // End synchronized update
         frame_buf.extend_from_slice(b"\x1b[?2026l");
 
-        // Write entire frame in one syscall
+        // Write frame — track duration to detect output backlog
+        let write_start = Instant::now();
         let mut stdout = io::stdout().lock();
         stdout.write_all(&frame_buf)?;
         stdout.flush()?;
+        drop(stdout);
+
+        // If write took much longer than frame budget, output is backing up
+        // (e.g. tmux buffering while iTerm2 is in background).
+        // Discard pending output to prevent massive backlog that causes
+        // minutes-long freezes when the terminal comes back to foreground.
+        let write_dur = write_start.elapsed();
+        if write_dur > frame_dur * 3 {
+            #[cfg(unix)]
+            {
+                use std::os::unix::io::AsRawFd;
+                unsafe {
+                    libc::tcflush(io::stdout().as_raw_fd(), libc::TCOFLUSH);
+                }
+            }
+        }
     }
 }
