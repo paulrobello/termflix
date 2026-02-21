@@ -9,6 +9,7 @@ permissions:
 
 env:
   RUST_VERSION: "1.85.0"
+  RUST_VERSION_CROSS: "stable"
 
 jobs:
   # Build Linux ARM64 using cross
@@ -22,7 +23,7 @@ jobs:
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@master
         with:
-          toolchain: ${{ env.RUST_VERSION }}
+          toolchain: ${{ env.RUST_VERSION_CROSS }}
           targets: aarch64-unknown-linux-gnu
 
       - name: Install cross
