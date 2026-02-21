@@ -9,6 +9,8 @@ A terminal animation player with 43 procedurally generated animations, multiple 
 
 [!["Buy Me A Coffee"](https://www.buymeacoffee.com/assets/img/custom_images/orange_img.png)](https://buymeacoffee.com/probello3)
 
+![termflix screenshot](screenshot.png)
+
 ## Features
 
 - **43 Animations** — Fire, matrix rain, starfields, plasma, ocean waves, aurora, lightning, and much more
