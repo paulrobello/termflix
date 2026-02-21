@@ -1,0 +1,262 @@
+name: Release and Deploy
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  id-token: write
+
+env:
+  RUST_VERSION: "1.85.0"
+  BINARY_NAME: "termflix"
+
+jobs:
+  build-linux-arm64:
+    name: Build - Linux ARM64
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+          targets: aarch64-unknown-linux-gnu
+
+      - name: Install cross
+        run: cargo install cross --git https://github.com/cross-rs/cross
+
+      - name: Build binary with cross
+        run: cross build --release --target aarch64-unknown-linux-gnu
+
+      - name: Prepare artifact
+        run: |
+          mkdir -p release-binaries
+          cp target/aarch64-unknown-linux-gnu/release/${{ env.BINARY_NAME }} release-binaries/${{ env.BINARY_NAME }}-linux-aarch64
+
+      - name: Upload binary artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: binary-aarch64-unknown-linux-gnu
+          path: release-binaries/${{ env.BINARY_NAME }}-linux-aarch64
+          retention-days: 1
+
+  build-linux-x86_64:
+    name: Build - Linux x86_64
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+          targets: x86_64-unknown-linux-gnu
+
+      - name: Build binary
+        run: cargo build --release --target x86_64-unknown-linux-gnu
+
+      - name: Strip binary
+        run: strip target/x86_64-unknown-linux-gnu/release/${{ env.BINARY_NAME }}
+
+      - name: Prepare artifact
+        run: |
+          mkdir -p release-binaries
+          cp target/x86_64-unknown-linux-gnu/release/${{ env.BINARY_NAME }} release-binaries/${{ env.BINARY_NAME }}-linux-x86_64
+
+      - name: Upload binary artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: binary-x86_64-unknown-linux-gnu
+          path: release-binaries/${{ env.BINARY_NAME }}-linux-x86_64
+          retention-days: 1
+
+  build-windows-x86_64:
+    name: Build - Windows x86_64
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+          targets: x86_64-pc-windows-msvc
+
+      - name: Build binary
+        run: cargo build --release --target x86_64-pc-windows-msvc
+
+      - name: Prepare artifact
+        shell: bash
+        run: |
+          mkdir -p release-binaries
+          cp target/x86_64-pc-windows-msvc/release/${{ env.BINARY_NAME }}.exe release-binaries/${{ env.BINARY_NAME }}-windows-x86_64.exe
+
+      - name: Upload binary artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: binary-x86_64-pc-windows-msvc
+          path: release-binaries/${{ env.BINARY_NAME }}-windows-x86_64.exe
+          retention-days: 1
+
+  build-macos-x86_64:
+    name: Build - macOS x86_64
+    runs-on: macos-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+          targets: x86_64-apple-darwin
+
+      - name: Build binary
+        run: cargo build --release --target x86_64-apple-darwin
+
+      - name: Prepare artifact
+        run: |
+          mkdir -p release-binaries
+          cp target/x86_64-apple-darwin/release/${{ env.BINARY_NAME }} release-binaries/${{ env.BINARY_NAME }}-macos-x86_64
+
+      - name: Upload binary artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: binary-x86_64-apple-darwin
+          path: release-binaries/${{ env.BINARY_NAME }}-macos-x86_64
+          retention-days: 1
+
+  build-macos-arm64:
+    name: Build - macOS ARM64
+    runs-on: macos-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+          targets: aarch64-apple-darwin
+
+      - name: Build binary
+        run: cargo build --release --target aarch64-apple-darwin
+
+      - name: Prepare artifact
+        run: |
+          mkdir -p release-binaries
+          cp target/aarch64-apple-darwin/release/${{ env.BINARY_NAME }} release-binaries/${{ env.BINARY_NAME }}-macos-aarch64
+
+      - name: Upload binary artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: binary-aarch64-apple-darwin
+          path: release-binaries/${{ env.BINARY_NAME }}-macos-aarch64
+          retention-days: 1
+
+  publish-crates:
+    name: Publish to crates.io
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: [build-linux-arm64, build-linux-x86_64, build-windows-x86_64, build-macos-x86_64, build-macos-arm64]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+
+      - name: Get version
+        id: version
+        run: |
+          CARGO_VERSION=$(cargo metadata --format-version 1 --no-deps | jq -r '.packages[0].version')
+          echo "version=$CARGO_VERSION" >> $GITHUB_OUTPUT
+
+      - name: Check if version exists on crates.io
+        id: check_version
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          if cargo search termflix --limit 1 | grep -q "termflix = \"$VERSION\""; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Run tests
+        if: steps.check_version.outputs.exists == 'false'
+        run: cargo test --verbose
+
+      - name: Publish to crates.io
+        if: steps.check_version.outputs.exists == 'false'
+        run: cargo publish --token ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+
+      - name: Discord notification
+        if: success() && steps.check_version.outputs.exists == 'false'
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+        uses: Ilshidur/action-discord@master
+        with:
+          args: 'Published termflix v${{ steps.version.outputs.version }} to crates.io! 🎬'
+        continue-on-error: true
+
+  github-release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: [build-linux-arm64, build-linux-x86_64, build-windows-x86_64, build-macos-x86_64, build-macos-arm64]
+    permissions:
+      contents: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+
+      - name: Get version
+        id: get_version
+        run: |
+          version=$(cargo metadata --format-version 1 --no-deps | jq -r '.packages[0].version')
+          echo "version=$version" >> $GITHUB_OUTPUT
+
+      - name: Download binary artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: binary-*
+          path: binaries
+          merge-multiple: true
+
+      - name: List downloaded binaries
+        run: ls -lh binaries/
+
+      - name: Create or update GitHub Release
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          VERSION="v${{ steps.get_version.outputs.version }}"
+          if gh release view "$VERSION" --repo '${{ github.repository }}' >/dev/null 2>&1; then
+            gh release delete "$VERSION" --repo '${{ github.repository }}' --yes
+          fi
+          gh release create "$VERSION" \
+            --repo '${{ github.repository }}' \
+            --generate-notes \
+            --latest
+
+      - name: Upload binaries to GitHub Release
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          gh release upload \
+            'v${{ steps.get_version.outputs.version }}' binaries/* \
+            --repo '${{ github.repository }}' \
+            --clobber

@@ -1,0 +1,72 @@
+name: Publish to crates.io
+
+on:
+  workflow_dispatch:
+    inputs:
+      skip_tests:
+        description: 'Skip running tests'
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  publish-crates:
+    name: Publish to crates.io
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.85.0
+
+      - name: Get version
+        id: version
+        run: |
+          CARGO_VERSION=$(cargo metadata --format-version 1 --no-deps | jq -r '.packages[0].version')
+          echo "version=$CARGO_VERSION" >> $GITHUB_OUTPUT
+          echo "Cargo.toml version: $CARGO_VERSION"
+
+      - name: Check if version exists on crates.io
+        id: check_version
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          if cargo search termflix --limit 1 | grep -q "termflix = \"$VERSION\""; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+            echo "Warning: Version $VERSION already exists on crates.io"
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+            echo "Version $VERSION not found on crates.io, proceeding"
+          fi
+
+      - name: Run tests
+        if: ${{ !inputs.skip_tests && steps.check_version.outputs.exists == 'false' }}
+        run: cargo test --verbose
+
+      - name: Dry run publish
+        if: steps.check_version.outputs.exists == 'false'
+        run: cargo publish --dry-run
+
+      - name: Publish to crates.io
+        if: steps.check_version.outputs.exists == 'false'
+        run: cargo publish --token ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+
+      - name: Version already exists
+        if: steps.check_version.outputs.exists == 'true'
+        run: echo "::notice::Version ${{ steps.version.outputs.version }} already exists. Skipping."
+
+      - name: Discord notification
+        if: success() && steps.check_version.outputs.exists == 'false'
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+        uses: Ilshidur/action-discord@master
+        with:
+          args: 'Published termflix v${{ steps.version.outputs.version }} to crates.io! 🎬'
+        continue-on-error: true
