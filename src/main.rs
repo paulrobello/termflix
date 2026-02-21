@@ -3,7 +3,7 @@ pub mod generators;
 mod record;
 mod render;
 
-use std::io::{self, Write};
+use std::io::{self, BufWriter, Write};
 use std::time::{Duration, Instant};
 use crossterm::{
     cursor, execute, terminal,
@@ -29,7 +29,7 @@ struct Cli {
     color: ColorMode,
 
     /// Target FPS (1-120)
-    #[arg(short, long, default_value = "30")]
+    #[arg(short, long, default_value = "24")]
     fps: u32,
 
     /// List available animations and exit
@@ -85,10 +85,11 @@ fn main() -> io::Result<()> {
     let mut stdout = io::stdout();
     execute!(stdout, terminal::EnterAlternateScreen, cursor::Hide)?;
 
-    let result = run_loop(&mut stdout, &cli, &anim_name, frame_dur);
+    let mut writer = BufWriter::with_capacity(256 * 1024, stdout);
+    let result = run_loop(&mut writer, &cli, &anim_name, frame_dur);
 
     // Cleanup
-    execute!(stdout, cursor::Show, terminal::LeaveAlternateScreen)?;
+    execute!(writer, cursor::Show, terminal::LeaveAlternateScreen)?;
     terminal::disable_raw_mode()?;
 
     result
@@ -98,7 +99,7 @@ const RENDER_MODES: [RenderMode; 3] = [RenderMode::Braille, RenderMode::HalfBloc
 const COLOR_MODES: [ColorMode; 4] = [ColorMode::TrueColor, ColorMode::Ansi256, ColorMode::Ansi16, ColorMode::Mono];
 
 fn run_loop(
-    stdout: &mut io::Stdout,
+    stdout: &mut BufWriter<io::Stdout>,
     cli: &Cli,
     initial_anim: &str,
     frame_dur: Duration,
@@ -255,8 +256,9 @@ fn run_loop(
             rec.capture(&frame);
         }
 
-        // Write frame
-        execute!(stdout, cursor::MoveTo(0, 0))?;
+        // Build entire frame into buffer before flushing
+        // Move cursor to top
+        stdout.write_all(b"\x1b[H")?;
         stdout.write_all(frame.as_bytes())?;
 
         // Status bar
@@ -273,10 +275,11 @@ fn run_loop(
                 anim.name(), render_mode, color_mode, actual_fps, rec_indicator,
             );
             let padded = format!("{:<width$}", status, width = cols as usize);
-            execute!(stdout, cursor::MoveTo(0, rows - 1))?;
-            stdout.write_all(format!("\x1b[7m{}\x1b[0m", padded).as_bytes())?;
+            // Move to last row and write status
+            write!(stdout, "\x1b[{};1H\x1b[7m{}\x1b[0m", rows, padded)?;
         }
 
+        // Single flush per frame
         stdout.flush()?;
 
         // Sleep to target FPS
