@@ -2,7 +2,14 @@
 name = "termflix"
 version = "0.1.0"
 edition = "2024"
-description = "A library of terminal ASCII animations with colors, braille, half-block rendering, and procedural generation"
+description = "Terminal animation player with 43 procedurally generated animations, multiple render modes, and true color support"
+license = "MIT"
+repository = "https://github.com/paulrobello/termflix"
+homepage = "https://github.com/paulrobello/termflix"
+readme = "README.md"
+keywords = ["terminal", "animation", "ascii-art", "braille", "tui"]
+categories = ["command-line-utilities", "visualization"]
+authors = ["Paul Robello <probello@gmail.com>"]
 
 [dependencies]
 crossterm = "0.29.0"
