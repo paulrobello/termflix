@@ -270,10 +270,9 @@ fn run_loop(cli: &Cli, initial_anim: &str, frame_dur: Duration) -> io::Result<()
                     canvas.height,
                     scale,
                 );
-                // Clear screen
-                let mut stdout = io::stdout().lock();
-                stdout.write_all(b"\x1b[2J\x1b[H")?;
-                stdout.flush()?;
+                // No clear screen — next frame overwrites everything.
+                // Clearing here with a blocking flush can lock up in tmux
+                // when the output buffer is full from the previous frame.
             }
             needs_rebuild = false;
             last_frame = Instant::now();
