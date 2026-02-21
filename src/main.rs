@@ -270,8 +270,10 @@ fn run_loop(
             rec.capture(&frame);
         }
 
-        // Build frame buffer
+        // Build frame buffer with synchronized output
         frame_buf.clear();
+        // Begin synchronized update — terminal batches everything until end marker
+        frame_buf.extend_from_slice(b"\x1b[?2026h");
         frame_buf.extend_from_slice(b"\x1b[H");
         frame_buf.extend_from_slice(frame.as_bytes());
 
@@ -303,6 +305,9 @@ fn run_loop(
             resize_cooldown = Instant::now();
             continue; // Discard frame_buf, don't write anything
         }
+
+        // End synchronized update
+        frame_buf.extend_from_slice(b"\x1b[?2026l");
 
         // Write entire frame in one syscall
         let mut stdout = io::stdout().lock();

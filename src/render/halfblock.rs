@@ -1,9 +1,6 @@
 use super::canvas::{Canvas, ColorMode, color_to_fg};
 use crossterm::style::Color;
 
-/// Half-block rendering: each terminal cell shows 2 vertical pixels
-/// using ▀ (upper half) with fg=top color, bg=bottom color
-
 fn color_to_bg(color: Color) -> String {
     match color {
         Color::Rgb { r, g, b } => format!("48;2;{};{};{}", r, g, b),
@@ -28,13 +25,16 @@ fn color_to_bg(color: Color) -> String {
     }
 }
 
+const DARK_THRESHOLD: f64 = 0.02;
+
 pub fn render(canvas: &Canvas) -> String {
     let term_cols = canvas.width;
     let term_rows = canvas.height / 2;
-    let mut out = String::with_capacity(term_cols * term_rows * 15);
+    let mut out = String::with_capacity(term_cols * term_rows * 10);
 
     let mut last_fg = String::new();
     let mut last_bg = String::new();
+    let mut in_color = false;
 
     for row in 0..term_rows {
         for col in 0..term_cols {
@@ -46,15 +46,25 @@ pub fn render(canvas: &Canvas) -> String {
             let top_v = canvas.pixels[top_idx];
             let bot_v = canvas.pixels[bot_idx];
 
+            let top_dark = top_v < DARK_THRESHOLD;
+            let bot_dark = bot_v < DARK_THRESHOLD;
+
             if canvas.color_mode == ColorMode::Mono {
-                let top_on = top_v > 0.3;
-                let bot_on = bot_v > 0.3;
-                match (top_on, bot_on) {
+                match (!top_dark, !bot_dark) {
                     (true, true) => out.push('█'),
                     (true, false) => out.push('▀'),
                     (false, true) => out.push('▄'),
                     (false, false) => out.push(' '),
                 }
+            } else if top_dark && bot_dark {
+                // Both pixels dark — just emit space, reset color if needed
+                if in_color {
+                    out.push_str("\x1b[0m");
+                    in_color = false;
+                    last_fg.clear();
+                    last_bg.clear();
+                }
+                out.push(' ');
             } else {
                 let (tr, tg, tb) = canvas.colors[top_idx];
                 let (br, bg, bb) = canvas.colors[bot_idx];
@@ -66,7 +76,6 @@ pub fn render(canvas: &Canvas) -> String {
                 let fg = color_to_fg(top_color);
                 let bg_s = color_to_bg(bot_color);
 
-                // Only emit escape sequences when colors change
                 let fg_changed = fg != last_fg;
                 let bg_changed = bg_s != last_bg;
 
@@ -88,17 +97,23 @@ pub fn render(canvas: &Canvas) -> String {
 
                 if fg_changed { last_fg = fg; }
                 if bg_changed { last_bg = bg_s; }
+                in_color = true;
 
                 out.push('▀');
             }
         }
-        // Reset at end of row and move to next
-        out.push_str("\x1b[0m\x1b[");
+        // Reset at end of row
+        if in_color {
+            out.push_str("\x1b[0m");
+            in_color = false;
+            last_fg.clear();
+            last_bg.clear();
+        }
+        // Move to next row
+        out.push_str("\x1b[");
         let next_row = row + 2;
         out.push_str(&next_row.to_string());
         out.push_str(";1H");
-        last_fg.clear();
-        last_bg.clear();
     }
     out
 }
