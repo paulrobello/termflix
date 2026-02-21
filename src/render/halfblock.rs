@@ -31,7 +31,10 @@ fn color_to_bg(color: Color) -> String {
 pub fn render(canvas: &Canvas) -> String {
     let term_cols = canvas.width;
     let term_rows = canvas.height / 2;
-    let mut out = String::with_capacity(term_cols * term_rows * 30);
+    let mut out = String::with_capacity(term_cols * term_rows * 15);
+
+    let mut last_fg = String::new();
+    let mut last_bg = String::new();
 
     for row in 0..term_rows {
         for col in 0..term_cols {
@@ -62,10 +65,40 @@ pub fn render(canvas: &Canvas) -> String {
 
                 let fg = color_to_fg(top_color);
                 let bg_s = color_to_bg(bot_color);
-                out.push_str(&format!("\x1b[{};{}m▀", fg, bg_s));
+
+                // Only emit escape sequences when colors change
+                let fg_changed = fg != last_fg;
+                let bg_changed = bg_s != last_bg;
+
+                if fg_changed && bg_changed {
+                    out.push_str("\x1b[");
+                    out.push_str(&fg);
+                    out.push(';');
+                    out.push_str(&bg_s);
+                    out.push('m');
+                } else if fg_changed {
+                    out.push_str("\x1b[");
+                    out.push_str(&fg);
+                    out.push('m');
+                } else if bg_changed {
+                    out.push_str("\x1b[");
+                    out.push_str(&bg_s);
+                    out.push('m');
+                }
+
+                if fg_changed { last_fg = fg; }
+                if bg_changed { last_bg = bg_s; }
+
+                out.push('▀');
             }
         }
-        out.push_str(&format!("\x1b[0m\x1b[{};1H", row + 2));
+        // Reset at end of row and move to next
+        out.push_str("\x1b[0m\x1b[");
+        let next_row = row + 2;
+        out.push_str(&next_row.to_string());
+        out.push_str(";1H");
+        last_fg.clear();
+        last_bg.clear();
     }
     out
 }

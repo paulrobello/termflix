@@ -119,7 +119,9 @@ impl Canvas {
     fn render_ascii(&self) -> String {
         const CHARS: &[u8] = b" .:-=+*#%@";
         let (cols, rows) = self.term_size();
-        let mut out = String::with_capacity(cols * rows * 20);
+        let mut out = String::with_capacity(cols * rows * 10);
+        let use_color = self.color_mode != ColorMode::Mono;
+        let mut last_fg = String::new();
 
         for row in 0..rows {
             for col in 0..cols {
@@ -133,18 +135,24 @@ impl Canvas {
                     CHARS[ci] as char
                 };
 
-                if self.color_mode != ColorMode::Mono {
+                if use_color {
                     let (r, g, b) = self.colors[idx];
                     let color = self.map_color(r, g, b);
-                    out.push_str(&format!("\x1b[{}m{}", color_to_fg(color), ch));
-                } else {
-                    out.push(ch);
+                    let fg = color_to_fg(color);
+                    if fg != last_fg {
+                        out.push_str("\x1b[");
+                        out.push_str(&fg);
+                        out.push('m');
+                        last_fg = fg;
+                    }
                 }
+                out.push(ch);
             }
-            if self.color_mode != ColorMode::Mono {
-                out.push_str("\x1b[0m");
-            }
-            out.push_str(&format!("\x1b[{};1H", row + 2));
+            out.push_str("\x1b[0m\x1b[");
+            let next_row = row + 2;
+            out.push_str(&next_row.to_string());
+            out.push_str(";1H");
+            last_fg.clear();
         }
         out
     }
