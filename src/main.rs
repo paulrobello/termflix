@@ -400,14 +400,6 @@ fn run_loop(cli: &Cli, initial_anim: &str, frame_dur: Duration) -> io::Result<()
         {
             use std::os::unix::io::AsRawFd;
             let fd = io::stdout().as_raw_fd();
-            // Discard any stale output from previous frames still in the kernel
-            // buffer. This prevents backlog from building up — without it, tmux's
-            // buffer gradually fills and FPS drops from 20+ to ~14.
-            // The current frame hasn't been written yet, so this only discards
-            // old data that tmux hasn't read.
-            unsafe {
-                libc::tcflush(fd, libc::TCOFLUSH);
-            }
             let mut written = 0;
             let buf = &frame_buf;
             while written < buf.len() {
