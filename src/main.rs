@@ -14,6 +14,67 @@ use render::{Canvas, ColorMode, RenderMode};
 use std::io::{self, Write};
 use std::time::{Duration, Instant};
 
+#[cfg(unix)]
+mod nonblock {
+    use std::io;
+    use std::os::unix::io::AsRawFd;
+
+    /// Set stdout to non-blocking mode. Returns the old flags for restoration.
+    pub fn set_nonblocking() -> io::Result<i32> {
+        let fd = io::stdout().as_raw_fd();
+        let flags = unsafe { libc::fcntl(fd, libc::F_GETFL) };
+        if flags < 0 {
+            return Err(io::Error::last_os_error());
+        }
+        let result = unsafe { libc::fcntl(fd, libc::F_SETFL, flags | libc::O_NONBLOCK) };
+        if result < 0 {
+            return Err(io::Error::last_os_error());
+        }
+        Ok(flags)
+    }
+
+    /// Restore stdout flags
+    pub fn restore_flags(flags: i32) {
+        let fd = io::stdout().as_raw_fd();
+        unsafe {
+            libc::fcntl(fd, libc::F_SETFL, flags);
+        }
+    }
+
+    /// Try to write all bytes, retrying on partial writes but giving up on WouldBlock.
+    /// Returns true if fully written, false if buffer was full (frame dropped).
+    pub fn try_write_all(buf: &[u8]) -> io::Result<bool> {
+        use std::io::Write;
+        let mut stdout = io::stdout().lock();
+        let mut written = 0;
+        while written < buf.len() {
+            match stdout.write(&buf[written..]) {
+                Ok(n) => written += n,
+                Err(e) if e.kind() == io::ErrorKind::WouldBlock => {
+                    if written == 0 {
+                        // Nothing written yet — clean drop
+                        return Ok(false);
+                    }
+                    // Partial write — must finish to avoid corruption.
+                    // Brief spin-wait for buffer to drain.
+                    std::thread::sleep(std::time::Duration::from_millis(1));
+                    continue;
+                }
+                Err(e) if e.kind() == io::ErrorKind::Interrupted => continue,
+                Err(e) => return Err(e),
+            }
+        }
+        match stdout.flush() {
+            Ok(()) => Ok(true),
+            Err(e) if e.kind() == io::ErrorKind::WouldBlock => {
+                // Data is written, just can't flush yet — that's fine
+                Ok(true)
+            }
+            Err(e) => Err(e),
+        }
+    }
+}
+
 #[derive(Parser)]
 #[command(name = "termflix", about = "Terminal animation player")]
 struct Cli {
@@ -84,7 +145,21 @@ fn main() -> io::Result<()> {
     let mut stdout = io::stdout();
     execute!(stdout, terminal::EnterAlternateScreen, cursor::Hide)?;
 
+    // In tmux, use non-blocking stdout to prevent lockups when buffer fills
+    #[cfg(unix)]
+    let saved_flags = if in_tmux() {
+        nonblock::set_nonblocking().ok()
+    } else {
+        None
+    };
+
     let result = run_loop(&cli, &anim_name, frame_dur);
+
+    // Restore blocking mode before cleanup (execute! needs blocking writes)
+    #[cfg(unix)]
+    if let Some(flags) = saved_flags {
+        nonblock::restore_flags(flags);
+    }
 
     let mut stdout = io::stdout();
     execute!(stdout, cursor::Show, terminal::LeaveAlternateScreen)?;
@@ -153,9 +228,6 @@ fn run_loop(cli: &Cli, initial_anim: &str, frame_dur: Duration) -> io::Result<()
     let mut frame_buf: Vec<u8> = Vec::with_capacity(256 * 1024);
     // Resize cooldown — skip frames after resize
     let mut resize_cooldown = Instant::now();
-    // Adaptive frame pacing for tmux — track write times and skip frames proportionally
-    let mut write_time_avg_us: f64 = 0.0;
-    let frame_budget_us = frame_dur.as_micros() as f64;
     loop {
         // Use event::poll as frame timer — properly yields to OS for signal handling
         let time_to_next = frame_dur.saturating_sub(last_frame.elapsed());
@@ -305,28 +377,6 @@ fn run_loop(cli: &Cli, initial_anim: &str, frame_dur: Duration) -> io::Result<()
         // Update animation
         anim.update(&mut canvas, dt, time);
 
-        // Adaptive frame pacing for tmux: if writes are slow, skip frames
-        // proportionally. E.g. if write takes 80ms and budget is 41ms, skip 1 frame.
-        // If write takes 160ms, skip 3 frames. Uses exponential moving average
-        // to smooth out spikes.
-        if is_tmux && write_time_avg_us > frame_budget_us * 1.2 {
-            // Calculate how many frames to skip to stay under budget
-            let skip_count = ((write_time_avg_us / frame_budget_us) as u32)
-                .saturating_sub(1)
-                .min(4);
-            // Skip by waiting through the frame intervals (still processing events)
-            for _ in 0..skip_count {
-                let wait = frame_dur.saturating_sub(last_frame.elapsed());
-                if event::poll(wait)?
-                    && let Event::Key(KeyEvent { code, .. }) = event::read()?
-                    && matches!(code, KeyCode::Char('q') | KeyCode::Esc)
-                {
-                    return Ok(());
-                }
-                last_frame = Instant::now();
-            }
-        }
-
         // Render to string
         let frame = canvas.render();
 
@@ -380,13 +430,27 @@ fn run_loop(cli: &Cli, initial_anim: &str, frame_dur: Duration) -> io::Result<()
         // End synchronized update
         frame_buf.extend_from_slice(b"\x1b[?2026l");
 
-        // Write entire frame in one syscall, track duration for adaptive pacing
-        let write_start = Instant::now();
-        let mut stdout = io::stdout().lock();
-        stdout.write_all(&frame_buf)?;
-        stdout.flush()?;
-        let write_us = write_start.elapsed().as_micros() as f64;
-        // Exponential moving average (alpha=0.3) to smooth out spikes
-        write_time_avg_us = write_time_avg_us * 0.7 + write_us * 0.3;
+        // Write frame — in tmux, use non-blocking to drop frames when buffer is full
+        #[cfg(unix)]
+        if is_tmux {
+            // Non-blocking: if buffer is full, silently drop this frame
+            match nonblock::try_write_all(&frame_buf) {
+                Ok(true) => {} // Written successfully
+                Ok(false) => {
+                    // Buffer full — frame dropped, terminal catches up
+                }
+                Err(e) => return Err(e),
+            }
+        } else {
+            let mut stdout = io::stdout().lock();
+            stdout.write_all(&frame_buf)?;
+            stdout.flush()?;
+        }
+        #[cfg(not(unix))]
+        {
+            let mut stdout = io::stdout().lock();
+            stdout.write_all(&frame_buf)?;
+            stdout.flush()?;
+        }
     }
 }
