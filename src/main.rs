@@ -307,8 +307,9 @@ fn run_loop(cli: &Cli, initial_anim: &str, frame_dur: Duration) -> io::Result<()
         // Adaptive frame dropping: if last write took longer than frame budget,
         // skip rendering this frame to let the terminal catch up.
         // This prevents output backlog that causes tmux/iTerm2 lockups.
+        // Reset after skipping so we don't get stuck in a permanent skip loop.
         if is_tmux && last_write_dur > frame_dur {
-            // Still count the frame for FPS tracking but don't render
+            last_write_dur = Duration::ZERO;
             frame_count += 1;
             continue;
         }
