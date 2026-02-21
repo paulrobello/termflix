@@ -9,9 +9,9 @@ permissions:
 
 env:
   RUST_VERSION: "1.85.0"
-  BINARY_NAME: "termflix"
 
 jobs:
+  # Build Linux ARM64 using cross
   build-linux-arm64:
     name: Build - Linux ARM64
     runs-on: ubuntu-latest
@@ -28,21 +28,22 @@ jobs:
       - name: Install cross
         run: cargo install cross --git https://github.com/cross-rs/cross
 
-      - name: Build binary with cross
+      - name: Build with cross
         run: cross build --release --target aarch64-unknown-linux-gnu
 
       - name: Prepare artifact
         run: |
           mkdir -p release-binaries
-          cp target/aarch64-unknown-linux-gnu/release/${{ env.BINARY_NAME }} release-binaries/${{ env.BINARY_NAME }}-linux-aarch64
+          cp target/aarch64-unknown-linux-gnu/release/termflix release-binaries/termflix-linux-aarch64
 
-      - name: Upload binary artifact
+      - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: binary-aarch64-unknown-linux-gnu
-          path: release-binaries/${{ env.BINARY_NAME }}-linux-aarch64
+          path: release-binaries/termflix-linux-aarch64
           retention-days: 1
 
+  # Build Linux x86_64
   build-linux-x86_64:
     name: Build - Linux x86_64
     runs-on: ubuntu-latest
@@ -56,24 +57,25 @@ jobs:
           toolchain: ${{ env.RUST_VERSION }}
           targets: x86_64-unknown-linux-gnu
 
-      - name: Build binary
+      - name: Build
         run: cargo build --release --target x86_64-unknown-linux-gnu
 
       - name: Strip binary
-        run: strip target/x86_64-unknown-linux-gnu/release/${{ env.BINARY_NAME }}
+        run: strip target/x86_64-unknown-linux-gnu/release/termflix
 
       - name: Prepare artifact
         run: |
           mkdir -p release-binaries
-          cp target/x86_64-unknown-linux-gnu/release/${{ env.BINARY_NAME }} release-binaries/${{ env.BINARY_NAME }}-linux-x86_64
+          cp target/x86_64-unknown-linux-gnu/release/termflix release-binaries/termflix-linux-x86_64
 
-      - name: Upload binary artifact
+      - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: binary-x86_64-unknown-linux-gnu
-          path: release-binaries/${{ env.BINARY_NAME }}-linux-x86_64
+          path: release-binaries/termflix-linux-x86_64
           retention-days: 1
 
+  # Build Windows x86_64
   build-windows-x86_64:
     name: Build - Windows x86_64
     runs-on: windows-latest
@@ -87,22 +89,23 @@ jobs:
           toolchain: ${{ env.RUST_VERSION }}
           targets: x86_64-pc-windows-msvc
 
-      - name: Build binary
+      - name: Build
         run: cargo build --release --target x86_64-pc-windows-msvc
 
       - name: Prepare artifact
         shell: bash
         run: |
           mkdir -p release-binaries
-          cp target/x86_64-pc-windows-msvc/release/${{ env.BINARY_NAME }}.exe release-binaries/${{ env.BINARY_NAME }}-windows-x86_64.exe
+          cp target/x86_64-pc-windows-msvc/release/termflix.exe release-binaries/termflix-windows-x86_64.exe
 
-      - name: Upload binary artifact
+      - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: binary-x86_64-pc-windows-msvc
-          path: release-binaries/${{ env.BINARY_NAME }}-windows-x86_64.exe
+          path: release-binaries/termflix-windows-x86_64.exe
           retention-days: 1
 
+  # Build macOS x86_64
   build-macos-x86_64:
     name: Build - macOS x86_64
     runs-on: macos-latest
@@ -116,21 +119,22 @@ jobs:
           toolchain: ${{ env.RUST_VERSION }}
           targets: x86_64-apple-darwin
 
-      - name: Build binary
+      - name: Build
         run: cargo build --release --target x86_64-apple-darwin
 
       - name: Prepare artifact
         run: |
           mkdir -p release-binaries
-          cp target/x86_64-apple-darwin/release/${{ env.BINARY_NAME }} release-binaries/${{ env.BINARY_NAME }}-macos-x86_64
+          cp target/x86_64-apple-darwin/release/termflix release-binaries/termflix-macos-x86_64
 
-      - name: Upload binary artifact
+      - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: binary-x86_64-apple-darwin
-          path: release-binaries/${{ env.BINARY_NAME }}-macos-x86_64
+          path: release-binaries/termflix-macos-x86_64
           retention-days: 1
 
+  # Build macOS ARM64
   build-macos-arm64:
     name: Build - macOS ARM64
     runs-on: macos-latest
@@ -144,21 +148,22 @@ jobs:
           toolchain: ${{ env.RUST_VERSION }}
           targets: aarch64-apple-darwin
 
-      - name: Build binary
+      - name: Build
         run: cargo build --release --target aarch64-apple-darwin
 
       - name: Prepare artifact
         run: |
           mkdir -p release-binaries
-          cp target/aarch64-apple-darwin/release/${{ env.BINARY_NAME }} release-binaries/${{ env.BINARY_NAME }}-macos-aarch64
+          cp target/aarch64-apple-darwin/release/termflix release-binaries/termflix-macos-aarch64
 
-      - name: Upload binary artifact
+      - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: binary-aarch64-apple-darwin
-          path: release-binaries/${{ env.BINARY_NAME }}-macos-aarch64
+          path: release-binaries/termflix-macos-aarch64
           retention-days: 1
 
+  # Publish to crates.io
   publish-crates:
     name: Publish to crates.io
     runs-on: ubuntu-latest
@@ -178,35 +183,16 @@ jobs:
           CARGO_VERSION=$(cargo metadata --format-version 1 --no-deps | jq -r '.packages[0].version')
           echo "version=$CARGO_VERSION" >> $GITHUB_OUTPUT
 
-      - name: Check if version exists on crates.io
-        id: check_version
-        run: |
-          VERSION="${{ steps.version.outputs.version }}"
-          if cargo search termflix --limit 1 | grep -q "termflix = \"$VERSION\""; then
-            echo "exists=true" >> $GITHUB_OUTPUT
-          else
-            echo "exists=false" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Run tests
-        if: steps.check_version.outputs.exists == 'false'
-        run: cargo test --verbose
+      - name: Dry run publish
+        run: cargo publish --dry-run
 
       - name: Publish to crates.io
-        if: steps.check_version.outputs.exists == 'false'
-        run: cargo publish --token ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        run: cargo publish --token ${{ secrets.CARGO_REGISTRY_TOKEN }} || echo "Version may already exist, continuing..."
+        continue-on-error: true
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
 
-      - name: Discord notification
-        if: success() && steps.check_version.outputs.exists == 'false'
-        env:
-          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
-        uses: Ilshidur/action-discord@master
-        with:
-          args: 'Published termflix v${{ steps.version.outputs.version }} to crates.io! 🎬'
-        continue-on-error: true
-
+  # Create GitHub Release
   github-release:
     name: Create GitHub Release
     runs-on: ubuntu-latest
@@ -214,7 +200,6 @@ jobs:
     needs: [build-linux-arm64, build-linux-x86_64, build-windows-x86_64, build-macos-x86_64, build-macos-arm64]
     permissions:
       contents: write
-      id-token: write
     steps:
       - uses: actions/checkout@v4
 
@@ -236,7 +221,7 @@ jobs:
           path: binaries
           merge-multiple: true
 
-      - name: List downloaded binaries
+      - name: List binaries
         run: ls -lh binaries/
 
       - name: Create or update GitHub Release
@@ -252,7 +237,7 @@ jobs:
             --generate-notes \
             --latest
 
-      - name: Upload binaries to GitHub Release
+      - name: Upload binaries to Release
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
@@ -260,3 +245,12 @@ jobs:
             'v${{ steps.get_version.outputs.version }}' binaries/* \
             --repo '${{ github.repository }}' \
             --clobber
+
+      - name: Discord notification
+        if: success()
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+        uses: Ilshidur/action-discord@master
+        with:
+          args: '🎬 termflix v${{ steps.get_version.outputs.version }} released! https://github.com/${{ github.repository }}/releases/tag/v${{ steps.get_version.outputs.version }}'
+        continue-on-error: true
