@@ -26,6 +26,9 @@ typecheck:
 
 checkall: fmt lint typecheck test build
 
+install:
+	cargo install --path .
+
 clean:
 	cargo clean
 
