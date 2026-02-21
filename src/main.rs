@@ -121,6 +121,19 @@ fn main() -> io::Result<()> {
         let _ = execute!(stdout, cursor::Show, terminal::LeaveAlternateScreen);
     }
 
+    // In tmux, tell tmux to discard buffered output and force a redraw.
+    // Without this, tmux slowly drains queued animation frames row by row.
+    if std::env::var("TMUX").is_ok() {
+        // clear-history discards tmux's output buffer for this pane
+        // refresh-client forces tmux to redraw from current state
+        let _ = std::process::Command::new("tmux")
+            .args(["clear-history"])
+            .status();
+        let _ = std::process::Command::new("tmux")
+            .args(["refresh-client"])
+            .status();
+    }
+
     if result.is_ok() {
         std::process::exit(0);
     }
