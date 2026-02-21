@@ -141,9 +141,16 @@ fn run_loop(
 
     loop {
         // Handle input (non-blocking)
-        if event::poll(Duration::ZERO)? {
-            if let Event::Key(KeyEvent { code, .. }) = event::read()? {
-                match code {
+        while event::poll(Duration::ZERO)? {
+            match event::read()? {
+            Event::Resize(w, h) => {
+                if w >= 10 && h >= 5 {
+                    cols = w;
+                    rows = h;
+                    rebuild_canvas = true;
+                }
+            }
+            Event::Key(KeyEvent { code, .. }) => match code {
                     KeyCode::Char('q') | KeyCode::Esc => {
                         // Save recording if active
                         if let (Some(rec), Some(path)) = (recorder.take(), &cli.record) {
@@ -203,19 +210,12 @@ fn run_loop(
                     }
                     _ => {}
                 }
+            _ => {}
             }
         }
 
-        // Check terminal resize
-        let (new_cols, new_rows) = terminal::size()?;
-        if new_cols != cols || new_rows != rows {
-            cols = new_cols;
-            rows = new_rows;
-            rebuild_canvas = true;
-        }
-
         // Rebuild canvas if mode changed or terminal resized
-        if rebuild_canvas {
+        if rebuild_canvas && cols >= 10 && rows >= 5 {
             let display_rows = if hide_status { rows as usize } else { (rows as usize).saturating_sub(1) };
             canvas = Canvas::new(cols as usize, display_rows, render_mode, color_mode);
             anim = animations::create(
