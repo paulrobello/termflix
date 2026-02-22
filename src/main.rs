@@ -7,7 +7,7 @@ use animations::Animation;
 use clap::Parser;
 use crossterm::{
     cursor,
-    event::{self, Event, KeyCode, KeyEvent},
+    event::{self, Event, KeyCode, KeyEvent, KeyEventKind},
     execute, terminal,
 };
 use render::{Canvas, ColorMode, RenderMode};
@@ -211,7 +211,11 @@ fn run_loop(cli: &Cli, initial_anim: &str, frame_dur: Duration) -> io::Result<()
                         needs_rebuild = true;
                         resize_cooldown = Instant::now();
                     }
-                    Event::Key(KeyEvent { code, .. }) => match code {
+                    Event::Key(KeyEvent {
+                        code,
+                        kind: KeyEventKind::Press,
+                        ..
+                    }) => match code {
                         KeyCode::Char('q') | KeyCode::Esc => {
                             if let (Some(rec), Some(path)) = (recorder.take(), &cli.record) {
                                 let mut stdout = io::stdout();
@@ -410,7 +414,11 @@ fn run_loop(cli: &Cli, initial_anim: &str, frame_dur: Duration) -> io::Result<()
             let buf = &frame_buf;
             while written < buf.len() {
                 if event::poll(Duration::ZERO)?
-                    && let Event::Key(KeyEvent { code, .. }) = event::read()?
+                    && let Event::Key(KeyEvent {
+                        code,
+                        kind: KeyEventKind::Press,
+                        ..
+                    }) = event::read()?
                     && matches!(code, KeyCode::Char('q') | KeyCode::Esc)
                 {
                     return Ok(());
