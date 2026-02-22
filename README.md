@@ -191,7 +191,48 @@ Typical FPS in tmux (200×44, halfblock truecolor):
 
 ## Configuration
 
-termflix auto-detects your terminal size and adapts. All settings can be overridden via CLI flags.
+termflix supports a TOML config file for persistent defaults. CLI flags always override config settings.
+
+```bash
+# Generate default config file
+termflix --init-config
+
+# Show config file path and current settings
+termflix --show-config
+```
+
+Config location:
+- **macOS**: `~/Library/Application Support/termflix/config.toml`
+- **Linux**: `~/.config/termflix/config.toml`
+- **Windows**: `%APPDATA%\termflix\config.toml`
+
+Example config:
+```toml
+# Default animation
+animation = "plasma"
+
+# Render mode: braille, half-block, ascii
+render = "half-block"
+
+# Color mode: mono, ansi16, ansi256, true-color
+color = "true-color"
+
+# Target FPS (1-120)
+fps = 24
+
+# Scale factor for particle density (0.5-2.0)
+scale = 1.0
+
+# Hide status bar
+clean = false
+
+# Auto-cycle interval in seconds (0 = disabled)
+cycle = 0
+
+# Color quantization (0=off, 4/8/16 = coarser colors, less output)
+# Useful for slow terminals or tmux
+color_quant = 0
+```
 
 ## Contributing
 

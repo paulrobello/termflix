@@ -1,4 +1,5 @@
 mod animations;
+mod config;
 pub mod generators;
 mod record;
 mod render;
@@ -17,8 +18,7 @@ use std::time::{Duration, Instant};
 #[derive(Parser)]
 #[command(name = "termflix", about = "Terminal animation player")]
 struct Cli {
-    /// Animation to play
-    /// Name of animation (use --list to see all)
+    /// Animation to play (use --list to see all)
     animation: Option<String>,
 
     /// Render mode (omit to use per-animation default)
@@ -26,20 +26,20 @@ struct Cli {
     render: Option<RenderMode>,
 
     /// Color mode
-    #[arg(short, long, value_enum, default_value = "true-color")]
-    color: ColorMode,
+    #[arg(short, long, value_enum)]
+    color: Option<ColorMode>,
 
     /// Target FPS (1-120)
-    #[arg(short, long, default_value = "24")]
-    fps: u32,
+    #[arg(short, long)]
+    fps: Option<u32>,
 
     /// List available animations and exit
     #[arg(short, long)]
     list: bool,
 
     /// Cycle through all animations (seconds per animation, 0 = disabled)
-    #[arg(long, default_value = "0")]
-    cycle: u32,
+    #[arg(long)]
+    cycle: Option<u32>,
 
     /// Record animation to .asciianim file
     #[arg(long)]
@@ -50,16 +50,53 @@ struct Cli {
     play: Option<String>,
 
     /// Scale factor for particle/element counts (0.5-2.0)
-    #[arg(short, long, default_value = "1.0")]
-    scale: f64,
+    #[arg(short, long)]
+    scale: Option<f64>,
 
     /// Hide the status bar for pure animation mode
     #[arg(long)]
     clean: bool,
+
+    /// Generate default config file at ~/.config/termflix/config.toml
+    #[arg(long)]
+    init_config: bool,
+
+    /// Show config file path and current settings
+    #[arg(long)]
+    show_config: bool,
 }
 
 fn main() -> io::Result<()> {
     let cli = Cli::parse();
+
+    // --init-config: generate default config file
+    if cli.init_config {
+        let path = config::config_path().expect("Could not determine config directory");
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        if path.exists() {
+            println!("Config already exists: {}", path.display());
+            println!("Delete it first if you want to regenerate.");
+        } else {
+            std::fs::write(&path, config::default_config_string())?;
+            println!("Created config file: {}", path.display());
+        }
+        return Ok(());
+    }
+
+    // Load config file (defaults if not found)
+    let cfg = config::load_config();
+
+    // --show-config: display current settings
+    if cli.show_config {
+        let path = config::config_path()
+            .map(|p| p.display().to_string())
+            .unwrap_or_else(|| "(unknown)".to_string());
+        println!("Config file: {}", path);
+        println!("{:#?}", cfg);
+        return Ok(());
+    }
 
     if let Some(ref path) = cli.play {
         let player = record::Player::load(path)?;
@@ -76,15 +113,42 @@ fn main() -> io::Result<()> {
         return Ok(());
     }
 
-    let anim_name = cli.animation.clone().unwrap_or_else(|| "fire".to_string());
-    let fps = cli.fps.clamp(1, 120);
+    // Merge: CLI flags > config file > defaults
+    let anim_name = cli
+        .animation
+        .clone()
+        .or(cfg.animation)
+        .unwrap_or_else(|| "fire".to_string());
+    let fps = cli.fps.or(cfg.fps).unwrap_or(24).clamp(1, 120);
     let frame_dur = Duration::from_secs_f64(1.0 / fps as f64);
 
     terminal::enable_raw_mode()?;
     let mut stdout = io::stdout();
     execute!(stdout, terminal::EnterAlternateScreen, cursor::Hide)?;
 
-    let result = run_loop(&cli, &anim_name, frame_dur);
+    // Merge remaining settings: CLI > config > defaults
+    let color_mode = cli
+        .color
+        .or(cfg.color.map(ColorMode::from))
+        .unwrap_or(ColorMode::TrueColor);
+    let scale = cli.scale.or(cfg.scale).unwrap_or(1.0).clamp(0.5, 2.0);
+    let cycle = cli.cycle.or(cfg.cycle).unwrap_or(0);
+    let clean = cli.clean || cfg.clean.unwrap_or(false);
+    let color_quant = cfg.color_quant.unwrap_or(0);
+    let render_override = cli.render.or(cfg.render.map(RenderMode::from));
+
+    let result = run_loop(
+        &anim_name,
+        render_override,
+        color_mode,
+        color_quant,
+        fps,
+        frame_dur,
+        scale,
+        cycle,
+        clean,
+        cli.record.as_deref(),
+    );
 
     // Restore terminal — disable raw mode first (doesn't write to stdout)
     let _ = terminal::disable_raw_mode();
@@ -152,14 +216,22 @@ const COLOR_MODES: [ColorMode; 4] = [
     ColorMode::Mono,
 ];
 
-fn run_loop(cli: &Cli, initial_anim: &str, frame_dur: Duration) -> io::Result<()> {
+#[allow(clippy::too_many_arguments)]
+fn run_loop(
+    initial_anim: &str,
+    explicit_render: Option<RenderMode>,
+    mut color_mode: ColorMode,
+    color_quant: u8,
+    _fps: u32,
+    frame_dur: Duration,
+    scale: f64,
+    cycle: u32,
+    clean: bool,
+    record_path: Option<&str>,
+) -> io::Result<()> {
     let (mut cols, mut rows) = terminal::size()?;
     let is_tmux = std::env::var("TMUX").is_ok();
-
-    let explicit_render = cli.render;
-    let mut color_mode = cli.color;
-    let mut hide_status = cli.clean;
-    let scale = cli.scale.clamp(0.5, 2.0);
+    let mut hide_status = clean;
     // Adaptive frame pacing — adjusts to actual terminal throughput
     let mut adaptive_frame_dur = frame_dur;
     let mut write_time_ema: f64 = 0.0; // exponential moving average of write time in secs
@@ -179,6 +251,7 @@ fn run_loop(cli: &Cli, initial_anim: &str, frame_dur: Duration) -> io::Result<()
         animations::create(initial_anim, temp_canvas.width, temp_canvas.height, scale);
     let mut render_mode = explicit_render.unwrap_or_else(|| anim.preferred_render());
     let mut canvas = Canvas::new(cols as usize, display_rows, render_mode, color_mode);
+    canvas.color_quant = color_quant;
     anim = animations::create(initial_anim, canvas.width, canvas.height, scale);
 
     let mut anim_index = animations::ANIMATION_NAMES
@@ -192,7 +265,7 @@ fn run_loop(cli: &Cli, initial_anim: &str, frame_dur: Duration) -> io::Result<()
     let mut frame_count: u64 = 0;
     let mut actual_fps: f64 = 0.0;
     let mut fps_update = Instant::now();
-    let mut recorder = cli.record.as_ref().map(|_| record::Recorder::new());
+    let mut recorder = record_path.map(|_| record::Recorder::new());
     let mut needs_rebuild = false;
     // Manual frame buffer — we control when it gets written
     let mut frame_buf: Vec<u8> = Vec::with_capacity(256 * 1024);
@@ -217,7 +290,7 @@ fn run_loop(cli: &Cli, initial_anim: &str, frame_dur: Duration) -> io::Result<()
                         ..
                     }) => match code {
                         KeyCode::Char('q') | KeyCode::Esc => {
-                            if let (Some(rec), Some(path)) = (recorder.take(), &cli.record) {
+                            if let (Some(rec), Some(path)) = (recorder.take(), record_path) {
                                 let mut stdout = io::stdout();
                                 execute!(stdout, cursor::Show, terminal::LeaveAlternateScreen)?;
                                 terminal::disable_raw_mode()?;
@@ -310,6 +383,7 @@ fn run_loop(cli: &Cli, initial_anim: &str, frame_dur: Duration) -> io::Result<()
                     (rows as usize).saturating_sub(1)
                 };
                 canvas = Canvas::new(cols as usize, display_rows, render_mode, color_mode);
+                canvas.color_quant = color_quant;
                 anim = animations::create(
                     animations::ANIMATION_NAMES[anim_index],
                     canvas.width,
@@ -326,7 +400,7 @@ fn run_loop(cli: &Cli, initial_anim: &str, frame_dur: Duration) -> io::Result<()
         }
 
         // Auto-cycle
-        if cli.cycle > 0 && cycle_start.elapsed() >= Duration::from_secs(cli.cycle as u64) {
+        if cycle > 0 && cycle_start.elapsed() >= Duration::from_secs(cycle as u64) {
             anim_index = (anim_index + 1) % animations::ANIMATION_NAMES.len();
             anim = animations::create(
                 animations::ANIMATION_NAMES[anim_index],
