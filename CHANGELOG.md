@@ -2,7 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased]
+## [0.2.0] - 2026-02-21
+
+### Added
+- **Config file support** — TOML config file for persistent defaults (`--init-config`, `--show-config`)
+- **Color quantization option** — `color_quant` setting for slower terminals (reduces output at cost of color precision)
 
 ### Performance
 - **Adaptive frame pacing in tmux** — Automatically adjusts frame rate to match tmux's actual throughput, preventing output backlog that caused choppiness, input lag, and beachball freezes
@@ -16,6 +20,8 @@ All notable changes to this project will be documented in this file.
 - **iTerm2 lockup** — Large terminals (200×50+) through tmux were generating ~5MB/s of escape sequences, overwhelming iTerm2's renderer
 - **Status bar wrapping** — Truncated to terminal width to prevent line wrapping artifacts
 - **Resize handling** — Proper cooldown and frame discarding during terminal resize events
+- **Double key registration** — Filter to KeyPress events only (was firing on both press and release)
+- **Windows build** — cfg-gate Unix-only chunked writes for cross-platform compatibility
 
 ### Changed
 - Default FPS reduced from 30 to 24 (sufficient for these animations, reduces terminal load)
