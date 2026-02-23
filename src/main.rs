@@ -171,18 +171,15 @@ fn main() -> io::Result<()> {
         }
     }
 
-    // Write restore sequences via raw fd write (non-blocking, bypasses Rust buffering).
-    // Then exit immediately. If tmux buffer is full, these may not get through,
-    // but the terminal will restore state when the PTY closes anyway.
+    // Write restore sequences. tcflush above emptied the kernel PTY output queue,
+    // so this blocking write returns immediately — nothing to block on.
+    // Must NOT use O_NONBLOCK here: if the write fails silently (EAGAIN), the
+    // terminal stays stuck in alt screen with cursor hidden after exit.
+    // Terminals do NOT auto-restore alt screen when the PTY closes.
     #[cfg(unix)]
     {
         use std::os::unix::io::AsRawFd;
         let fd = io::stdout().as_raw_fd();
-        // Make stdout non-blocking so these writes don't hang
-        unsafe {
-            let flags = libc::fcntl(fd, libc::F_GETFL);
-            libc::fcntl(fd, libc::F_SETFL, flags | libc::O_NONBLOCK);
-        }
         let restore = b"\x1b[?25h\x1b[?1049l";
         unsafe {
             libc::write(fd, restore.as_ptr() as *const libc::c_void, restore.len());

@@ -9,6 +9,7 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 - **Unlimited mode quit hang** — without adaptive pacing, unlimited mode flooded the terminal faster than it could drain, causing `libc::write()` to block for seconds and making `q` unresponsive. Adaptive pacing is now enabled in unlimited mode for all terminals. Added a post-write quit check as defense-in-depth for the EMA warmup period.
+- **Terminal stuck in alt screen after exit** — restore sequences (`\x1b[?1049l`) were written with `O_NONBLOCK`, which silently dropped them if the PTY buffer was full (returns `EAGAIN` with no error). The terminal does not auto-restore alt screen when the PTY closes. Fixed by removing `O_NONBLOCK`; after `tcflush` empties the kernel buffer the blocking write returns immediately.
 
 ## [0.2.0] - 2026-02-21
 
