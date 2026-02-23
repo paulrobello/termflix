@@ -9,7 +9,7 @@ A terminal animation player with 43 procedurally generated animations, multiple 
 
 [!["Buy Me A Coffee"](https://www.buymeacoffee.com/assets/img/custom_images/orange_img.png)](https://buymeacoffee.com/probello3)
 
-![termflix screenshot](screenshot.png)
+![termflix screenshot](https://raw.githubusercontent.com/paulrobello/termflix/main/screenshot.png)
 
 ## Features
 
