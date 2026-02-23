@@ -521,6 +521,18 @@ fn run_loop(
                 };
                 if n > 0 {
                     written += n as usize;
+                    // Also check for quit AFTER the write — catches events that arrived
+                    // during a blocking write (e.g. during EMA warmup in unlimited mode).
+                    if event::poll(Duration::ZERO)?
+                        && let Event::Key(KeyEvent {
+                            code,
+                            kind: KeyEventKind::Press,
+                            ..
+                        }) = event::read()?
+                        && matches!(code, KeyCode::Char('q') | KeyCode::Esc)
+                    {
+                        return Ok(());
+                    }
                 } else if n < 0 {
                     let err = io::Error::last_os_error();
                     if err.kind() == io::ErrorKind::Interrupted {
@@ -541,7 +553,11 @@ fn run_loop(
         // Adaptive frame pacing: adjust frame duration based on actual write throughput.
         // In tmux, writes block when the buffer is full, so write time reflects
         // how fast tmux can actually process our output.
-        if is_tmux && !unlimited {
+        // In unlimited mode, also enable adaptive pacing: without it, we flood the
+        // terminal faster than it can drain, causing libc::write() to block for seconds
+        // and making quit unresponsive. With frame_dur=ZERO, the target becomes
+        // write_time_ema*1.1 — no hard cap, but no terminal flood either.
+        if is_tmux || unlimited {
             let write_secs = write_start.elapsed().as_secs_f64();
             write_time_ema = write_time_ema * 0.8 + write_secs * 0.2;
             // Target: frame duration = write time + small margin for animation update
