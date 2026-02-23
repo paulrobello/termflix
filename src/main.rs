@@ -53,6 +53,10 @@ struct Cli {
     #[arg(short, long)]
     scale: Option<f64>,
 
+    /// Remove FPS cap and render as fast as possible (overrides --fps)
+    #[arg(long)]
+    unlimited: bool,
+
     /// Hide the status bar for pure animation mode
     #[arg(long)]
     clean: bool,
@@ -119,8 +123,13 @@ fn main() -> io::Result<()> {
         .clone()
         .or(cfg.animation)
         .unwrap_or_else(|| "fire".to_string());
+    let unlimited = cli.unlimited || cfg.unlimited_fps.unwrap_or(false);
     let fps = cli.fps.or(cfg.fps).unwrap_or(24).clamp(1, 120);
-    let frame_dur = Duration::from_secs_f64(1.0 / fps as f64);
+    let frame_dur = if unlimited {
+        Duration::ZERO
+    } else {
+        Duration::from_secs_f64(1.0 / fps as f64)
+    };
 
     terminal::enable_raw_mode()?;
     let mut stdout = io::stdout();
@@ -142,7 +151,7 @@ fn main() -> io::Result<()> {
         render_override,
         color_mode,
         color_quant,
-        fps,
+        unlimited,
         frame_dur,
         scale,
         cycle,
@@ -222,7 +231,7 @@ fn run_loop(
     explicit_render: Option<RenderMode>,
     mut color_mode: ColorMode,
     color_quant: u8,
-    _fps: u32,
+    unlimited: bool,
     frame_dur: Duration,
     scale: f64,
     cycle: u32,
@@ -449,12 +458,17 @@ fn run_loop(
         }
         if !hide_status {
             let rec_indicator = if recorder.is_some() { " [REC]" } else { "" };
+            let fps_str = if unlimited {
+                "∞ fps".to_string()
+            } else {
+                format!("{:.0} fps", actual_fps)
+            };
             let status = format!(
-                " {} | {:?} | {:?} | {:.0} fps{} | [←/→] anim  [r] render  [c] color  [h] hide  [q] quit ",
+                " {} | {:?} | {:?} | {}{} | [←/→] anim  [r] render  [c] color  [h] hide  [q] quit ",
                 anim.name(),
                 render_mode,
                 color_mode,
-                actual_fps,
+                fps_str,
                 rec_indicator,
             );
             let w = cols as usize;
@@ -527,7 +541,7 @@ fn run_loop(
         // Adaptive frame pacing: adjust frame duration based on actual write throughput.
         // In tmux, writes block when the buffer is full, so write time reflects
         // how fast tmux can actually process our output.
-        if is_tmux {
+        if is_tmux && !unlimited {
             let write_secs = write_start.elapsed().as_secs_f64();
             write_time_ema = write_time_ema * 0.8 + write_secs * 0.2;
             // Target: frame duration = write time + small margin for animation update

@@ -143,6 +143,9 @@ termflix --cycle 10
 # Scale particle density
 termflix -a rain --scale 1.5
 
+# Remove FPS cap (render as fast as terminal allows)
+termflix --unlimited
+
 # Clean mode (no status bar)
 termflix --clean
 
@@ -232,6 +235,9 @@ cycle = 0
 # Color quantization (0=off, 4/8/16 = coarser colors, less output)
 # Useful for slow terminals or tmux
 color_quant = 0
+
+# Remove FPS cap and render as fast as possible (overrides fps)
+unlimited_fps = false
 ```
 
 ## Contributing

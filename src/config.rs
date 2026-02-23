@@ -23,6 +23,8 @@ pub struct Config {
     pub cycle: Option<u32>,
     /// Color quantization step (0 = off, 4/8/16 = coarser colors for less output)
     pub color_quant: Option<u8>,
+    /// Remove FPS cap and render as fast as possible
+    pub unlimited_fps: Option<bool>,
 }
 
 /// Render mode names for config file (kebab-case friendly)
@@ -117,6 +119,9 @@ pub fn default_config_string() -> String {
 # Color quantization step (0 = off, 4/8/16 = coarser colors, less output)
 # Useful for slow terminals or tmux
 # color_quant = 0
+
+# Remove FPS cap and render as fast as possible (overrides fps)
+# unlimited_fps = false
 "#
     .to_string()
 }

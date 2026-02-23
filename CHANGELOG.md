@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.0] - 2026-02-23
+
+### Added
+- **Unlimited FPS mode** — `--unlimited` flag (and `unlimited_fps` config option) removes the FPS cap and renders as fast as the terminal allows. Status bar shows `∞ fps`. Adaptive tmux pacing is disabled in this mode.
+
 ## [0.2.0] - 2026-02-21
 
 ### Added
