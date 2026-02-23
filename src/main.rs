@@ -171,16 +171,17 @@ fn main() -> io::Result<()> {
         }
     }
 
-    // Write restore sequences. tcflush above emptied the kernel PTY output queue,
-    // so this blocking write returns immediately — nothing to block on.
-    // Must NOT use O_NONBLOCK here: if the write fails silently (EAGAIN), the
-    // terminal stays stuck in alt screen with cursor hidden after exit.
-    // Terminals do NOT auto-restore alt screen when the PTY closes.
+    // Restore cursor and leave alt screen.
+    // \x1b[?2026l MUST come first: every frame starts with \x1b[?2026h (BSU begin
+    // synchronized output). If quit fires mid-write, the terminal has seen the begin
+    // marker but not the end marker, so it sits in sync mode buffering everything that
+    // follows — including the restore sequences — and appears frozen on the last frame.
+    // Sending \x1b[?2026l closes the pending sync block; it is a no-op if not in sync mode.
     #[cfg(unix)]
     {
         use std::os::unix::io::AsRawFd;
         let fd = io::stdout().as_raw_fd();
-        let restore = b"\x1b[?25h\x1b[?1049l";
+        let restore = b"\x1b[?2026l\x1b[?25h\x1b[?1049l";
         unsafe {
             libc::write(fd, restore.as_ptr() as *const libc::c_void, restore.len());
         }
