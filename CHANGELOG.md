@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased]
+## [0.4.0] - 2026-02-24
 
 ### Added
 - **Screensaver mode** — `--screensaver` flag exits immediately on any keypress or when the terminal window gains focus. Useful for desktop screensaver integrations (e.g. `termflix matrix --clean --screensaver`).
