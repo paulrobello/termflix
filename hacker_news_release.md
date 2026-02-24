@@ -24,7 +24,9 @@ Hey HN! I built Termflix, a terminal animation player with 43 procedurally gener
 
 • Runtime hotkeys: cycle animations, render modes, color modes without restarting
 
-• Recording & playback: record sessions as `.termflix` files and replay them
+• Recording & playback: record sessions as `.asciianim` files and replay them
+
+• Unlimited FPS mode (`--unlimited`): removes the frame cap, renders as fast as the terminal accepts
 
 **Technical highlights:**
 

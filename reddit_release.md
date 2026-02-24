@@ -29,8 +29,9 @@ Snake (AI-controlled), Space Invaders demo, Pong (AI vs AI), hackerman terminal,
 - **4 Color Modes** — Mono, ANSI 16, ANSI 256, 24-bit true color
 - **Config file** — TOML persistent defaults (`--init-config` / `--show-config`)
 - **Runtime Hotkeys** — cycle animations, render modes, color modes without restarting
-- **Recording & Playback** — record to `.termflix` files, replay later
+- **Recording & Playback** — record to `.asciianim` files, replay later
 - **Auto-Cycle** — rotate through all animations on a configurable timer
+- **Unlimited FPS** — `--unlimited` removes the frame cap, renders as fast as the terminal accepts
 - **Low CPU** — color dedup + single buffered write per frame keeps it light
 
 ## tmux Support
@@ -55,6 +56,7 @@ render = "half-block"
 color = "true-color"
 fps = 24
 color_quant = 0   # 4/8/16 for slower terminals
+unlimited_fps = false  # remove FPS cap
 ```
 
 ## Installation
@@ -74,13 +76,13 @@ cargo install termflix
 
 ```bash
 termflix                        # Default animation (fire)
-termflix -a mandelbrot          # Specific animation
+termflix mandelbrot          # Specific animation
 termflix --list                 # List all 43 animations
-termflix -a plasma -r braille   # Force render mode
+termflix plasma -r braille   # Force render mode
 termflix --cycle 10             # Auto-cycle every 10 seconds
 termflix --clean                # No status bar
-termflix -a matrix --record s.termflix  # Record session
-termflix --play s.termflix      # Replay recording
+termflix matrix --record s.asciianim  # Record session
+termflix --play s.asciianim      # Replay recording
 ```
 
 ## Links
