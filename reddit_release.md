@@ -1,6 +1,6 @@
 # Termflix – 43 Procedural Animations in Your Terminal, Written in Rust
 
-I'm releasing **Termflix**, a terminal animation player with 43 procedurally generated animations. Zero dependencies beyond a terminal — runs on Linux, macOS, and Windows.
+I'm releasing **Termflix**, a terminal animation player with 43 procedurally generated animations. Runs on Linux, macOS, and Windows.
 
 ## What Is It?
 
