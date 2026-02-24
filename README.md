@@ -149,6 +149,9 @@ termflix --unlimited
 # Clean mode (no status bar)
 termflix --clean
 
+# Screensaver mode (exits on any keypress or focus)
+termflix matrix --clean --screensaver
+
 # Record a session
 termflix matrix --record session.asciianim
 

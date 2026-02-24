@@ -8,7 +8,7 @@ use animations::Animation;
 use clap::Parser;
 use crossterm::{
     cursor,
-    event::{self, Event, KeyCode, KeyEvent, KeyEventKind},
+    event::{self, Event, KeyCode, KeyEvent, KeyEventKind, EnableFocusChange, DisableFocusChange},
     execute, terminal,
 };
 use render::{Canvas, ColorMode, RenderMode};
@@ -68,6 +68,9 @@ struct Cli {
     /// Show config file path and current settings
     #[arg(long)]
     show_config: bool,
+    /// Exit on first keypress or focus when running as a screensaver
+    #[arg(long)]
+    screensaver: bool,
 }
 
 fn main() -> io::Result<()> {
@@ -134,6 +137,9 @@ fn main() -> io::Result<()> {
     terminal::enable_raw_mode()?;
     let mut stdout = io::stdout();
     execute!(stdout, terminal::EnterAlternateScreen, cursor::Hide)?;
+    if cli.screensaver {
+        execute!(stdout, EnableFocusChange)?;
+    }
 
     // Merge remaining settings: CLI > config > defaults
     let color_mode = cli
@@ -156,6 +162,7 @@ fn main() -> io::Result<()> {
         scale,
         cycle,
         clean,
+        cli.screensaver,
         cli.record.as_deref(),
     );
 
@@ -185,11 +192,19 @@ fn main() -> io::Result<()> {
         unsafe {
             libc::write(fd, restore.as_ptr() as *const libc::c_void, restore.len());
         }
+        // Explicitly disable focus-change reporting before exiting
+        if cli.screensaver {
+            let mut stdout = io::stdout();
+            let _ = execute!(stdout, DisableFocusChange);
+        }
     }
     #[cfg(not(unix))]
     {
         let mut stdout = io::stdout();
         let _ = execute!(stdout, cursor::Show, terminal::LeaveAlternateScreen);
+        if cli.screensaver {
+            let _ = execute!(stdout, DisableFocusChange);
+        }
     }
 
     // In tmux, tell tmux to discard buffered output and force a redraw.
@@ -234,6 +249,7 @@ fn run_loop(
     scale: f64,
     cycle: u32,
     clean: bool,
+    screensaver: bool,
     record_path: Option<&str>,
 ) -> io::Result<()> {
     let (mut cols, mut rows) = terminal::size()?;
@@ -295,73 +311,83 @@ fn run_loop(
                         code,
                         kind: KeyEventKind::Press,
                         ..
-                    }) => match code {
-                        KeyCode::Char('q') | KeyCode::Esc => {
-                            if let (Some(rec), Some(path)) = (recorder.take(), record_path) {
-                                let mut stdout = io::stdout();
-                                execute!(stdout, cursor::Show, terminal::LeaveAlternateScreen)?;
-                                terminal::disable_raw_mode()?;
-                                rec.save(path)?;
-                                println!("Saved {} frames to {}", rec.frame_count(), path);
-                                terminal::enable_raw_mode()?;
-                                execute!(stdout, terminal::EnterAlternateScreen, cursor::Hide)?;
-                            }
+                    }) => {
+                        if screensaver {
                             return Ok(());
                         }
-                        KeyCode::Right | KeyCode::Char('n') => {
-                            anim_index = (anim_index + 1) % animations::ANIMATION_NAMES.len();
-                            anim = animations::create(
-                                animations::ANIMATION_NAMES[anim_index],
-                                canvas.width,
-                                canvas.height,
-                                scale,
-                            );
-                            if explicit_render.is_none() {
-                                render_mode = anim.preferred_render();
+                        match code {
+                            KeyCode::Char('q') | KeyCode::Esc => {
+                                if let (Some(rec), Some(path)) = (recorder.take(), record_path) {
+                                    let mut stdout = io::stdout();
+                                    execute!(stdout, cursor::Show, terminal::LeaveAlternateScreen)?;
+                                    terminal::disable_raw_mode()?;
+                                    rec.save(path)?;
+                                    println!("Saved {} frames to {}", rec.frame_count(), path);
+                                    terminal::enable_raw_mode()?;
+                                    execute!(stdout, terminal::EnterAlternateScreen, cursor::Hide)?;
+                                }
+                                return Ok(());
+                            }
+                            KeyCode::Right | KeyCode::Char('n') => {
+                                anim_index = (anim_index + 1) % animations::ANIMATION_NAMES.len();
+                                anim = animations::create(
+                                    animations::ANIMATION_NAMES[anim_index],
+                                    canvas.width,
+                                    canvas.height,
+                                    scale,
+                                );
+                                if explicit_render.is_none() {
+                                    render_mode = anim.preferred_render();
+                                    needs_rebuild = true;
+                                }
+                                cycle_start = Instant::now();
+                            }
+                            KeyCode::Left | KeyCode::Char('p') => {
+                                anim_index = if anim_index == 0 {
+                                    animations::ANIMATION_NAMES.len() - 1
+                                } else {
+                                    anim_index - 1
+                                };
+                                anim = animations::create(
+                                    animations::ANIMATION_NAMES[anim_index],
+                                    canvas.width,
+                                    canvas.height,
+                                    scale,
+                                );
+                                if explicit_render.is_none() {
+                                    render_mode = anim.preferred_render();
+                                    needs_rebuild = true;
+                                }
+                                cycle_start = Instant::now();
+                            }
+                            KeyCode::Char('r') => {
+                                let idx = RENDER_MODES
+                                    .iter()
+                                    .position(|&m| m == render_mode)
+                                    .unwrap_or(0);
+                                render_mode = RENDER_MODES[(idx + 1) % RENDER_MODES.len()];
                                 needs_rebuild = true;
                             }
-                            cycle_start = Instant::now();
-                        }
-                        KeyCode::Left | KeyCode::Char('p') => {
-                            anim_index = if anim_index == 0 {
-                                animations::ANIMATION_NAMES.len() - 1
-                            } else {
-                                anim_index - 1
-                            };
-                            anim = animations::create(
-                                animations::ANIMATION_NAMES[anim_index],
-                                canvas.width,
-                                canvas.height,
-                                scale,
-                            );
-                            if explicit_render.is_none() {
-                                render_mode = anim.preferred_render();
+                            KeyCode::Char('c') => {
+                                let idx = COLOR_MODES
+                                    .iter()
+                                    .position(|&m| m == color_mode)
+                                    .unwrap_or(0);
+                                color_mode = COLOR_MODES[(idx + 1) % COLOR_MODES.len()];
                                 needs_rebuild = true;
                             }
-                            cycle_start = Instant::now();
+                            KeyCode::Char('h') => {
+                                hide_status = !hide_status;
+                                needs_rebuild = true;
+                            }
+                            _ => {}
                         }
-                        KeyCode::Char('r') => {
-                            let idx = RENDER_MODES
-                                .iter()
-                                .position(|&m| m == render_mode)
-                                .unwrap_or(0);
-                            render_mode = RENDER_MODES[(idx + 1) % RENDER_MODES.len()];
-                            needs_rebuild = true;
+                    }
+                    Event::FocusGained => {
+                        if screensaver {
+                            return Ok(());
                         }
-                        KeyCode::Char('c') => {
-                            let idx = COLOR_MODES
-                                .iter()
-                                .position(|&m| m == color_mode)
-                                .unwrap_or(0);
-                            color_mode = COLOR_MODES[(idx + 1) % COLOR_MODES.len()];
-                            needs_rebuild = true;
-                        }
-                        KeyCode::Char('h') => {
-                            hide_status = !hide_status;
-                            needs_rebuild = true;
-                        }
-                        _ => {}
-                    },
+                    }
                     _ => {}
                 }
                 // Check for more events without blocking
