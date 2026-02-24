@@ -8,7 +8,7 @@ use animations::Animation;
 use clap::Parser;
 use crossterm::{
     cursor,
-    event::{self, Event, KeyCode, KeyEvent, KeyEventKind, EnableFocusChange},
+    event::{self, Event, KeyCode, KeyEvent, KeyEventKind, EnableFocusChange, DisableFocusChange},
     execute, terminal,
 };
 use render::{Canvas, ColorMode, RenderMode};
@@ -189,11 +189,14 @@ fn main() -> io::Result<()> {
         unsafe {
             libc::write(fd, restore.as_ptr() as *const libc::c_void, restore.len());
         }
+        // Explicitly disable focus-change reporting before exiting
+        let mut stdout = io::stdout();
+        let _ = execute!(stdout, DisableFocusChange);
     }
     #[cfg(not(unix))]
     {
         let mut stdout = io::stdout();
-        let _ = execute!(stdout, cursor::Show, terminal::LeaveAlternateScreen);
+        let _ = execute!(stdout, cursor::Show, terminal::LeaveAlternateScreen, DisableFocusChange);
     }
 
     // In tmux, tell tmux to discard buffered output and force a redraw.
