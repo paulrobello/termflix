@@ -8,7 +8,7 @@ use animations::Animation;
 use clap::Parser;
 use crossterm::{
     cursor,
-    event::{self, Event, KeyCode, KeyEvent, KeyEventKind},
+    event::{self, Event, KeyCode, KeyEvent, KeyEventKind, EnableFocusChange},
     execute, terminal,
 };
 use render::{Canvas, ColorMode, RenderMode};
@@ -68,6 +68,9 @@ struct Cli {
     /// Show config file path and current settings
     #[arg(long)]
     show_config: bool,
+    /// Exit on first keypress or focus when running as a screensaver
+    #[arg(long)]
+    screensaver: bool,
 }
 
 fn main() -> io::Result<()> {
@@ -133,7 +136,7 @@ fn main() -> io::Result<()> {
 
     terminal::enable_raw_mode()?;
     let mut stdout = io::stdout();
-    execute!(stdout, terminal::EnterAlternateScreen, cursor::Hide)?;
+    execute!(stdout, terminal::EnterAlternateScreen, cursor::Hide, EnableFocusChange)?;
 
     // Merge remaining settings: CLI > config > defaults
     let color_mode = cli
@@ -156,6 +159,7 @@ fn main() -> io::Result<()> {
         scale,
         cycle,
         clean,
+        cli.screensaver,
         cli.record.as_deref(),
     );
 
@@ -234,6 +238,7 @@ fn run_loop(
     scale: f64,
     cycle: u32,
     clean: bool,
+    screensaver: bool,
     record_path: Option<&str>,
 ) -> io::Result<()> {
     let (mut cols, mut rows) = terminal::size()?;
@@ -292,10 +297,14 @@ fn run_loop(
                         resize_cooldown = Instant::now();
                     }
                     Event::Key(KeyEvent {
-                        code,
-                        kind: KeyEventKind::Press,
-                        ..
-                    }) => match code {
+                            code,
+                            kind: KeyEventKind::Press,
+                            ..
+                        }) => {
+                            if screensaver {
+                                return Ok(());
+                            }
+                            match code {
                         KeyCode::Char('q') | KeyCode::Esc => {
                             if let (Some(rec), Some(path)) = (recorder.take(), record_path) {
                                 let mut stdout = io::stdout();
@@ -361,7 +370,14 @@ fn run_loop(
                             needs_rebuild = true;
                         }
                         _ => {}
-                    },
+                        }
+                    }
+                    
+                    Event::FocusGained => {
+                        if screensaver {
+                            return Ok(());
+                        }
+                    }
                     _ => {}
                 }
                 // Check for more events without blocking
