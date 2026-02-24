@@ -5,7 +5,7 @@
 ![Arch x86-64 | ARM | AppleSilicon](https://img.shields.io/badge/arch-x86--64%20%7C%20ARM%20%7C%20AppleSilicon-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
-A terminal animation player with 43 procedurally generated animations, multiple render modes, and true color support. Low CPU impact, works great in tmux, zero dependencies beyond your terminal.
+A terminal animation player with 43 procedurally generated animations, multiple render modes, and true color support. Low CPU impact, works great in tmux, only needs your terminal.
 
 [!["Buy Me A Coffee"](https://www.buymeacoffee.com/assets/img/custom_images/orange_img.png)](https://buymeacoffee.com/probello3)
 
