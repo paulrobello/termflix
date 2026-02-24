@@ -44,7 +44,7 @@ All notable changes to this project will be documented in this file.
 - 4 color modes: mono, ANSI 16, ANSI 256, 24-bit true color
 - Per-animation default render mode selection
 - Runtime hotkeys: cycle animations (←/→), render mode (r), color mode (c), status bar (h), quit (q)
-- Recording and playback support (`.termflix` format)
+- Recording and playback support (`.asciianim` format)
 - Auto-cycle mode with configurable interval
 - Particle scale factor (--scale)
 - Clean mode (--clean) for no status bar
