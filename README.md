@@ -27,49 +27,49 @@ A terminal animation player with 43 procedurally generated animations, multiple 
 
 | Animation | Description | Default Render |
 |-----------|-------------|---------------|
-| `fire` | Classic rising flames with heat simulation | Half-block |
-| `matrix` | Digital rain with glowing lead characters | ASCII |
-| `plasma` | Colorful sine-wave plasma interference | Half-block |
-| `starfield` | 3D starfield flying through space | Braille |
-| `wave` | Sine wave interference patterns | Half-block |
+| `fire` | Doom-style fire effect with heat propagation | Half-block |
+| `matrix` | Matrix digital rain with trailing drops | ASCII |
+| `plasma` | Classic plasma with overlapping sine waves | Half-block |
+| `starfield` | 3D starfield with depth parallax | Braille |
+| `wave` | Sine wave interference from moving sources | Half-block |
 | `life` | Conway's Game of Life cellular automaton | Half-block |
-| `particles` | Particle fountain with gravity | Half-block |
-| `rain` | Falling rain with splash effects | Half-block |
-| `fountain` | Water fountain with spray | Half-block |
-| `flow` | Fluid flow field visualization | Half-block |
-| `spiral` | Colorful rotating spiral arms | Half-block |
-| `ocean` | Ocean waves with foam | Half-block |
-| `aurora` | Northern lights / aurora borealis | Half-block |
+| `particles` | Fireworks bursting with physics and fade | Half-block |
+| `rain` | Raindrops with splash particles and wind | Half-block |
+| `fountain` | Water fountain with jets, splashes, and mist | Half-block |
+| `flow` | Perlin noise flow field with particle trails | Half-block |
+| `spiral` | Rotating multi-arm spiral pattern | Half-block |
+| `ocean` | Ocean waves with foam and depth shading | Half-block |
+| `aurora` | Aurora borealis with layered curtains | Half-block |
 | `lightning` | Lightning bolts with recursive branching | Half-block |
-| `smoke` | Smoke rising with turbulence | Half-block |
-| `ripple` | Ripple interference from random drops | Half-block |
-| `snow` | Snowfall with ground accumulation | Half-block |
+| `smoke` | Smoke rising with Perlin turbulence | Half-block |
+| `ripple` | Ripple interference from random drop points | Half-block |
+| `snow` | Snowfall with accumulation on the ground | Half-block |
 | `fireflies` | Fireflies blinking with warm glow | Half-block |
-| `dna` | DNA double helix rotation | Half-block |
-| `pulse` | Pulsing concentric rings | Half-block |
-| `boids` | Flocking simulation (boids algorithm) | Half-block |
-| `lava` | Lava lamp with rising/falling blobs | Half-block |
+| `dna` | Rotating DNA double helix with base pairs | Half-block |
+| `pulse` | Expanding pulse rings from center | Half-block |
+| `boids` | Boids flocking simulation with trails | Half-block |
+| `lava` | Lava lamp blobs rising, merging, and splitting | Half-block |
 | `sandstorm` | Blowing sand with dune formation | Half-block |
 | `petals` | Cherry blossom petals drifting in wind | Half-block |
-| `campfire` | Campfire with logs, flames, and embers | Half-block |
+| `campfire` | Campfire with rising ember sparks | Half-block |
 | `waterfall` | Cascading water with mist spray | Half-block |
-| `eclipse` | Solar eclipse with corona | Half-block |
-| `blackhole` | Black hole with accretion disk | Half-block |
-| `radar` | Radar sweep with blips | Half-block |
-| `crystallize` | Crystal growth via diffusion-limited aggregation | Braille |
-| `hackerman` | Fake hacker terminal with scrolling commands | ASCII |
-| `visualizer` | Audio-style frequency visualizer | Half-block |
-| `cells` | Petri dish — cells with membranes and organelles | Half-block |
-| `atom` | Atomic model with orbiting electrons | Half-block |
-| `globe` | Rotating wireframe globe | Half-block |
-| `dragon` | Dragon curve fractal | Braille |
-| `sierpinski` | Sierpinski triangle fractal | Braille |
-| `mandelbrot` | Animated Mandelbrot set zoom | Braille |
-| `langton` | Langton's ant cellular automaton | Half-block |
-| `sort` | Sorting algorithm visualization | Half-block |
-| `snake` | Snake game (AI-controlled) | Half-block |
-| `invaders` | Space invaders demo | Half-block |
-| `pong` | Pong game (AI vs AI) | Half-block |
+| `eclipse` | Moon crossing sun with corona rays | Half-block |
+| `blackhole` | Black hole with accretion disk and lensing | Half-block |
+| `radar` | Rotating radar sweep with fading blips | Half-block |
+| `crystallize` | DLA crystal growth from center seed | Braille |
+| `hackerman` | Scrolling hex/binary hacker terminal | ASCII |
+| `visualizer` | Audio spectrum analyzer with bouncing bars | Half-block |
+| `cells` | Cell division and mitosis animation | Half-block |
+| `atom` | Electrons orbiting a nucleus in 3D | Half-block |
+| `globe` | Rotating wireframe Earth with continents | Half-block |
+| `dragon` | Dragon curve fractal with color cycling | Braille |
+| `sierpinski` | Animated Sierpinski triangle with zoom | Braille |
+| `mandelbrot` | Mandelbrot set with zoom and color cycling | Braille |
+| `langton` | Langton's Ant cellular automaton | Half-block |
+| `sort` | Sorting algorithm visualizer | Half-block |
+| `snake` | Self-playing Snake game AI | Half-block |
+| `invaders` | Space Invaders attract mode demo | Half-block |
+| `pong` | Self-playing Pong with AI paddles | Half-block |
 
 ## Installation
 
@@ -126,22 +126,22 @@ chmod +x termflix-macos-*
 termflix
 
 # Run a specific animation
-termflix -a starfield
+termflix starfield
 
 # List all animations
 termflix --list
 
 # Set render mode (braille, half-block, ascii)
-termflix -a plasma -r braille
+termflix plasma -r braille
 
 # Set color mode (mono, ansi16, ansi256, true-color)
-termflix -a fire -c true-color
+termflix fire -c true-color
 
 # Auto-cycle through animations every 10 seconds
 termflix --cycle 10
 
 # Scale particle density
-termflix -a rain --scale 1.5
+termflix rain --scale 1.5
 
 # Remove FPS cap (render as fast as terminal allows)
 termflix --unlimited
@@ -150,10 +150,10 @@ termflix --unlimited
 termflix --clean
 
 # Record a session
-termflix -a matrix --record session.termflix
+termflix matrix --record session.asciianim
 
 # Play back a recording
-termflix --play session.termflix
+termflix --play session.asciianim
 ```
 
 ## Hotkeys
@@ -232,12 +232,8 @@ clean = false
 # Auto-cycle interval in seconds (0 = disabled)
 cycle = 0
 
-# Color quantization (0=off, 4/8/16 = coarser colors, less output)
-# Useful for slow terminals or tmux
-color_quant = 0
-
 # Remove FPS cap and render as fast as possible (overrides fps)
-unlimited_fps = false
+unlimited = false
 ```
 
 ## Contributing
