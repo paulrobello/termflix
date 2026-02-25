@@ -134,6 +134,15 @@ fn main() -> io::Result<()> {
         Duration::from_secs_f64(1.0 / fps as f64)
     };
 
+    // Validate animation name before entering raw mode so errors print cleanly
+    if !animations::ANIMATION_NAMES.contains(&anim_name.as_str()) {
+        eprintln!("Unknown animation: '{}'\n\nAvailable animations:", anim_name);
+        for &(name, desc) in animations::ANIMATIONS {
+            eprintln!("  {:<12} {}", name, desc);
+        }
+        std::process::exit(1);
+    }
+
     terminal::enable_raw_mode()?;
     let mut stdout = io::stdout();
     execute!(stdout, terminal::EnterAlternateScreen, cursor::Hide)?;

@@ -1,6 +1,6 @@
 [package]
 name = "termflix"
-version = "0.4.0"
+version = "0.4.1"
 edition = "2024"
 description = "Terminal animation player with 43 procedurally generated animations, multiple render modes, and true color support"
 license = "MIT"

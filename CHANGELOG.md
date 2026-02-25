@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.4.1] - 2026-02-25
+
+### Fixed
+- **Unknown animation name causes panic** — passing an unrecognised animation name (e.g. `termflix bogus`) previously triggered a Rust panic and left the terminal in raw mode. The name is now validated before raw mode is enabled; an invalid name prints a clean error message with the full list of available animations and exits with code 1.
+
 ## [0.4.0] - 2026-02-24
 
 ### Added
