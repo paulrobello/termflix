@@ -80,7 +80,8 @@ const SKY_DIM: (u8, u8, u8) = (15, 25, 50);
 struct Plant {
     col: usize,
     variety: usize,
-    stage: usize, // 0 = seed, 5 = full bloom (max)
+    stage: usize,     // 0 = seed, max_rows = full bloom
+    max_rows: usize,  // randomised height cap: 2–5 rows
 }
 
 struct Raindrop {
@@ -110,7 +111,6 @@ pub struct Garden {
     clouds: Vec<Cloud>,
     drops: Vec<Raindrop>,
     splashes: Vec<Splash>,
-    sun_x: f64,
     width: usize,
     height: usize,
 }
@@ -126,6 +126,7 @@ impl Garden {
                 col: spacing * (i + 1),
                 variety: rng.random_range(0..VARIETIES.len()),
                 stage: 0,
+                max_rows: rng.random_range(2..=5),
             })
             .collect();
 
@@ -146,7 +147,6 @@ impl Garden {
             clouds,
             drops: Vec::new(),
             splashes: Vec::new(),
-            sun_x: 0.0,
             width,
             height,
         }
@@ -172,8 +172,7 @@ impl Animation for Garden {
         }
 
         let ground_y = self.height - 1;
-        let cloud_y: usize = 2;
-        let sun_y: usize = 0;
+        let cloud_y: usize = 3;
 
         canvas.clear();
 
@@ -186,31 +185,32 @@ impl Animation for Garden {
 
         // Ground row
         for x in 0..self.width {
-            canvas.set_char(
-                x,
-                ground_y,
-                '=',
-                GROUND_COLOR.0,
-                GROUND_COLOR.1,
-                GROUND_COLOR.2,
-            );
+            canvas.set_char(x, ground_y, '=', GROUND_COLOR.0, GROUND_COLOR.1, GROUND_COLOR.2);
         }
 
-        // Sun drifts left→right, wraps
-        self.sun_x += 3.0 * dt;
-        if self.sun_x > (self.width + 6) as f64 {
-            self.sun_x = -6.0;
-        }
-        for (i, ch) in ['(', '*', ')'].iter().enumerate() {
-            let px = self.sun_x as i32 + i as i32;
-            if px >= 0 && (px as usize) < self.width {
+        // Static large starburst sun anchored at top-right corner.
+        // Center (@) sits at (width-1, 1); rays pointing right/up clip naturally.
+        // (dx, dy, char) relative to center
+        let sun_cx = self.width as i32 - 1;
+        let sun_cy = 1_i32;
+        for &(dx, dy, ch) in &[
+            // Body + left horizontal arm
+            (-5, 0, '*'), (-4, 0, '-'), (-3, 0, '-'), (-2, 0, '-'), (-1, 0, '('), (0, 0, '@'),
+            // Top vertical (single step — rows above 0 clip)
+            (0, -1, '|'),
+            // NW diagonal (one step visible at row 0)
+            (-1, -1, '\\'),
+            // Bottom vertical arm
+            (0, 1, '|'), (0, 2, '|'), (0, 3, '*'),
+            // SW diagonal arm
+            (-1, 1, '/'), (-2, 2, '/'), (-3, 3, '/'),
+        ] {
+            let px = sun_cx + dx;
+            let py = sun_cy + dy;
+            if px >= 0 && (px as usize) < canvas.width && py >= 0 && (py as usize) < canvas.height
+            {
                 canvas.set_char(
-                    px as usize,
-                    sun_y,
-                    *ch,
-                    SUN_COLOR.0,
-                    SUN_COLOR.1,
-                    SUN_COLOR.2,
+                    px as usize, py as usize, ch, SUN_COLOR.0, SUN_COLOR.1, SUN_COLOR.2,
                 );
             }
         }
@@ -308,7 +308,7 @@ impl Animation for Garden {
             for plant in &mut self.plants {
                 let lo = plant.col.saturating_sub(2);
                 let hi = plant.col + 2;
-                if hit_x >= lo && hit_x <= hi && plant.stage < 5 {
+                if hit_x >= lo && hit_x <= hi && plant.stage < plant.max_rows {
                     plant.stage += 1;
                 }
             }
@@ -357,7 +357,7 @@ impl Animation for Garden {
             }
 
             let rows = VARIETIES[plant.variety];
-            let rows_to_draw = plant.stage.min(rows.len());
+            let rows_to_draw = plant.stage.min(plant.max_rows).min(rows.len());
 
             for (row_idx, row) in rows[..rows_to_draw].iter().enumerate() {
                 let y = ground_y as i32 - 1 - row_idx as i32;
