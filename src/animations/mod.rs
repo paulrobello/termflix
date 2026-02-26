@@ -56,6 +56,9 @@ pub trait Animation {
     fn preferred_render(&self) -> RenderMode {
         RenderMode::HalfBlock
     }
+
+    /// Called once per frame before update(). Default is a no-op.
+    fn set_params(&mut self, _params: &crate::external::ExternalParams) {}
 }
 
 /// List of all available animation names with descriptions.

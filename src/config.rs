@@ -25,6 +25,8 @@ pub struct Config {
     pub color_quant: Option<u8>,
     /// Remove FPS cap and render as fast as possible
     pub unlimited_fps: Option<bool>,
+    /// Path to a file to watch for external control params (ndjson)
+    pub data_file: Option<String>,
 }
 
 /// Render mode names for config file (kebab-case friendly)
@@ -122,6 +124,9 @@ pub fn default_config_string() -> String {
 
 # Remove FPS cap and render as fast as possible (overrides fps)
 # unlimited_fps = false
+
+# Watch a file for external control params (ndjson — one JSON object per line)
+# data_file = "/tmp/termflix.json"
 "#
     .to_string()
 }

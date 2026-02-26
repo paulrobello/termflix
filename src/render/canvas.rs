@@ -166,6 +166,22 @@ impl Canvas {
         out
     }
 
+    /// Apply post-processing effects to the canvas.
+    /// `intensity`: brightness multiplier (1.0 = no change, 0.0 = black, 2.0 = double bright)
+    /// `hue_shift`: hue rotation fraction (0.0 = no change, 0.5 = rotate 180°, 1.0 = full cycle)
+    pub fn apply_effects(&mut self, intensity: f64, hue_shift: f64) {
+        if (intensity - 1.0).abs() > 1e-10 {
+            for p in &mut self.pixels {
+                *p = (*p * intensity).clamp(0.0, 1.0);
+            }
+        }
+        if hue_shift.abs() > 1e-10 {
+            for c in &mut self.colors {
+                *c = rotate_hue(*c, hue_shift);
+            }
+        }
+    }
+
     pub fn map_color(&self, r: u8, g: u8, b: u8) -> Color {
         // Apply color quantization if enabled (reduces unique colors for better dedup)
         let (r, g, b) = if self.color_quant > 1 {
@@ -217,6 +233,54 @@ impl Canvas {
             }
         }
     }
+}
+
+fn rotate_hue(rgb: (u8, u8, u8), shift: f64) -> (u8, u8, u8) {
+    let (r, g, b) = rgb;
+    let r = r as f64 / 255.0;
+    let g = g as f64 / 255.0;
+    let b = b as f64 / 255.0;
+
+    let max = r.max(g).max(b);
+    let min = r.min(g).min(b);
+    let delta = max - min;
+
+    let h = if delta < 1e-10 {
+        0.0
+    } else if (max - r).abs() < 1e-10 {
+        60.0 * (((g - b) / delta).rem_euclid(6.0))
+    } else if (max - g).abs() < 1e-10 {
+        60.0 * ((b - r) / delta + 2.0)
+    } else {
+        60.0 * ((r - g) / delta + 4.0)
+    };
+    let h = (h + shift * 360.0).rem_euclid(360.0);
+    let s = if max < 1e-10 { 0.0 } else { delta / max };
+    let v = max;
+
+    let c = v * s;
+    let x = c * (1.0 - ((h / 60.0).rem_euclid(2.0) - 1.0).abs());
+    let m = v - c;
+
+    let (r1, g1, b1) = if h < 60.0 {
+        (c, x, 0.0)
+    } else if h < 120.0 {
+        (x, c, 0.0)
+    } else if h < 180.0 {
+        (0.0, c, x)
+    } else if h < 240.0 {
+        (0.0, x, c)
+    } else if h < 300.0 {
+        (x, 0.0, c)
+    } else {
+        (c, 0.0, x)
+    };
+
+    (
+        ((r1 + m) * 255.0).clamp(0.0, 255.0) as u8,
+        ((g1 + m) * 255.0).clamp(0.0, 255.0) as u8,
+        ((b1 + m) * 255.0).clamp(0.0, 255.0) as u8,
+    )
 }
 
 pub fn color_to_fg(color: Color) -> String {

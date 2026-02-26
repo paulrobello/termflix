@@ -1,5 +1,6 @@
 mod animations;
 mod config;
+mod external;
 pub mod generators;
 mod record;
 mod render;
@@ -11,8 +12,11 @@ use crossterm::{
     event::{self, Event, KeyCode, KeyEvent, KeyEventKind, EnableFocusChange, DisableFocusChange},
     execute, terminal,
 };
+use external::{CurrentState, ExternalParams, ParamsSource, spawn_reader};
 use render::{Canvas, ColorMode, RenderMode};
 use std::io;
+use std::io::IsTerminal;
+use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
 #[derive(Parser)]
@@ -71,6 +75,10 @@ struct Cli {
     /// Exit on first keypress or focus when running as a screensaver
     #[arg(long)]
     screensaver: bool,
+
+    /// Watch a file for external control params (ndjson — one JSON object per line)
+    #[arg(long, value_name = "PATH")]
+    data_file: Option<String>,
 }
 
 fn main() -> io::Result<()> {
@@ -94,6 +102,8 @@ fn main() -> io::Result<()> {
 
     // Load config file (defaults if not found)
     let cfg = config::load_config();
+
+    let data_file = cli.data_file.clone().or(cfg.data_file.clone());
 
     // --show-config: display current settings
     if cli.show_config {
@@ -173,6 +183,7 @@ fn main() -> io::Result<()> {
         clean,
         cli.screensaver,
         cli.record.as_deref(),
+        data_file,
     );
 
     // Restore terminal — disable raw mode first (doesn't write to stdout)
@@ -255,11 +266,12 @@ fn run_loop(
     color_quant: u8,
     unlimited: bool,
     frame_dur: Duration,
-    scale: f64,
+    mut scale: f64,
     cycle: u32,
     clean: bool,
     screensaver: bool,
     record_path: Option<&str>,
+    data_file: Option<String>,
 ) -> io::Result<()> {
     let (mut cols, mut rows) = terminal::size()?;
     let is_tmux = std::env::var("TMUX").is_ok();
@@ -291,7 +303,6 @@ fn run_loop(
         .position(|&n| n == initial_anim)
         .unwrap_or(0);
 
-    let start = Instant::now();
     let mut last_frame = Instant::now();
     let mut cycle_start = Instant::now();
     let mut frame_count: u64 = 0;
@@ -303,6 +314,18 @@ fn run_loop(
     let mut frame_buf: Vec<u8> = Vec::with_capacity(256 * 1024);
     // Resize cooldown — skip frames after resize
     let mut resize_cooldown = Instant::now();
+    // External control channel setup
+    let params_rx: Option<mpsc::Receiver<ExternalParams>> = {
+        if let Some(path) = data_file {
+            Some(spawn_reader(ParamsSource::File(path.into())))
+        } else if !std::io::stdin().is_terminal() {
+            Some(spawn_reader(ParamsSource::Stdin))
+        } else {
+            None
+        }
+    };
+    let mut ext_state = CurrentState::default();
+    let mut virtual_time: f64 = 0.0;
     loop {
         // Use event::poll as frame timer — properly yields to OS for signal handling
         let time_to_next = adaptive_frame_dur.saturating_sub(last_frame.elapsed());
@@ -460,11 +483,84 @@ fn run_loop(
         // Timing
         let now = Instant::now();
         let dt = now.duration_since(last_frame).as_secs_f64().min(0.1); // Cap dt to avoid huge jumps
-        let time = start.elapsed().as_secs_f64();
         last_frame = now;
 
+        // Drain external params channel
+        if let Some(rx) = &params_rx {
+            while let Ok(p) = rx.try_recv() {
+                ext_state.merge(p);
+            }
+        }
+
+        // Handle animation switch from external params
+        if let Some(name) = ext_state.take_animation_change() {
+            if animations::ANIMATION_NAMES.contains(&name.as_str()) {
+                anim_index = animations::ANIMATION_NAMES
+                    .iter()
+                    .position(|&n| n == name.as_str())
+                    .unwrap_or(anim_index);
+                anim = animations::create(
+                    animations::ANIMATION_NAMES[anim_index],
+                    canvas.width,
+                    canvas.height,
+                    scale,
+                );
+                if explicit_render.is_none() {
+                    render_mode = anim.preferred_render();
+                    needs_rebuild = true;
+                }
+                cycle_start = Instant::now();
+            }
+            // Unknown animation names are silently ignored
+        }
+
+        // Handle scale change from external params
+        if let Some(new_scale) = ext_state.take_scale_change() {
+            scale = new_scale.clamp(0.5, 2.0);
+            anim = animations::create(
+                animations::ANIMATION_NAMES[anim_index],
+                canvas.width,
+                canvas.height,
+                scale,
+            );
+        }
+
+        // Handle render mode change from external params
+        if let Some(render_name) = ext_state.take_render_change() {
+            if let Some(new_mode) = parse_render_mode(&render_name) {
+                render_mode = new_mode;
+                needs_rebuild = true;
+            }
+        }
+
+        // Handle color mode change from external params
+        if let Some(color_name) = ext_state.take_color_change() {
+            if let Some(new_mode) = parse_color_mode(&color_name) {
+                color_mode = new_mode;
+                needs_rebuild = true;
+            }
+        }
+
+        // If a rebuild was triggered by external params, skip this frame
+        if needs_rebuild {
+            continue;
+        }
+
+        // Virtual time with speed multiplier
+        let speed = ext_state.speed().clamp(0.1, 5.0);
+        let effective_dt = (dt * speed).min(0.5);
+        virtual_time += effective_dt;
+
+        // Per-animation semantic params
+        anim.set_params(ext_state.params());
+
         // Update animation
-        anim.update(&mut canvas, dt, time);
+        anim.update(&mut canvas, effective_dt, virtual_time);
+
+        // Post-process canvas with intensity and hue shift
+        let intensity = ext_state.intensity().clamp(0.0, 2.0);
+        let hue = ext_state.color_shift().clamp(0.0, 1.0);
+        canvas.apply_effects(intensity, hue);
 
         // Render to string
         let frame = canvas.render();
@@ -599,5 +695,24 @@ fn run_loop(
                 Duration::from_secs_f64((write_time_ema * 1.1).max(frame_dur.as_secs_f64()));
             adaptive_frame_dur = target.min(Duration::from_millis(200)); // cap at 5fps minimum
         }
+    }
+}
+
+fn parse_render_mode(s: &str) -> Option<RenderMode> {
+    match s {
+        "braille" => Some(RenderMode::Braille),
+        "half-block" | "halfblock" => Some(RenderMode::HalfBlock),
+        "ascii" => Some(RenderMode::Ascii),
+        _ => None,
+    }
+}
+
+fn parse_color_mode(s: &str) -> Option<ColorMode> {
+    match s {
+        "mono" => Some(ColorMode::Mono),
+        "ansi16" => Some(ColorMode::Ansi16),
+        "ansi256" => Some(ColorMode::Ansi256),
+        "true-color" | "truecolor" => Some(ColorMode::TrueColor),
+        _ => None,
     }
 }

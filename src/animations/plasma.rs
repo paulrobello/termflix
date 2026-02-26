@@ -2,17 +2,26 @@ use super::Animation;
 use crate::render::Canvas;
 
 /// Classic plasma effect using overlapping sine waves
-pub struct Plasma;
+pub struct Plasma {
+    /// Hue bias from external color_shift param: rotates the color palette independently
+    hue_bias: f64,
+}
 
 impl Plasma {
     pub fn new() -> Self {
-        Plasma
+        Plasma { hue_bias: 0.0 }
     }
 }
 
 impl Animation for Plasma {
     fn name(&self) -> &str {
         "plasma"
+    }
+
+    fn set_params(&mut self, params: &crate::external::ExternalParams) {
+        if let Some(cs) = params.color_shift {
+            self.hue_bias = cs.clamp(0.0, 1.0);
+        }
     }
 
     fn update(&mut self, canvas: &mut Canvas, _dt: f64, time: f64) {
@@ -33,16 +42,17 @@ impl Animation for Plasma {
                 let v = (v1 + v2 + v3 + v4) * 0.25 + 0.5; // normalize to ~0..1
                 let v = v.clamp(0.0, 1.0);
 
-                let (r, g, b) = plasma_color(v, t);
+                let (r, g, b) = plasma_color(v, t, self.hue_bias);
                 canvas.set_colored(x, y, v * 0.8 + 0.2, r, g, b);
             }
         }
     }
 }
 
-fn plasma_color(v: f64, t: f64) -> (u8, u8, u8) {
-    let r = ((v * std::f64::consts::PI + t * 0.3).sin() * 127.0 + 128.0) as u8;
-    let g = ((v * std::f64::consts::PI * 1.5 + t * 0.5 + 2.0).sin() * 127.0 + 128.0) as u8;
-    let b = ((v * std::f64::consts::PI * 2.0 + t * 0.7 + 4.0).sin() * 127.0 + 128.0) as u8;
+fn plasma_color(v: f64, t: f64, hue_bias: f64) -> (u8, u8, u8) {
+    let bias = hue_bias * std::f64::consts::TAU;
+    let r = ((v * std::f64::consts::PI + t * 0.3 + bias).sin() * 127.0 + 128.0) as u8;
+    let g = ((v * std::f64::consts::PI * 1.5 + t * 0.5 + 2.0 + bias).sin() * 127.0 + 128.0) as u8;
+    let b = ((v * std::f64::consts::PI * 2.0 + t * 0.7 + 4.0 + bias).sin() * 127.0 + 128.0) as u8;
     (r, g, b)
 }

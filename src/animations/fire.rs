@@ -7,6 +7,8 @@ pub struct Fire {
     width: usize,
     height: usize,
     buffer: Vec<f64>,
+    /// Heat rate: controls how hot the bottom row burns (0.0 = cold, 1.0 = normal, 2.0 = intense)
+    heat_rate: f64,
 }
 
 impl Fire {
@@ -22,6 +24,7 @@ impl Fire {
             width,
             height,
             buffer,
+            heat_rate: 0.8,
         }
     }
 
@@ -42,6 +45,12 @@ impl Animation for Fire {
         "fire"
     }
 
+    fn set_params(&mut self, params: &crate::external::ExternalParams) {
+        if let Some(intensity) = params.intensity {
+            self.heat_rate = intensity.clamp(0.0, 2.0);
+        }
+    }
+
     fn update(&mut self, canvas: &mut Canvas, _dt: f64, _time: f64) {
         let mut rng = rand::rng();
         let w = canvas.width;
@@ -51,6 +60,10 @@ impl Animation for Fire {
             self.resize(w, h);
         }
 
+        // heat_rate > 1.0: reduce decay so fire reaches higher (more intense)
+        // heat_rate < 1.0: normal decay but cooler bottom source
+        let intensity_scale = 1.0 / self.heat_rate.clamp(0.1, 2.0);
+
         // Classic Doom fire: for each pixel, pull heat from below
         // Process bottom-to-top so heat propagates fully in one frame
         for x in 0..w {
@@ -59,16 +72,24 @@ impl Animation for Fire {
                 let src_x = (x as i32 + wind).clamp(0, w as i32 - 1) as usize;
                 let src_y = y + 1;
                 let src_val = self.buffer[src_y * w + src_x];
-                // Scale decay to canvas height so fire reaches ~60% up
-                let max_decay = 3.0 / h as f64;
-                let decay = rng.random_range(0.0..max_decay);
+                // Scale decay to canvas height so fire reaches ~60% up at heat_rate=1.0
+                // At heat_rate=2.0, intensity_scale=0.5 → half decay → fire reaches higher
+                let max_decay = (3.0 / h as f64) * intensity_scale;
+                let decay = rng.random_range(0.0..max_decay.max(f64::EPSILON));
                 self.buffer[y * w + x] = (src_val - decay).max(0.0);
             }
         }
 
-        // Keep bottom row hot
+        // Keep bottom row hot — capped at 1.0 for brightness, but decay scaling above
+        // gives heat_rate > 1.0 its extra reach
+        let heat = self.heat_rate.min(1.0);
+        let heat_min = (heat * 0.9).max(0.0);
         for x in 0..w {
-            self.buffer[(h - 1) * w + x] = rng.random_range(0.9..1.0);
+            self.buffer[(h - 1) * w + x] = if heat_min < heat {
+                rng.random_range(heat_min..heat)
+            } else {
+                heat
+            };
         }
 
         // Draw to canvas
