@@ -132,23 +132,23 @@ impl Garden {
                 let variety = rng.random_range(0..VARIETIES.len());
                 let shape: Vec<PRow> = if variety == 0 {
                     // Rose: plain stems × 1-3, leafed stems × 1-3, branch, bloom
-                    let plain = rng.random_range(1..=3_usize);
-                    let leafed = rng.random_range(1..=3_usize);
+                    // Interleave plain | and leafed |~ rows (2–6 total)
+                    // so they're never all bunched together
+                    let stem_rows = rng.random_range(2..=6_usize);
                     let mut s: Vec<PRow> = Vec::new();
-                    for _ in 0..plain {
-                        s.push(ROSE_STEM);
-                    }
-                    for _ in 0..leafed {
-                        s.push(ROSE_STEM_LEAF);
+                    for i in 0..stem_rows {
+                        // Alternate base pattern (even=plain, odd=leafed)
+                        // with a 30% chance of flipping for natural variation
+                        let leafed = (i % 2 == 1) ^ rng.random_bool(0.3);
+                        s.push(if leafed { ROSE_STEM_LEAF } else { ROSE_STEM });
                     }
                     s.push(ROSE_BRANCH);
                     s.push(ROSE_BLOOM);
                     s
                 } else {
-                    // Other varieties: take the top N rows so bloom is always included
-                    let v = VARIETIES[variety];
-                    let rows = rng.random_range(3..=v.len());
-                    v[v.len() - rows..].to_vec()
+                    // Other varieties: always use the full shape so Y/branch
+                    // characters never appear at the bottom during early growth
+                    VARIETIES[variety].to_vec()
                 };
                 Plant { col: spacing * (i + 1), variety, stage: 0, shape }
             })
