@@ -81,7 +81,10 @@ pub const ANIMATIONS: &[(&str, &str)] = &[
     ("smoke", "Smoke rising with Perlin turbulence"),
     ("ripple", "Ripple interference from random drop points"),
     ("snow", "Snowfall with accumulation on the ground"),
-    ("garden", "Growing garden with rain, clouds, and blooming plants"),
+    (
+        "garden",
+        "Growing garden with rain, clouds, and blooming plants",
+    ),
     ("fireflies", "Fireflies blinking with warm glow"),
     ("dna", "Rotating DNA double helix with base pairs"),
     ("pulse", "Expanding pulse rings from center"),
@@ -159,8 +162,8 @@ pub const ANIMATION_NAMES: &[&str] = &[
 ];
 
 /// Create an animation by name with scale factor for particle/element counts.
-pub fn create(name: &str, width: usize, height: usize, scale: f64) -> Box<dyn Animation> {
-    match name {
+pub fn create(name: &str, width: usize, height: usize, scale: f64) -> Option<Box<dyn Animation>> {
+    Some(match name {
         "fire" => Box::new(fire::Fire::new(width, height)),
         "matrix" => Box::new(matrix::Matrix::new(width, height, scale)),
         "plasma" => Box::new(plasma::Plasma::new()),
@@ -205,6 +208,6 @@ pub fn create(name: &str, width: usize, height: usize, scale: f64) -> Box<dyn An
         "snake" => Box::new(snake::Snake::new(width, height, scale)),
         "invaders" => Box::new(invaders::Invaders::new(width, height, scale)),
         "pong" => Box::new(pong::Pong::new(width, height, scale)),
-        _ => panic!("Unknown animation: {}", name),
-    }
+        _ => return None,
+    })
 }

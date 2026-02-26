@@ -295,11 +295,13 @@ fn run_loop(
         color_mode,
     );
     let mut anim: Box<dyn Animation> =
-        animations::create(initial_anim, temp_canvas.width, temp_canvas.height, scale);
+        animations::create(initial_anim, temp_canvas.width, temp_canvas.height, scale)
+            .expect("animation name validated before calling create");
     let mut render_mode = explicit_render.unwrap_or_else(|| anim.preferred_render());
     let mut canvas = Canvas::new(cols as usize, display_rows, render_mode, color_mode);
     canvas.color_quant = color_quant;
-    anim = animations::create(initial_anim, canvas.width, canvas.height, scale);
+    anim = animations::create(initial_anim, canvas.width, canvas.height, scale)
+        .expect("animation name validated before calling create");
 
     let mut anim_index = animations::ANIMATION_NAMES
         .iter()
@@ -370,7 +372,8 @@ fn run_loop(
                                     canvas.width,
                                     canvas.height,
                                     scale,
-                                );
+                                )
+                                .expect("animation name validated before calling create");
                                 if explicit_render.is_none() {
                                     render_mode = anim.preferred_render();
                                     needs_rebuild = true;
@@ -388,7 +391,8 @@ fn run_loop(
                                     canvas.width,
                                     canvas.height,
                                     scale,
-                                );
+                                )
+                                .expect("animation name validated before calling create");
                                 if explicit_render.is_none() {
                                     render_mode = anim.preferred_render();
                                     needs_rebuild = true;
@@ -457,7 +461,8 @@ fn run_loop(
                     canvas.width,
                     canvas.height,
                     scale,
-                );
+                )
+                .expect("animation name validated before calling create");
                 // No clear screen — next frame overwrites everything.
                 // Clearing here with a blocking flush can lock up in tmux
                 // when the output buffer is full from the previous frame.
@@ -475,7 +480,8 @@ fn run_loop(
                 canvas.width,
                 canvas.height,
                 scale,
-            );
+            )
+            .expect("animation name validated before calling create");
             if explicit_render.is_none() {
                 render_mode = anim.preferred_render();
                 needs_rebuild = true;
@@ -508,7 +514,8 @@ fn run_loop(
                 canvas.width,
                 canvas.height,
                 scale,
-            );
+            )
+            .expect("animation name validated before calling create");
             if explicit_render.is_none() {
                 render_mode = anim.preferred_render();
                 needs_rebuild = true;
@@ -525,7 +532,8 @@ fn run_loop(
                 canvas.width,
                 canvas.height,
                 scale,
-            );
+            )
+            .expect("animation name validated before calling create");
         }
 
         // Handle render mode change from external params
