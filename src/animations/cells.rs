@@ -174,7 +174,9 @@ impl Animation for Cells {
                     daughter.x = cell.x + split_angle.cos() * offset;
                     daughter.y = cell.y + split_angle.sin() * offset;
                     daughter.radius = new_radius;
-                    daughter.hue = (cell.hue + self.rng.random_range(-0.08..0.08)).fract().abs();
+                    daughter.hue = (cell.hue + self.rng.random_range(-0.08..0.08))
+                        .fract()
+                        .abs();
                     new_cells.push(daughter);
 
                     cell.x -= split_angle.cos() * offset;

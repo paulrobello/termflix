@@ -127,8 +127,10 @@ impl Animation for Waterfall {
             if drop.y >= pool_y {
                 // Splash at bottom
                 drop.y = self.rng.random_range(-5.0..0.0);
-                drop.x =
-                    self.fall_x + self.rng.random_range(-self.fall_width * 0.5..self.fall_width * 0.5);
+                drop.x = self.fall_x
+                    + self
+                        .rng
+                        .random_range(-self.fall_width * 0.5..self.fall_width * 0.5);
                 drop.vy = self.rng.random_range(15.0..35.0);
                 drop.brightness = self.rng.random_range(0.4..1.0);
             }
@@ -176,8 +178,10 @@ impl Animation for Waterfall {
         }
 
         // Emit mist at base
-        self.mist.config.x =
-            self.fall_x + self.rng.random_range(-self.fall_width * 0.5..self.fall_width * 0.5);
+        self.mist.config.x = self.fall_x
+            + self
+                .rng
+                .random_range(-self.fall_width * 0.5..self.fall_width * 0.5);
         self.mist.config.y = pool_y;
         self.mist.config.wind = (time * 0.3).sin() * 5.0;
         self.mist.emit(self.rng.random_range(4..10));

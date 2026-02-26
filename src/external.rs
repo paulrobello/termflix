@@ -205,8 +205,14 @@ mod tests {
     #[test]
     fn test_current_state_merge_accumulates() {
         let mut state = CurrentState::default();
-        state.merge(ExternalParams { speed: Some(2.0), ..Default::default() });
-        state.merge(ExternalParams { intensity: Some(0.5), ..Default::default() });
+        state.merge(ExternalParams {
+            speed: Some(2.0),
+            ..Default::default()
+        });
+        state.merge(ExternalParams {
+            intensity: Some(0.5),
+            ..Default::default()
+        });
         assert_eq!(state.speed(), 2.0);
         assert_eq!(state.intensity(), 0.5);
     }

@@ -19,7 +19,10 @@ impl Starfield {
         let mut rng = rand::rng();
         let num_stars = ((width * height) as f64 / 30.0 * scale) as usize;
         let stars = (0..num_stars).map(|_| new_star(&mut rng, false)).collect();
-        Starfield { stars, rng: rand::rng() }
+        Starfield {
+            stars,
+            rng: rand::rng(),
+        }
     }
 }
 

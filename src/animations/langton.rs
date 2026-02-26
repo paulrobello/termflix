@@ -89,8 +89,12 @@ impl Langton {
 
     fn reset(&mut self) {
         self.grid = vec![false; self.width * self.height];
-        self.ant_x = self.rng.random_range(self.width as i32 / 3..self.width as i32 * 2 / 3);
-        self.ant_y = self.rng.random_range(self.height as i32 / 3..self.height as i32 * 2 / 3);
+        self.ant_x = self
+            .rng
+            .random_range(self.width as i32 / 3..self.width as i32 * 2 / 3);
+        self.ant_y = self
+            .rng
+            .random_range(self.height as i32 / 3..self.height as i32 * 2 / 3);
         self.ant_dir = match self.rng.random_range(0u8..4) {
             0 => Direction::Up,
             1 => Direction::Right,

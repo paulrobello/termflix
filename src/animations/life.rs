@@ -81,8 +81,12 @@ impl GameOfLife {
         // Inject chaos periodically to keep things interesting
         else if self.generation.is_multiple_of(300) {
             // Spawn a random pattern (glider gun, r-pentomino, etc)
-            let cx = self.rng.random_range(10..self.width.saturating_sub(10).max(11));
-            let cy = self.rng.random_range(10..self.height.saturating_sub(10).max(11));
+            let cx = self
+                .rng
+                .random_range(10..self.width.saturating_sub(10).max(11));
+            let cy = self
+                .rng
+                .random_range(10..self.height.saturating_sub(10).max(11));
             // R-pentomino — classic long-lived pattern
             let pattern = [(0, 0), (1, 0), (-1, 1), (0, 1), (0, 2)];
             for (dx, dy) in pattern {

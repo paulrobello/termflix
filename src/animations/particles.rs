@@ -35,8 +35,12 @@ impl Particles {
     }
 
     fn spawn_firework(&mut self) {
-        let cx = self.rng.random_range(self.width as f64 * 0.2..self.width as f64 * 0.8);
-        let cy = self.rng.random_range(self.height as f64 * 0.2..self.height as f64 * 0.6);
+        let cx = self
+            .rng
+            .random_range(self.width as f64 * 0.2..self.width as f64 * 0.8);
+        let cy = self
+            .rng
+            .random_range(self.height as f64 * 0.2..self.height as f64 * 0.6);
         let count = self.rng.random_range(30..80);
         let r: u8 = self.rng.random_range(100..255);
         let g: u8 = self.rng.random_range(100..255);

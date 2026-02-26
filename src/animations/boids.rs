@@ -44,7 +44,9 @@ impl SpatialGrid {
         (row - 1..=row + 1).flat_map(move |r| {
             (col - 1..=col + 1).flat_map(move |c| {
                 if c >= 0 && c < cols && r >= 0 && r < rows {
-                    self.cells[(r as usize) * self.cols + (c as usize)].iter().copied()
+                    self.cells[(r as usize) * self.cols + (c as usize)]
+                        .iter()
+                        .copied()
                 } else {
                     [].iter().copied()
                 }

@@ -117,7 +117,6 @@ impl Animation for Lightning {
     }
 
     fn update(&mut self, canvas: &mut Canvas, dt: f64, _time: f64) {
-
         // Spawn new bolts
         self.spawn_timer -= dt;
         if self.spawn_timer <= 0.0 {
