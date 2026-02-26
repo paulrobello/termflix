@@ -124,7 +124,7 @@ impl Animation for Rain {
                 let t = i as f64 / drop.length.max(1.0);
                 let px = (drop.x - effective_wind * t * 0.1) as usize;
                 let py = (drop.y - t * drop.length * 0.5) as usize;
-                if px < canvas.width && py < canvas.height {
+                if py < canvas.height {
                     let brightness = depth_brightness * (0.5 + 0.5 * (1.0 - t));
                     let r = (60.0 + 80.0 * drop.depth) as u8;
                     let g = (80.0 + 90.0 * drop.depth) as u8;

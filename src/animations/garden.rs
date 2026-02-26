@@ -253,7 +253,7 @@ impl Animation for Garden {
         ] {
             let px = sun_cx + dx;
             let py = sun_cy + dy;
-            if px >= 0 && (px as usize) < canvas.width && py >= 0 && (py as usize) < canvas.height {
+            if px >= 0 && py >= 0 {
                 canvas.set_char(
                     px as usize,
                     py as usize,
@@ -346,7 +346,7 @@ impl Animation for Garden {
             } else {
                 let x = drop.x as usize;
                 let y = drop.y as usize;
-                if x < canvas.width && y < canvas.height && y > cloud_y {
+                if y > cloud_y {
                     canvas.set_char(x, y, '|', RAIN_COLOR.0, RAIN_COLOR.1, RAIN_COLOR.2);
                 }
                 true
@@ -377,7 +377,7 @@ impl Animation for Garden {
             if s.ttl > 0.0 {
                 for (i, &ch) in ['.', '\'', '.'].iter().enumerate() {
                     let px = s.x as i32 + i as i32 - 1;
-                    if px >= 0 && (px as usize) < canvas.width && s.y < canvas.height {
+                    if px >= 0 {
                         canvas.set_char(
                             px as usize,
                             s.y,
@@ -400,7 +400,7 @@ impl Animation for Garden {
             let (sr, sg, sb) = STEM_COLOR;
 
             if plant.stage == 0 {
-                if plant.col < canvas.width && ground_y >= 1 {
+                if ground_y >= 1 {
                     canvas.set_char(plant.col, ground_y - 1, '.', sr, sg, sb);
                 }
                 continue;
@@ -411,14 +411,14 @@ impl Animation for Garden {
 
             for (row_idx, row) in rows[..rows_to_draw].iter().enumerate() {
                 let y = ground_y as i32 - 1 - row_idx as i32;
-                if y < 0 || y as usize >= canvas.height {
+                if y < 0 {
                     continue;
                 }
                 // Top drawn row uses flower color; lower rows use stem color
                 let is_top = row_idx + 1 == rows_to_draw;
                 for &(dx, ch, is_flower) in *row {
                     let px = plant.col as i32 + dx;
-                    if px < 0 || (px as usize) >= canvas.width {
+                    if px < 0 {
                         continue;
                     }
                     let (r, g, b) = if is_flower && is_top {
