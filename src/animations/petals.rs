@@ -57,9 +57,12 @@ impl Animation for Petals {
         "petals"
     }
 
+    fn on_resize(&mut self, width: usize, height: usize) {
+        self.width = width;
+        self.height = height;
+    }
+
     fn update(&mut self, canvas: &mut Canvas, dt: f64, time: f64) {
-        self.width = canvas.width;
-        self.height = canvas.height;
         let w = self.width as f64;
         let h = self.height as f64;
 

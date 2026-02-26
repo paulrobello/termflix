@@ -50,15 +50,13 @@ impl Animation for Snow {
         "snow"
     }
 
+    fn on_resize(&mut self, width: usize, height: usize) {
+        self.width = width;
+        self.height = height;
+        self.accumulation.resize(width, 0.0);
+    }
+
     fn update(&mut self, canvas: &mut Canvas, dt: f64, time: f64) {
-        self.width = canvas.width;
-        self.height = canvas.height;
-
-        // Resize accumulation if needed
-        if self.accumulation.len() != self.width {
-            self.accumulation.resize(self.width, 0.0);
-        }
-
         canvas.clear();
 
         // Global wind

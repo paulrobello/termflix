@@ -302,6 +302,7 @@ fn run_loop(
     canvas.color_quant = color_quant;
     anim = animations::create(initial_anim, canvas.width, canvas.height, scale)
         .expect("animation name validated before calling create");
+    anim.on_resize(canvas.width, canvas.height);
 
     let mut anim_index = animations::ANIMATION_NAMES
         .iter()
@@ -374,6 +375,7 @@ fn run_loop(
                                     scale,
                                 )
                                 .expect("animation name validated before calling create");
+                                anim.on_resize(canvas.width, canvas.height);
                                 if explicit_render.is_none() {
                                     render_mode = anim.preferred_render();
                                     needs_rebuild = true;
@@ -393,6 +395,7 @@ fn run_loop(
                                     scale,
                                 )
                                 .expect("animation name validated before calling create");
+                                anim.on_resize(canvas.width, canvas.height);
                                 if explicit_render.is_none() {
                                     render_mode = anim.preferred_render();
                                     needs_rebuild = true;
@@ -463,6 +466,7 @@ fn run_loop(
                     scale,
                 )
                 .expect("animation name validated before calling create");
+                anim.on_resize(canvas.width, canvas.height);
                 // No clear screen — next frame overwrites everything.
                 // Clearing here with a blocking flush can lock up in tmux
                 // when the output buffer is full from the previous frame.
@@ -482,6 +486,7 @@ fn run_loop(
                 scale,
             )
             .expect("animation name validated before calling create");
+            anim.on_resize(canvas.width, canvas.height);
             if explicit_render.is_none() {
                 render_mode = anim.preferred_render();
                 needs_rebuild = true;
@@ -516,6 +521,7 @@ fn run_loop(
                 scale,
             )
             .expect("animation name validated before calling create");
+            anim.on_resize(canvas.width, canvas.height);
             if explicit_render.is_none() {
                 render_mode = anim.preferred_render();
                 needs_rebuild = true;
@@ -534,6 +540,7 @@ fn run_loop(
                 scale,
             )
             .expect("animation name validated before calling create");
+            anim.on_resize(canvas.width, canvas.height);
         }
 
         // Handle render mode change from external params

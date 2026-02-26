@@ -132,10 +132,12 @@ impl Animation for Fountain {
         "fountain"
     }
 
-    fn update(&mut self, canvas: &mut Canvas, dt: f64, time: f64) {
-        self.width = canvas.width;
-        self.height = canvas.height;
+    fn on_resize(&mut self, width: usize, height: usize) {
+        self.width = width;
+        self.height = height;
+    }
 
+    fn update(&mut self, canvas: &mut Canvas, dt: f64, time: f64) {
         let cx = self.width as f64 / 2.0;
         let bottom = self.height as f64 - 1.0;
 

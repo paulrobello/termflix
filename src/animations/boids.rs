@@ -48,10 +48,12 @@ impl Animation for Boids {
         "boids"
     }
 
-    fn update(&mut self, canvas: &mut Canvas, dt: f64, _time: f64) {
-        self.width = canvas.width;
-        self.height = canvas.height;
+    fn on_resize(&mut self, width: usize, height: usize) {
+        self.width = width;
+        self.height = height;
+    }
 
+    fn update(&mut self, canvas: &mut Canvas, dt: f64, _time: f64) {
         let visual_range = 25.0;
         let protected_range = 5.0;
         let max_speed = 35.0;

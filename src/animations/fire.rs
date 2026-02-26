@@ -29,17 +29,6 @@ impl Fire {
             rng: rand::rng(),
         }
     }
-
-    fn resize(&mut self, w: usize, h: usize) {
-        self.width = w;
-        self.height = h;
-        self.buffer = vec![0.0; w * h];
-        for x in 0..w {
-            for y in h.saturating_sub(2)..h {
-                self.buffer[y * w + x] = 1.0;
-            }
-        }
-    }
 }
 
 impl Animation for Fire {
@@ -53,13 +42,20 @@ impl Animation for Fire {
         }
     }
 
-    fn update(&mut self, canvas: &mut Canvas, _dt: f64, _time: f64) {
-        let w = canvas.width;
-        let h = canvas.height;
-
-        if self.width != w || self.height != h {
-            self.resize(w, h);
+    fn on_resize(&mut self, width: usize, height: usize) {
+        self.width = width;
+        self.height = height;
+        self.buffer = vec![0.0; width * height];
+        for x in 0..width {
+            for y in height.saturating_sub(2)..height {
+                self.buffer[y * width + x] = 1.0;
+            }
         }
+    }
+
+    fn update(&mut self, canvas: &mut Canvas, _dt: f64, _time: f64) {
+        let w = self.width;
+        let h = self.height;
 
         // heat_rate > 1.0: reduce decay so fire reaches higher (more intense)
         // heat_rate < 1.0: normal decay but cooler bottom source

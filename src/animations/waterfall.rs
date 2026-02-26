@@ -88,9 +88,12 @@ impl Animation for Waterfall {
         "waterfall"
     }
 
+    fn on_resize(&mut self, width: usize, height: usize) {
+        self.width = width;
+        self.height = height;
+    }
+
     fn update(&mut self, canvas: &mut Canvas, dt: f64, time: f64) {
-        self.width = canvas.width;
-        self.height = canvas.height;
         let h = self.height as f64;
         self.fall_x = self.width as f64 * 0.5;
         self.fall_width = (self.width as f64 * 0.25).max(8.0);

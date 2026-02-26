@@ -69,15 +69,17 @@ impl Animation for Campfire {
         "campfire"
     }
 
+    fn on_resize(&mut self, width: usize, height: usize) {
+        self.width = width;
+        self.height = height;
+        self.fire_buf.resize(width * height, 0.0);
+    }
+
     fn update(&mut self, canvas: &mut Canvas, dt: f64, time: f64) {
-        self.width = canvas.width;
-        self.height = canvas.height;
         let w = self.width;
         let h = self.height;
         let cx = w as f64 * 0.5;
         let base_y = h as f64 * 0.75;
-
-        self.fire_buf.resize(w * h, 0.0);
 
         // Seed fire at base
         let fire_width = 10.0;

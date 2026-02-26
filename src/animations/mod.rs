@@ -60,6 +60,10 @@ pub trait Animation {
 
     /// Called once per frame before update(). Default is a no-op.
     fn set_params(&mut self, _params: &crate::external::ExternalParams) {}
+
+    /// Called when the canvas is rebuilt with new dimensions.
+    /// Override to update stored dimensions and rebuild size-dependent state.
+    fn on_resize(&mut self, _width: usize, _height: usize) {}
 }
 
 /// List of all available animation names with descriptions.

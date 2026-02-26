@@ -107,15 +107,13 @@ impl Animation for Langton {
         "langton"
     }
 
+    fn on_resize(&mut self, width: usize, height: usize) {
+        self.width = width;
+        self.height = height;
+        self.reset();
+    }
+
     fn update(&mut self, canvas: &mut Canvas, _dt: f64, _time: f64) {
-        self.width = canvas.width;
-        self.height = canvas.height;
-
-        // Resize grid if needed
-        if self.grid.len() != self.width * self.height {
-            self.reset();
-        }
-
         // Reset if ant has been going for a very long time
         if self.total_steps > self.width * self.height * 3 {
             self.reset();

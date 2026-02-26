@@ -111,9 +111,12 @@ impl Animation for Lightning {
         crate::render::RenderMode::Braille
     }
 
+    fn on_resize(&mut self, width: usize, height: usize) {
+        self.width = width;
+        self.height = height;
+    }
+
     fn update(&mut self, canvas: &mut Canvas, dt: f64, _time: f64) {
-        self.width = canvas.width;
-        self.height = canvas.height;
 
         // Spawn new bolts
         self.spawn_timer -= dt;

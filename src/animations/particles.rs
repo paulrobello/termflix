@@ -70,10 +70,12 @@ impl Animation for Particles {
         crate::render::RenderMode::Braille
     }
 
-    fn update(&mut self, canvas: &mut Canvas, dt: f64, _time: f64) {
-        self.width = canvas.width;
-        self.height = canvas.height;
+    fn on_resize(&mut self, width: usize, height: usize) {
+        self.width = width;
+        self.height = height;
+    }
 
+    fn update(&mut self, canvas: &mut Canvas, dt: f64, _time: f64) {
         // Spawn
         self.spawn_timer += dt;
         if self.spawn_timer > 0.8 {

@@ -162,9 +162,12 @@ impl Animation for Hackerman {
         crate::render::RenderMode::Ascii
     }
 
+    fn on_resize(&mut self, width: usize, height: usize) {
+        self.width = width;
+        self.height = height;
+    }
+
     fn update(&mut self, canvas: &mut Canvas, dt: f64, time: f64) {
-        self.width = canvas.width;
-        self.height = canvas.height;
         self.uptime_secs += dt;
 
         if self.width < 40 || self.height < 15 {

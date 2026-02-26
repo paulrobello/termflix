@@ -107,10 +107,12 @@ impl Animation for Rain {
         crate::render::RenderMode::HalfBlock
     }
 
-    fn update(&mut self, canvas: &mut Canvas, dt: f64, _time: f64) {
-        self.width = canvas.width;
-        self.height = canvas.height;
+    fn on_resize(&mut self, width: usize, height: usize) {
+        self.width = width;
+        self.height = height;
+    }
 
+    fn update(&mut self, canvas: &mut Canvas, dt: f64, _time: f64) {
         // Vary wind over time
         self.wind_timer -= dt;
         if self.wind_timer <= 0.0 {

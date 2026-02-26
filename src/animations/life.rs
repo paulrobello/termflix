@@ -125,15 +125,15 @@ impl Animation for GameOfLife {
         crate::render::RenderMode::Braille
     }
 
+    fn on_resize(&mut self, width: usize, height: usize) {
+        *self = GameOfLife::new(width, height);
+    }
+
     fn update(&mut self, canvas: &mut Canvas, dt: f64, _time: f64) {
         self.accumulator += dt;
         while self.accumulator >= self.step_interval {
             self.step();
             self.accumulator -= self.step_interval;
-        }
-
-        if self.width != canvas.width || self.height != canvas.height {
-            *self = GameOfLife::new(canvas.width, canvas.height);
         }
 
         canvas.clear();

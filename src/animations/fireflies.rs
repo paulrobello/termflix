@@ -50,10 +50,12 @@ impl Animation for Fireflies {
         "fireflies"
     }
 
-    fn update(&mut self, canvas: &mut Canvas, dt: f64, time: f64) {
-        self.width = canvas.width;
-        self.height = canvas.height;
+    fn on_resize(&mut self, width: usize, height: usize) {
+        self.width = width;
+        self.height = height;
+    }
 
+    fn update(&mut self, canvas: &mut Canvas, dt: f64, time: f64) {
         canvas.clear();
 
         // Slight ambient glow for atmosphere

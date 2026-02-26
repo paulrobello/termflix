@@ -93,21 +93,20 @@ impl Animation for Crystallize {
         crate::render::RenderMode::Braille
     }
 
+    fn on_resize(&mut self, width: usize, height: usize) {
+        self.width = width;
+        self.height = height;
+        self.grid = vec![0u8; width * height];
+        let cx = width / 2;
+        let cy = height / 2;
+        if cx < width && cy < height {
+            self.grid[cy * width + cx] = 1;
+        }
+    }
+
     fn update(&mut self, canvas: &mut Canvas, dt: f64, time: f64) {
-        self.width = canvas.width;
-        self.height = canvas.height;
         let w = self.width;
         let h = self.height;
-
-        // Resize grid if needed
-        if self.grid.len() != w * h {
-            self.grid = vec![0u8; w * h];
-            let cx = w / 2;
-            let cy = h / 2;
-            if cx < w && cy < h {
-                self.grid[cy * w + cx] = 1;
-            }
-        }
 
         self.color_cycle += dt * 0.5;
 

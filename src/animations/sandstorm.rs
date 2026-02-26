@@ -54,14 +54,15 @@ impl Animation for Sandstorm {
         "sandstorm"
     }
 
+    fn on_resize(&mut self, width: usize, height: usize) {
+        self.width = width;
+        self.height = height;
+        self.dunes.resize(width, 0.0);
+    }
+
     fn update(&mut self, canvas: &mut Canvas, dt: f64, _time: f64) {
-        self.width = canvas.width;
-        self.height = canvas.height;
         let w = self.width as f64;
         let h = self.height as f64;
-
-        // Resize dunes if needed
-        self.dunes.resize(self.width, 0.0);
 
         // Vary wind
         self.wind_timer -= dt;
