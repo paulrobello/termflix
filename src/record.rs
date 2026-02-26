@@ -257,3 +257,32 @@ fn base64_decode(data: &str) -> Result<Vec<u8>, String> {
 
     Ok(result)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_base64_roundtrip_empty() {
+        let input: &[u8] = b"";
+        let encoded = base64_encode(input);
+        let decoded = base64_decode(&encoded).unwrap();
+        assert_eq!(decoded, input);
+    }
+
+    #[test]
+    fn test_base64_roundtrip_hello() {
+        let input = b"hello";
+        let encoded = base64_encode(input);
+        let decoded = base64_decode(&encoded).unwrap();
+        assert_eq!(decoded, input);
+    }
+
+    #[test]
+    fn test_base64_roundtrip_all_bytes() {
+        let input: Vec<u8> = (0u8..=255u8).collect();
+        let encoded = base64_encode(&input);
+        let decoded = base64_decode(&encoded).unwrap();
+        assert_eq!(decoded, input);
+    }
+}

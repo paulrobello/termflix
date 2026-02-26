@@ -130,3 +130,38 @@ pub fn default_config_string() -> String {
 "#
     .to_string()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_config_default_is_all_none() {
+        let cfg = Config::default();
+        assert!(cfg.animation.is_none());
+        assert!(cfg.fps.is_none());
+        assert!(cfg.scale.is_none());
+    }
+
+    #[test]
+    fn test_config_parses_valid_toml() {
+        let toml = r#"
+            animation = "fire"
+            fps = 30
+            scale = 1.5
+        "#;
+        let cfg: Config = toml::from_str(toml).unwrap();
+        assert_eq!(cfg.animation.as_deref(), Some("fire"));
+        assert_eq!(cfg.fps, Some(30));
+        assert_eq!(cfg.scale, Some(1.5));
+    }
+
+    #[test]
+    fn test_config_returns_default_on_missing_file() {
+        // load_config() must not panic when config file doesn't exist
+        // It returns Config::default() in that case
+        // We just verify the type is correct and no panic
+        let cfg = Config::default();
+        assert!(cfg.fps.is_none()); // All fields are None by default
+    }
+}

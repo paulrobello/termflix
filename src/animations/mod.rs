@@ -229,6 +229,41 @@ mod tests {
     use super::*;
 
     #[test]
+    fn test_create_returns_some_for_all_known_names() {
+        for &name in ANIMATION_NAMES {
+            let result = create(name, 80, 24, 1.0);
+            assert!(result.is_some(), "create({name:?}) returned None");
+        }
+    }
+
+    #[test]
+    fn test_create_returns_none_for_unknown_name() {
+        let result = create("does_not_exist", 80, 24, 1.0);
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_animation_names_and_animations_have_same_length() {
+        assert_eq!(ANIMATION_NAMES.len(), ANIMATIONS.len());
+    }
+
+    #[test]
+    fn test_animation_names_match_animations_list() {
+        for (name, (anim_name, _desc)) in ANIMATION_NAMES.iter().zip(ANIMATIONS.iter()) {
+            assert_eq!(
+                name, anim_name,
+                "ANIMATION_NAMES and ANIMATIONS are out of sync at {name}"
+            );
+        }
+    }
+
+    #[test]
+    fn test_created_animation_name_matches_requested() {
+        let anim = create("fire", 80, 24, 1.0).unwrap();
+        assert_eq!(anim.name(), "fire");
+    }
+
+    #[test]
     fn test_fire_supported_params_includes_intensity() {
         let anim = create("fire", 80, 24, 1.0).unwrap();
         let params = anim.supported_params();

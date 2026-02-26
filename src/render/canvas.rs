@@ -306,3 +306,44 @@ pub fn color_to_fg(color: Color) -> String {
         _ => "37".into(),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn test_canvas() -> Canvas {
+        Canvas::new(10, 10, RenderMode::HalfBlock, ColorMode::TrueColor)
+    }
+
+    #[test]
+    fn test_set_and_get_pixel() {
+        let mut c = test_canvas();
+        c.set(5, 5, 0.75);
+        assert!((c.pixels[5 * 10 + 5] - 0.75).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn test_set_out_of_bounds_is_noop() {
+        let mut c = test_canvas();
+        // Should not panic
+        c.set(100, 100, 1.0);
+        c.set(usize::MAX, usize::MAX, 1.0);
+    }
+
+    #[test]
+    fn test_clear_zeroes_all_pixels() {
+        let mut c = test_canvas();
+        c.set(5, 5, 1.0);
+        c.clear();
+        assert!(c.pixels.iter().all(|&v| v == 0.0));
+    }
+
+    #[test]
+    fn test_set_colored_stores_color() {
+        let mut c = test_canvas();
+        c.set_colored(3, 3, 0.5, 255, 128, 0);
+        let idx = 3 * 10 + 3;
+        assert_eq!(c.colors[idx], (255, 128, 0));
+        assert!((c.pixels[idx] - 0.5).abs() < f64::EPSILON);
+    }
+}

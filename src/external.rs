@@ -173,3 +173,54 @@ pub fn spawn_reader(source: ParamsSource) -> std::sync::mpsc::Receiver<ExternalP
 
     rx
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_external_params_deserializes_partial() {
+        let json = r#"{"animation": "matrix", "speed": 2.0}"#;
+        let p: ExternalParams = serde_json::from_str(json).unwrap();
+        assert_eq!(p.animation.as_deref(), Some("matrix"));
+        assert_eq!(p.speed, Some(2.0));
+        assert!(p.intensity.is_none());
+    }
+
+    #[test]
+    fn test_external_params_empty_object() {
+        let json = "{}";
+        let p: ExternalParams = serde_json::from_str(json).unwrap();
+        assert!(p.animation.is_none());
+        assert!(p.speed.is_none());
+    }
+
+    #[test]
+    fn test_external_params_invalid_json_fails() {
+        let json = "not json";
+        let result = serde_json::from_str::<ExternalParams>(json);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_current_state_merge_accumulates() {
+        let mut state = CurrentState::default();
+        state.merge(ExternalParams { speed: Some(2.0), ..Default::default() });
+        state.merge(ExternalParams { intensity: Some(0.5), ..Default::default() });
+        assert_eq!(state.speed(), 2.0);
+        assert_eq!(state.intensity(), 0.5);
+    }
+
+    #[test]
+    fn test_current_state_take_animation_change() {
+        let mut state = CurrentState::default();
+        state.merge(ExternalParams {
+            animation: Some("fire".to_string()),
+            ..Default::default()
+        });
+        let change = state.take_animation_change();
+        assert_eq!(change.as_deref(), Some("fire"));
+        // Second take returns None
+        assert!(state.take_animation_change().is_none());
+    }
+}

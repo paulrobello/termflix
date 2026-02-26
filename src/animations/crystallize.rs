@@ -29,7 +29,7 @@ impl Crystallize {
         let walkers = (0..walker_count)
             .map(|_| {
                 let angle = rng.random_range(0.0..std::f64::consts::TAU);
-                let dist = rng.random_range(10.0..(width.min(height) as f64 * 0.4));
+                let dist = (width.min(height) as f64 * 0.4).max(10.0);
                 let x = width as f64 * 0.5 + angle.cos() * dist;
                 let y = height as f64 * 0.5 + angle.sin() * dist;
                 (x, y)
