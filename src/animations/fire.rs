@@ -42,6 +42,10 @@ impl Animation for Fire {
         }
     }
 
+    fn supported_params(&self) -> &'static [(&'static str, f64, f64)] {
+        &[("intensity", 0.0, 2.0)]
+    }
+
     fn on_resize(&mut self, width: usize, height: usize) {
         self.width = width;
         self.height = height;

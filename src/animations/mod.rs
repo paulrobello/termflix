@@ -64,6 +64,14 @@ pub trait Animation {
     /// Called when the canvas is rebuilt with new dimensions.
     /// Override to update stored dimensions and rebuild size-dependent state.
     fn on_resize(&mut self, _width: usize, _height: usize) {}
+
+    /// Returns a list of supported external control parameters.
+    /// Each entry is `(param_name, min_value, max_value)`.
+    /// The empty slice default means the animation has no tunable parameters.
+    #[allow(dead_code)]
+    fn supported_params(&self) -> &'static [(&'static str, f64, f64)] {
+        &[]
+    }
 }
 
 /// List of all available animation names with descriptions.
@@ -214,4 +222,33 @@ pub fn create(name: &str, width: usize, height: usize, scale: f64) -> Option<Box
         "pong" => Box::new(pong::Pong::new(width, height, scale)),
         _ => return None,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_fire_supported_params_includes_intensity() {
+        let anim = create("fire", 80, 24, 1.0).unwrap();
+        let params = anim.supported_params();
+        assert!(!params.is_empty(), "fire should have supported params");
+        assert!(params.iter().any(|&(name, _, _)| name == "intensity"));
+    }
+
+    #[test]
+    fn test_plasma_supported_params_includes_color_shift() {
+        let anim = create("plasma", 80, 24, 1.0).unwrap();
+        let params = anim.supported_params();
+        assert!(!params.is_empty(), "plasma should have supported params");
+        assert!(params.iter().any(|&(name, _, _)| name == "color_shift"));
+    }
+
+    #[test]
+    fn test_unknown_animation_has_empty_params() {
+        // Most animations have no declared params — verify default returns empty
+        let anim = create("matrix", 80, 24, 1.0).unwrap();
+        let params = anim.supported_params();
+        assert!(params.is_empty(), "matrix should have no declared params");
+    }
 }

@@ -24,6 +24,10 @@ impl Animation for Plasma {
         }
     }
 
+    fn supported_params(&self) -> &'static [(&'static str, f64, f64)] {
+        &[("color_shift", 0.0, 1.0)]
+    }
+
     fn update(&mut self, canvas: &mut Canvas, _dt: f64, time: f64) {
         let w = canvas.width as f64;
         let h = canvas.height as f64;
