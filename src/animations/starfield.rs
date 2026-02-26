@@ -11,6 +11,7 @@ struct Star {
 /// 3D starfield with depth parallax
 pub struct Starfield {
     stars: Vec<Star>,
+    rng: rand::rngs::ThreadRng,
 }
 
 impl Starfield {
@@ -18,7 +19,7 @@ impl Starfield {
         let mut rng = rand::rng();
         let num_stars = ((width * height) as f64 / 30.0 * scale) as usize;
         let stars = (0..num_stars).map(|_| new_star(&mut rng, false)).collect();
-        Starfield { stars }
+        Starfield { stars, rng: rand::rng() }
     }
 }
 
@@ -45,7 +46,6 @@ impl Animation for Starfield {
     }
 
     fn update(&mut self, canvas: &mut Canvas, dt: f64, _time: f64) {
-        let mut rng = rand::rng();
         canvas.clear();
         let cx = canvas.width as f64 / 2.0;
         let cy = canvas.height as f64 / 2.0;
@@ -67,7 +67,7 @@ impl Animation for Starfield {
                 || ix >= canvas.width as isize
                 || iy >= canvas.height as isize
             {
-                *star = new_star(&mut rng, true);
+                *star = new_star(&mut self.rng, true);
                 continue;
             }
 

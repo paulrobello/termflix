@@ -9,6 +9,7 @@ pub struct Fire {
     buffer: Vec<f64>,
     /// Heat rate: controls how hot the bottom row burns (0.0 = cold, 1.0 = normal, 2.0 = intense)
     heat_rate: f64,
+    rng: rand::rngs::ThreadRng,
 }
 
 impl Fire {
@@ -25,6 +26,7 @@ impl Fire {
             height,
             buffer,
             heat_rate: 0.8,
+            rng: rand::rng(),
         }
     }
 
@@ -52,7 +54,6 @@ impl Animation for Fire {
     }
 
     fn update(&mut self, canvas: &mut Canvas, _dt: f64, _time: f64) {
-        let mut rng = rand::rng();
         let w = canvas.width;
         let h = canvas.height;
 
@@ -68,14 +69,14 @@ impl Animation for Fire {
         // Process bottom-to-top so heat propagates fully in one frame
         for x in 0..w {
             for y in 0..h.saturating_sub(1) {
-                let wind: i32 = rng.random_range(-1i32..=1);
+                let wind: i32 = self.rng.random_range(-1i32..=1);
                 let src_x = (x as i32 + wind).clamp(0, w as i32 - 1) as usize;
                 let src_y = y + 1;
                 let src_val = self.buffer[src_y * w + src_x];
                 // Scale decay to canvas height so fire reaches ~60% up at heat_rate=1.0
                 // At heat_rate=2.0, intensity_scale=0.5 → half decay → fire reaches higher
                 let max_decay = (3.0 / h as f64) * intensity_scale;
-                let decay = rng.random_range(0.0..max_decay.max(f64::EPSILON));
+                let decay = self.rng.random_range(0.0..max_decay.max(f64::EPSILON));
                 self.buffer[y * w + x] = (src_val - decay).max(0.0);
             }
         }
@@ -86,7 +87,7 @@ impl Animation for Fire {
         let heat_min = (heat * 0.9).max(0.0);
         for x in 0..w {
             self.buffer[(h - 1) * w + x] = if heat_min < heat {
-                rng.random_range(heat_min..heat)
+                self.rng.random_range(heat_min..heat)
             } else {
                 heat
             };

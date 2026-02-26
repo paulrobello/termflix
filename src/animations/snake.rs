@@ -48,6 +48,7 @@ pub struct Snake {
     move_interval: f64,
     score: usize,
     game_over_timer: f64,
+    rng: rand::rngs::ThreadRng,
 }
 
 impl Snake {
@@ -73,18 +74,18 @@ impl Snake {
             move_interval: 0.08,
             score: 0,
             game_over_timer: 0.0,
+            rng: rand::rng(),
         }
     }
 
     fn reset(&mut self) {
-        let mut rng = rand::rng();
         let cx = self.width as i32 / 2;
         let cy = self.height as i32 / 2;
         self.body = vec![(cx, cy), (cx - 1, cy), (cx - 2, cy)];
         self.dir = Dir::Right;
         self.food = (
-            rng.random_range(1..self.width as i32 - 1),
-            rng.random_range(1..self.height as i32 - 1),
+            self.rng.random_range(1..self.width as i32 - 1),
+            self.rng.random_range(1..self.height as i32 - 1),
         );
         self.score = 0;
     }
@@ -128,10 +129,9 @@ impl Snake {
     }
 
     fn spawn_food(&mut self) {
-        let mut rng = rand::rng();
         loop {
-            let fx = rng.random_range(1..self.width as i32 - 1);
-            let fy = rng.random_range(1..self.height as i32 - 1);
+            let fx = self.rng.random_range(1..self.width as i32 - 1);
+            let fy = self.rng.random_range(1..self.height as i32 - 1);
             if !self.body.iter().any(|&(bx, by)| bx == fx && by == fy) {
                 self.food = (fx, fy);
                 break;

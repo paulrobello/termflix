@@ -24,6 +24,7 @@ pub struct Rain {
     wind: f64,
     wind_target: f64,
     wind_timer: f64,
+    rng: rand::rngs::ThreadRng,
 }
 
 impl Rain {
@@ -92,6 +93,7 @@ impl Rain {
             wind: 0.0,
             wind_target: 0.0,
             wind_timer: 0.0,
+            rng: rand::rng(),
         }
     }
 }
@@ -106,15 +108,14 @@ impl Animation for Rain {
     }
 
     fn update(&mut self, canvas: &mut Canvas, dt: f64, _time: f64) {
-        let mut rng = rand::rng();
         self.width = canvas.width;
         self.height = canvas.height;
 
         // Vary wind over time
         self.wind_timer -= dt;
         if self.wind_timer <= 0.0 {
-            self.wind_target = rng.random_range(-8.0..8.0);
-            self.wind_timer = rng.random_range(2.0..6.0);
+            self.wind_target = self.rng.random_range(-8.0..8.0);
+            self.wind_timer = self.rng.random_range(2.0..6.0);
         }
         self.wind += (self.wind_target - self.wind) * dt * 0.5;
 
@@ -151,11 +152,11 @@ impl Animation for Rain {
 
                 // Reset drop at top, keep same depth layer
                 // depth (and thus r/g/b) preserved across resets
-                drop.y = rng.random_range(-(self.height as f64 * 0.3)..0.0);
-                drop.x = rng.random_range(0.0..self.width as f64);
+                drop.y = self.rng.random_range(-(self.height as f64 * 0.3)..0.0);
+                drop.x = self.rng.random_range(0.0..self.width as f64);
                 drop.speed = 15.0 + drop.depth * 50.0;
                 drop.length = 1.0 + drop.depth * 5.0;
-                drop.wind_offset = rng.random_range(-0.5..0.5);
+                drop.wind_offset = self.rng.random_range(-0.5..0.5);
             }
 
             // Wrap horizontally

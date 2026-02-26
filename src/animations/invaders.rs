@@ -30,6 +30,7 @@ pub struct Invaders {
     shoot_timer: f64,
     alien_shoot_timer: f64,
     wave: usize,
+    rng: rand::rngs::ThreadRng,
 }
 
 impl Invaders {
@@ -47,6 +48,7 @@ impl Invaders {
             shoot_timer: 0.0,
             alien_shoot_timer: 0.0,
             wave: 0,
+            rng: rand::rng(),
         };
         inv.spawn_wave();
         inv
@@ -81,7 +83,6 @@ impl Animation for Invaders {
     }
 
     fn update(&mut self, canvas: &mut Canvas, dt: f64, _time: f64) {
-        let mut rng = rand::rng();
         self.width = canvas.width;
         self.height = canvas.height;
         let w = self.width as f64;
@@ -150,7 +151,7 @@ impl Animation for Invaders {
         self.alien_shoot_timer += dt;
         if self.alien_shoot_timer >= 1.0 && !alive_aliens.is_empty() {
             self.alien_shoot_timer = 0.0;
-            let shooter_idx = rng.random_range(0..alive_aliens.len());
+            let shooter_idx = self.rng.random_range(0..alive_aliens.len());
             let shooter = alive_aliens[shooter_idx];
             self.bullets.push(Bullet {
                 x: shooter.x,

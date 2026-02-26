@@ -32,6 +32,7 @@ pub struct Cells {
     cells: Vec<Cell>,
     max_cells: usize,
     fluid_time: f64,
+    rng: rand::rngs::ThreadRng,
 }
 
 impl Cells {
@@ -48,6 +49,7 @@ impl Cells {
             cells,
             max_cells: (35.0 * scale) as usize,
             fluid_time: 0.0,
+            rng: rand::rng(),
         }
     }
 }
@@ -83,11 +85,10 @@ fn make_cell(rng: &mut impl rand::RngExt, width: usize, height: usize) -> Cell {
 
 impl Cells {
     fn reset(&mut self) {
-        let mut rng = rand::rng();
         self.cells.clear();
         for _ in 0..5 {
             self.cells
-                .push(make_cell(&mut rng, self.width, self.height));
+                .push(make_cell(&mut self.rng, self.width, self.height));
         }
     }
 }
@@ -98,7 +99,6 @@ impl Animation for Cells {
     }
 
     fn update(&mut self, canvas: &mut Canvas, dt: f64, time: f64) {
-        let mut rng = rand::rng();
         self.width = canvas.width;
         self.height = canvas.height;
         let w = self.width as f64;
@@ -111,7 +111,7 @@ impl Animation for Cells {
 
         // Trigger splitting
         for cell in &mut self.cells {
-            if !cell.splitting && cell.radius > 8.0 && rng.random_range(0.0..1.0) < 0.004 {
+            if !cell.splitting && cell.radius > 8.0 && self.rng.random_range(0.0..1.0) < 0.004 {
                 cell.splitting = true;
                 cell.split_progress = 0.0;
             }
@@ -125,8 +125,8 @@ impl Animation for Cells {
                 (time * 0.3 + cell.phase).cos() * 3.0 + (time * 0.7 + cell.phase * 2.3).sin() * 1.5;
             let drift_y =
                 (time * 0.4 + cell.phase).sin() * 2.5 + (time * 0.6 + cell.phase * 1.7).cos() * 1.2;
-            cell.x += (drift_x + rng.random_range(-1.0..1.0)) * dt;
-            cell.y += (drift_y + rng.random_range(-0.8..0.8)) * dt;
+            cell.x += (drift_x + self.rng.random_range(-1.0..1.0)) * dt;
+            cell.y += (drift_y + self.rng.random_range(-0.8..0.8)) * dt;
             cell.phase += dt * 0.5;
             cell.elong_angle += dt * 0.2;
 
@@ -167,11 +167,11 @@ impl Animation for Cells {
                     let new_radius = cell.radius * 0.7;
                     let offset = new_radius * 1.5;
 
-                    let mut daughter = make_cell(&mut rng, w as usize, h as usize);
+                    let mut daughter = make_cell(&mut self.rng, w as usize, h as usize);
                     daughter.x = cell.x + split_angle.cos() * offset;
                     daughter.y = cell.y + split_angle.sin() * offset;
                     daughter.radius = new_radius;
-                    daughter.hue = (cell.hue + rng.random_range(-0.08..0.08)).fract().abs();
+                    daughter.hue = (cell.hue + self.rng.random_range(-0.08..0.08)).fract().abs();
                     new_cells.push(daughter);
 
                     cell.x -= split_angle.cos() * offset;

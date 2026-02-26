@@ -13,6 +13,7 @@ struct RippleSource {
 pub struct Ripple {
     sources: Vec<RippleSource>,
     spawn_timer: f64,
+    rng: rand::rngs::ThreadRng,
 }
 
 impl Ripple {
@@ -20,6 +21,7 @@ impl Ripple {
         Ripple {
             sources: Vec::new(),
             spawn_timer: 0.0,
+            rng: rand::rng(),
         }
     }
 }
@@ -30,7 +32,6 @@ impl Animation for Ripple {
     }
 
     fn update(&mut self, canvas: &mut Canvas, dt: f64, time: f64) {
-        let mut rng = rand::rng();
         let w = canvas.width as f64;
         let h = canvas.height as f64;
 
@@ -38,12 +39,12 @@ impl Animation for Ripple {
         self.spawn_timer -= dt;
         if self.spawn_timer <= 0.0 {
             self.sources.push(RippleSource {
-                x: rng.random_range(0.0..w),
-                y: rng.random_range(0.0..h),
+                x: self.rng.random_range(0.0..w),
+                y: self.rng.random_range(0.0..h),
                 birth: time,
-                strength: rng.random_range(0.5..1.0),
+                strength: self.rng.random_range(0.5..1.0),
             });
-            self.spawn_timer = rng.random_range(0.3..1.5);
+            self.spawn_timer = self.rng.random_range(0.3..1.5);
         }
 
         // Remove old sources

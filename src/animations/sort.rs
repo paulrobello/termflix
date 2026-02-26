@@ -38,6 +38,7 @@ pub struct Sort {
     sorted: bool,
     pause_timer: f64,
     ops_per_frame: usize,
+    rng: rand::rngs::ThreadRng,
 }
 
 #[derive(Clone, Copy)]
@@ -61,6 +62,7 @@ impl Sort {
             sorted: false,
             pause_timer: 0.0,
             ops_per_frame: 3,
+            rng: rand::rng(),
         };
         sort.generate_ops();
         sort
@@ -90,10 +92,9 @@ impl Sort {
     }
 
     fn shuffle(&mut self) {
-        let mut rng = rand::rng();
         let n = self.data.len();
         for i in (1..n).rev() {
-            let j = rng.random_range(0..=i);
+            let j = self.rng.random_range(0..=i);
             self.data.swap(i, j);
         }
         self.generate_ops();
@@ -221,9 +222,8 @@ impl Animation for Sort {
         // Resize data if needed
         let target_size = (w / 2).clamp(16, 200);
         if self.data.len() != target_size {
-            let mut rng = rand::rng();
             self.data = (0..target_size)
-                .map(|_| rng.random_range(0.05..1.0))
+                .map(|_| self.rng.random_range(0.05..1.0))
                 .collect();
             self.generate_ops();
         }

@@ -15,6 +15,7 @@ pub struct Lava {
     width: usize,
     height: usize,
     blobs: Vec<Blob>,
+    rng: rand::rngs::ThreadRng,
 }
 
 impl Lava {
@@ -36,6 +37,7 @@ impl Lava {
             width,
             height,
             blobs,
+            rng: rand::rng(),
         }
     }
 }
@@ -46,7 +48,6 @@ impl Animation for Lava {
     }
 
     fn update(&mut self, canvas: &mut Canvas, dt: f64, time: f64) {
-        let mut rng = rand::rng();
         self.width = canvas.width;
         self.height = canvas.height;
         let w = self.width as f64;
@@ -58,17 +59,17 @@ impl Animation for Lava {
             blob.y += blob.vy * dt;
 
             // Gentle horizontal wobble
-            blob.vx += rng.random_range(-1.0..1.0) * dt * 5.0;
+            blob.vx += self.rng.random_range(-1.0..1.0) * dt * 5.0;
             blob.vx = blob.vx.clamp(-5.0, 5.0);
 
             // Buoyancy: rise when low, sink when high
             let center_y = h * 0.5;
             blob.vy += (center_y - blob.y) * 0.01 * dt;
-            blob.vy += rng.random_range(-2.0..2.0) * dt;
+            blob.vy += self.rng.random_range(-2.0..2.0) * dt;
             blob.vy = blob.vy.clamp(-10.0, 10.0);
 
             // Radius pulsing
-            blob.radius = (blob.radius + rng.random_range(-0.5..0.5) * dt).clamp(3.0, 12.0);
+            blob.radius = (blob.radius + self.rng.random_range(-0.5..0.5) * dt).clamp(3.0, 12.0);
 
             // Bounce off walls
             if blob.x < blob.radius {

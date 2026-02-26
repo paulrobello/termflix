@@ -45,6 +45,7 @@ pub struct Hackerman {
     bytes_count: u64,
     threats_count: u32,
     uptime_secs: f64,
+    rng: rand::rngs::ThreadRng,
 }
 
 const LOG_MSGS: &[&str] = &[
@@ -147,6 +148,7 @@ impl Hackerman {
             bytes_count: 1_284_019,
             threats_count: 3,
             uptime_secs: 3847.0,
+            rng: rand::rng(),
         }
     }
 }
@@ -161,7 +163,6 @@ impl Animation for Hackerman {
     }
 
     fn update(&mut self, canvas: &mut Canvas, dt: f64, time: f64) {
-        let mut rng = rand::rng();
         self.width = canvas.width;
         self.height = canvas.height;
         self.uptime_secs += dt;
@@ -299,9 +300,9 @@ impl Animation for Hackerman {
         // TOP-LEFT: System Status
         // ══════════════════════════════════════
         self.stats_flicker += dt;
-        self.packets_count += rng.random_range(10..200) as u64;
-        self.bytes_count += rng.random_range(500..50000) as u64;
-        if rng.random_range(0.0..1.0) < 0.005 {
+        self.packets_count += self.rng.random_range(10..200) as u64;
+        self.bytes_count += self.rng.random_range(500..50000) as u64;
+        if self.rng.random_range(0.0..1.0) < 0.005 {
             self.threats_count += 1;
         }
 
@@ -365,7 +366,7 @@ impl Animation for Hackerman {
 
         // CPU/MEM bars
         if stats_y + 11 < mid_y {
-            let cpu = 0.3 + (time * 0.7).sin().abs() * 0.5 + rng.random_range(0.0..0.1);
+            let cpu = 0.3 + (time * 0.7).sin().abs() * 0.5 + self.rng.random_range(0.0..0.1);
             let mem = 0.6 + (time * 0.1).sin() * 0.1;
             draw_text(canvas, stats_x, stats_y + 10, "CPU:", dim_green);
             draw_mini_bar(
@@ -405,19 +406,19 @@ impl Animation for Hackerman {
         self.conn_timer += dt;
         if self.conn_timer > 2.0 {
             self.conn_timer = 0.0;
-            if rng.random_range(0.0..1.0) < 0.4 {
-                let a = rng.random_range(0..self.nodes.len());
-                let mut b = rng.random_range(0..self.nodes.len());
+            if self.rng.random_range(0.0..1.0) < 0.4 {
+                let a = self.rng.random_range(0..self.nodes.len());
+                let mut b = self.rng.random_range(0..self.nodes.len());
                 while b == a {
-                    b = rng.random_range(0..self.nodes.len());
+                    b = self.rng.random_range(0..self.nodes.len());
                 }
                 self.active_connection = Some((a, b));
                 self.nodes[b].active = true;
             }
             // Randomly deactivate a node
-            if rng.random_range(0.0..1.0) < 0.2 && self.nodes.len() > 2 {
-                let idx = rng.random_range(1..self.nodes.len());
-                self.nodes[idx].active = rng.random_range(0.0..1.0) < 0.5;
+            if self.rng.random_range(0.0..1.0) < 0.2 && self.nodes.len() > 2 {
+                let idx = self.rng.random_range(1..self.nodes.len());
+                self.nodes[idx].active = self.rng.random_range(0.0..1.0) < 0.5;
             }
         }
 
@@ -490,11 +491,11 @@ impl Animation for Hackerman {
         // Add new log lines
         self.log_timer -= dt;
         if self.log_timer <= 0.0 {
-            self.log_timer = rng.random_range(0.1..0.5);
-            let tmpl = LOG_MSGS[rng.random_range(0..LOG_MSGS.len())];
-            let ip = rand_ip(&mut rng);
-            let num = rng.random_range(1000u32..65535);
-            let word = rand_word(&mut rng);
+            self.log_timer = self.rng.random_range(0.1..0.5);
+            let tmpl = LOG_MSGS[self.rng.random_range(0..LOG_MSGS.len())];
+            let ip = rand_ip(&mut self.rng);
+            let num = self.rng.random_range(1000u32..65535);
+            let word = rand_word(&mut self.rng);
             let text = tmpl.replace(
                 "{}",
                 &if tmpl.contains("port") || tmpl.contains("bytes") || tmpl.contains("rows") {
@@ -580,11 +581,11 @@ impl Animation for Hackerman {
             self.bar_reset_timer = 0.0;
             for bar in &mut self.bars {
                 if bar.value >= bar.target {
-                    bar.label = BAR_LABELS[rng.random_range(0..BAR_LABELS.len())].to_string();
+                    bar.label = BAR_LABELS[self.rng.random_range(0..BAR_LABELS.len())].to_string();
                     bar.value = 0.0;
-                    bar.target = rng.random_range(0.6..1.0);
-                    bar.speed = rng.random_range(0.05..0.3);
-                    bar.color = match rng.random_range(0u8..3) {
+                    bar.target = self.rng.random_range(0.6..1.0);
+                    bar.speed = self.rng.random_range(0.05..0.3);
+                    bar.color = match self.rng.random_range(0u8..3) {
                         0 => (0, 220, 180),
                         1 => (0, 180, 255),
                         _ => (0, 255, 100),

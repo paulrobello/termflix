@@ -13,6 +13,7 @@ struct Blip {
 pub struct Radar {
     blips: Vec<Blip>,
     sweep_angle: f64,
+    rng: rand::rngs::ThreadRng,
 }
 
 impl Radar {
@@ -20,6 +21,7 @@ impl Radar {
         Radar {
             blips: Vec::new(),
             sweep_angle: 0.0,
+            rng: rand::rng(),
         }
     }
 }
@@ -30,7 +32,6 @@ impl Animation for Radar {
     }
 
     fn update(&mut self, canvas: &mut Canvas, dt: f64, _time: f64) {
-        let mut rng = rand::rng();
         let w = canvas.width as f64;
         let h = canvas.height as f64;
         let cx = w * 0.5;
@@ -45,9 +46,9 @@ impl Animation for Radar {
         }
 
         // Spawn blips along sweep line
-        if rng.random_range(0.0..1.0) < 0.15 {
-            let dist = rng.random_range(radius * 0.15..radius * 0.9);
-            let blip_angle = self.sweep_angle + rng.random_range(-0.05..0.05);
+        if self.rng.random_range(0.0..1.0) < 0.15 {
+            let dist = self.rng.random_range(radius * 0.15..radius * 0.9);
+            let blip_angle = self.sweep_angle + self.rng.random_range(-0.05..0.05);
             self.blips.push(Blip {
                 x: cx + blip_angle.cos() * dist,
                 y: cy + blip_angle.sin() * dist,

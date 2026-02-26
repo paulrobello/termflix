@@ -9,6 +9,7 @@ pub struct Campfire {
     height: usize,
     fire_buf: Vec<f64>,
     embers: ParticleSystem,
+    rng: rand::rngs::ThreadRng,
 }
 
 impl Campfire {
@@ -58,6 +59,7 @@ impl Campfire {
             height,
             fire_buf: vec![0.0; width * height],
             embers: ParticleSystem::new(ember_config, (500.0 * scale) as usize),
+            rng: rand::rng(),
         }
     }
 }
@@ -68,7 +70,6 @@ impl Animation for Campfire {
     }
 
     fn update(&mut self, canvas: &mut Canvas, dt: f64, time: f64) {
-        let mut rng = rand::rng();
         self.width = canvas.width;
         self.height = canvas.height;
         let w = self.width;
@@ -86,17 +87,17 @@ impl Animation for Campfire {
             if dist < fire_width {
                 let intensity = 1.0 - dist / fire_width;
                 let row = (base_y as usize).min(h - 1);
-                self.fire_buf[row * w + x] = intensity * rng.random_range(0.7..1.0);
+                self.fire_buf[row * w + x] = intensity * self.rng.random_range(0.7..1.0);
             }
         }
 
         // Propagate fire upward
         for y in 0..h.saturating_sub(1) {
             for x in 0..w {
-                let src_x = (x as isize + rng.random_range(-1i32..=1) as isize)
+                let src_x = (x as isize + self.rng.random_range(-1i32..=1) as isize)
                     .clamp(0, w as isize - 1) as usize;
                 let src_y = (y + 1).min(h - 1);
-                let decay = rng.random_range(0.03..0.08);
+                let decay = self.rng.random_range(0.03..0.08);
                 let val = (self.fire_buf[src_y * w + src_x] - decay).max(0.0);
                 self.fire_buf[y * w + x] = val;
             }
@@ -137,11 +138,11 @@ impl Animation for Campfire {
         }
 
         // Emit embers
-        self.embers.config.x = cx + rng.random_range(-3.0..3.0);
+        self.embers.config.x = cx + self.rng.random_range(-3.0..3.0);
         self.embers.config.y = base_y - 5.0;
         self.embers.config.wind = (time * 0.5).sin() * 2.0;
-        if rng.random_range(0.0..1.0) < 0.3 {
-            self.embers.emit(rng.random_range(1..4));
+        if self.rng.random_range(0.0..1.0) < 0.3 {
+            self.embers.emit(self.rng.random_range(1..4));
         }
 
         self.embers.update(dt);

@@ -19,6 +19,7 @@ pub struct Sandstorm {
     wind: f64,
     wind_target: f64,
     wind_timer: f64,
+    rng: rand::rngs::ThreadRng,
 }
 
 impl Sandstorm {
@@ -43,6 +44,7 @@ impl Sandstorm {
             wind: 10.0,
             wind_target: 10.0,
             wind_timer: 0.0,
+            rng: rand::rng(),
         }
     }
 }
@@ -53,7 +55,6 @@ impl Animation for Sandstorm {
     }
 
     fn update(&mut self, canvas: &mut Canvas, dt: f64, _time: f64) {
-        let mut rng = rand::rng();
         self.width = canvas.width;
         self.height = canvas.height;
         let w = self.width as f64;
@@ -65,8 +66,8 @@ impl Animation for Sandstorm {
         // Vary wind
         self.wind_timer -= dt;
         if self.wind_timer <= 0.0 {
-            self.wind_target = rng.random_range(5.0..25.0);
-            self.wind_timer = rng.random_range(1.0..4.0);
+            self.wind_target = self.rng.random_range(5.0..25.0);
+            self.wind_timer = self.rng.random_range(1.0..4.0);
         }
         self.wind += (self.wind_target - self.wind) * dt * 0.8;
 
@@ -75,8 +76,8 @@ impl Animation for Sandstorm {
         // Update particles
         for p in &mut self.particles {
             let gust = (p.y * 0.1 + p.x * 0.05).sin() * 3.0;
-            p.vx = self.wind + gust + rng.random_range(-2.0..2.0);
-            p.vy += rng.random_range(-0.5..1.5) * dt * 10.0;
+            p.vx = self.wind + gust + self.rng.random_range(-2.0..2.0);
+            p.vy += self.rng.random_range(-0.5..1.5) * dt * 10.0;
             p.vy = p.vy.clamp(-2.0, 8.0);
 
             p.x += p.vx * dt;
@@ -96,23 +97,23 @@ impl Animation for Sandstorm {
                     self.dunes[ix + 1] = (self.dunes[ix + 1] + amt * 0.5).min(h * 0.4);
                 }
                 // Reset particle
-                p.x = rng.random_range(-10.0..0.0);
-                p.y = rng.random_range(0.0..h * 0.8);
-                p.vy = rng.random_range(-1.0..2.0);
+                p.x = self.rng.random_range(-10.0..0.0);
+                p.y = self.rng.random_range(0.0..h * 0.8);
+                p.vy = self.rng.random_range(-1.0..2.0);
                 continue;
             }
 
             // Wrap horizontally
             if p.x >= w {
                 p.x -= w + 10.0;
-                p.y = rng.random_range(0.0..h * 0.8);
+                p.y = self.rng.random_range(0.0..h * 0.8);
             }
             if p.x < -10.0 {
                 p.x += w + 10.0;
             }
             if p.y >= h {
                 p.y = 0.0;
-                p.x = rng.random_range(0.0..w);
+                p.x = self.rng.random_range(0.0..w);
             }
             if p.y < 0.0 {
                 p.y = 0.0;
@@ -124,7 +125,7 @@ impl Animation for Sandstorm {
             let py = p.y as usize;
             if px < canvas.width && py < canvas.height {
                 let brightness = p.size * 0.8;
-                let shade = rng.random_range(0.8..1.0);
+                let shade = self.rng.random_range(0.8..1.0);
                 let r = (210.0 * shade) as u8;
                 let g = (180.0 * shade) as u8;
                 let b = (120.0 * shade) as u8;

@@ -120,6 +120,7 @@ pub struct Garden {
     splashes: Vec<Splash>,
     width: usize,
     height: usize,
+    rng: rand::rngs::ThreadRng,
 }
 
 impl Garden {
@@ -179,6 +180,7 @@ impl Garden {
             splashes: Vec::new(),
             width,
             height,
+            rng: rand::rng(),
         }
     }
 }
@@ -193,7 +195,6 @@ impl Animation for Garden {
     }
 
     fn update(&mut self, canvas: &mut Canvas, dt: f64, _time: f64) {
-        let mut rng = rand::rng();
         self.width = canvas.width;
         self.height = canvas.height;
 
@@ -272,9 +273,9 @@ impl Animation for Garden {
             cloud.x += 5.0 * dt;
             if cloud.x > (self.width + cloud.width + 2) as f64 {
                 cloud.x = -(cloud.width as f64 + 2.0);
-                cloud.width = rng.random_range(6..14);
+                cloud.width = self.rng.random_range(6..14);
                 cloud.raining = false;
-                cloud.rain_cooldown = rng.random_range(3.0..12.0);
+                cloud.rain_cooldown = self.rng.random_range(3.0..12.0);
             }
 
             // State machine
@@ -282,17 +283,17 @@ impl Animation for Garden {
                 cloud.rain_timer -= dt;
                 if cloud.rain_timer <= 0.0 {
                     cloud.raining = false;
-                    cloud.rain_cooldown = rng.random_range(8.0..20.0);
+                    cloud.rain_cooldown = self.rng.random_range(8.0..20.0);
                 } else {
                     cloud.spawn_timer -= dt;
                     if cloud.spawn_timer <= 0.0 {
                         cloud.spawn_timer = 0.2;
-                        let drop_x = cloud.x + rng.random_range(0.0..cloud.width as f64);
+                        let drop_x = cloud.x + self.rng.random_range(0.0..cloud.width as f64);
                         if drop_x >= 0.0 && (drop_x as usize) < self.width {
                             new_drops.push(Raindrop {
                                 x: drop_x,
                                 y: (cloud_y + 1) as f64,
-                                speed: rng.random_range(20.0..35.0),
+                                speed: self.rng.random_range(20.0..35.0),
                             });
                         }
                     }
@@ -301,7 +302,7 @@ impl Animation for Garden {
                 cloud.rain_cooldown -= dt;
                 if cloud.rain_cooldown <= 0.0 {
                     cloud.raining = true;
-                    cloud.rain_timer = rng.random_range(3.0..8.0);
+                    cloud.rain_timer = self.rng.random_range(3.0..8.0);
                     cloud.spawn_timer = 0.0;
                 }
             }

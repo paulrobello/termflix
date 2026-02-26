@@ -11,6 +11,7 @@ pub struct Visualizer {
     beat_timer: f64,
     beat_interval: f64,
     energy: f64,
+    rng: rand::rngs::ThreadRng,
 }
 
 impl Visualizer {
@@ -24,6 +25,7 @@ impl Visualizer {
             beat_timer: 0.0,
             beat_interval: 0.5,
             energy: 0.5,
+            rng: rand::rng(),
         }
     }
 }
@@ -34,7 +36,6 @@ impl Animation for Visualizer {
     }
 
     fn update(&mut self, canvas: &mut Canvas, dt: f64, time: f64) {
-        let mut rng = rand::rng();
         let w = canvas.width;
         let h = canvas.height;
 
@@ -48,9 +49,9 @@ impl Animation for Visualizer {
         // Simulate music beats
         self.beat_timer -= dt;
         if self.beat_timer <= 0.0 {
-            self.beat_interval = rng.random_range(0.3..0.8);
+            self.beat_interval = self.rng.random_range(0.3..0.8);
             self.beat_timer = self.beat_interval;
-            self.energy = rng.random_range(0.3..1.0);
+            self.energy = self.rng.random_range(0.3..1.0);
 
             // Set new targets for each bar (frequency spectrum shape)
             for i in 0..bar_count {
@@ -58,9 +59,9 @@ impl Animation for Visualizer {
                 // Bass-heavy with occasional treble
                 let bass = (1.0 - freq).powi(2) * self.energy;
                 let mid = (-(freq - 0.4).powi(2) * 10.0).exp() * self.energy * 0.7;
-                let treble = freq.powi(3) * rng.random_range(0.0..self.energy * 0.5);
+                let treble = freq.powi(3) * self.rng.random_range(0.0..self.energy * 0.5);
                 self.targets[i] =
-                    (bass + mid + treble + rng.random_range(0.0..0.2)).clamp(0.0, 1.0);
+                    (bass + mid + treble + self.rng.random_range(0.0..0.2)).clamp(0.0, 1.0);
             }
         }
 

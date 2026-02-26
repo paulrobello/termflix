@@ -57,6 +57,7 @@ pub struct Langton {
     steps: usize,
     steps_per_frame: usize,
     total_steps: usize,
+    rng: rand::rngs::ThreadRng,
 }
 
 impl Langton {
@@ -82,15 +83,15 @@ impl Langton {
             steps: 0,
             steps_per_frame: (100.0 * scale) as usize,
             total_steps: 0,
+            rng: rand::rng(),
         }
     }
 
     fn reset(&mut self) {
-        let mut rng = rand::rng();
         self.grid = vec![false; self.width * self.height];
-        self.ant_x = rng.random_range(self.width as i32 / 3..self.width as i32 * 2 / 3);
-        self.ant_y = rng.random_range(self.height as i32 / 3..self.height as i32 * 2 / 3);
-        self.ant_dir = match rng.random_range(0u8..4) {
+        self.ant_x = self.rng.random_range(self.width as i32 / 3..self.width as i32 * 2 / 3);
+        self.ant_y = self.rng.random_range(self.height as i32 / 3..self.height as i32 * 2 / 3);
+        self.ant_dir = match self.rng.random_range(0u8..4) {
             0 => Direction::Up,
             1 => Direction::Right,
             2 => Direction::Down,

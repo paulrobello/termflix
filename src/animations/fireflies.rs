@@ -17,6 +17,7 @@ pub struct Fireflies {
     width: usize,
     height: usize,
     flies: Vec<Firefly>,
+    rng: rand::rngs::ThreadRng,
 }
 
 impl Fireflies {
@@ -39,6 +40,7 @@ impl Fireflies {
             width,
             height,
             flies,
+            rng: rand::rng(),
         }
     }
 }
@@ -49,7 +51,6 @@ impl Animation for Fireflies {
     }
 
     fn update(&mut self, canvas: &mut Canvas, dt: f64, time: f64) {
-        let mut rng = rand::rng();
         self.width = canvas.width;
         self.height = canvas.height;
 
@@ -64,8 +65,8 @@ impl Animation for Fireflies {
 
         for fly in &mut self.flies {
             // Wandering movement
-            fly.vx += rng.random_range(-2.0..2.0) * dt;
-            fly.vy += rng.random_range(-2.0..2.0) * dt;
+            fly.vx += self.rng.random_range(-2.0..2.0) * dt;
+            fly.vy += self.rng.random_range(-2.0..2.0) * dt;
             fly.vx *= 0.98;
             fly.vy *= 0.98;
             fly.x += fly.vx * dt * 5.0;

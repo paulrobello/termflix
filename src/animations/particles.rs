@@ -20,6 +20,7 @@ pub struct Particles {
     height: usize,
     particles: Vec<Particle>,
     spawn_timer: f64,
+    rng: rand::rngs::ThreadRng,
 }
 
 impl Particles {
@@ -29,22 +30,22 @@ impl Particles {
             height,
             particles: Vec::with_capacity((2000.0 * scale) as usize),
             spawn_timer: 0.0,
+            rng: rand::rng(),
         }
     }
 
     fn spawn_firework(&mut self) {
-        let mut rng = rand::rng();
-        let cx = rng.random_range(self.width as f64 * 0.2..self.width as f64 * 0.8);
-        let cy = rng.random_range(self.height as f64 * 0.2..self.height as f64 * 0.6);
-        let count = rng.random_range(30..80);
-        let r: u8 = rng.random_range(100..255);
-        let g: u8 = rng.random_range(100..255);
-        let b: u8 = rng.random_range(100..255);
+        let cx = self.rng.random_range(self.width as f64 * 0.2..self.width as f64 * 0.8);
+        let cy = self.rng.random_range(self.height as f64 * 0.2..self.height as f64 * 0.6);
+        let count = self.rng.random_range(30..80);
+        let r: u8 = self.rng.random_range(100..255);
+        let g: u8 = self.rng.random_range(100..255);
+        let b: u8 = self.rng.random_range(100..255);
 
         for _ in 0..count {
-            let angle = rng.random_range(0.0..std::f64::consts::TAU);
-            let speed = rng.random_range(5.0..40.0);
-            let life = rng.random_range(0.8..2.5);
+            let angle = self.rng.random_range(0.0..std::f64::consts::TAU);
+            let speed = self.rng.random_range(5.0..40.0);
+            let life = self.rng.random_range(0.8..2.5);
             self.particles.push(Particle {
                 x: cx,
                 y: cy,

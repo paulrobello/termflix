@@ -11,6 +11,7 @@ pub struct Smoke {
     system: ParticleSystem,
     noise: Perlin,
     emit_accum: f64,
+    rng: rand::rngs::ThreadRng,
 }
 
 impl Smoke {
@@ -64,6 +65,7 @@ impl Smoke {
             system: ParticleSystem::new(config, (4000.0 * scale) as usize),
             noise: Perlin::new(123),
             emit_accum: 0.0,
+            rng: rand::rng(),
         }
     }
 }
@@ -74,14 +76,13 @@ impl Animation for Smoke {
     }
 
     fn update(&mut self, canvas: &mut Canvas, dt: f64, time: f64) {
-        let mut rng = rand::rng();
         self.width = canvas.width;
         self.height = canvas.height;
 
         let cx = self.width as f64 / 2.0;
         let bottom = self.height as f64 - 1.0;
 
-        self.system.config.x = cx + rng.random_range(-3.0..3.0);
+        self.system.config.x = cx + self.rng.random_range(-3.0..3.0);
         self.system.config.y = bottom;
 
         // Emit smoke

@@ -14,6 +14,7 @@ pub struct Pong {
     left_score: u32,
     right_score: u32,
     serve_timer: f64,
+    rng: rand::rngs::ThreadRng,
 }
 
 impl Pong {
@@ -37,20 +38,20 @@ impl Pong {
             left_score: 0,
             right_score: 0,
             serve_timer: 0.0,
+            rng: rand::rng(),
         }
     }
 
     fn serve(&mut self, w: f64, h: f64) {
-        let mut rng = rand::rng();
         self.ball_x = w * 0.5;
         self.ball_y = h * 0.5;
-        let dir: f64 = if rng.random_range(0u8..2) == 0 {
+        let dir: f64 = if self.rng.random_range(0u8..2) == 0 {
             1.0
         } else {
             -1.0
         };
         self.ball_vx = dir * 30.0;
-        self.ball_vy = rng.random_range(-15.0..15.0);
+        self.ball_vy = self.rng.random_range(-15.0..15.0);
         self.serve_timer = 0.5;
     }
 }

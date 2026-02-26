@@ -17,6 +17,7 @@ pub struct Snow {
     height: usize,
     flakes: Vec<Snowflake>,
     accumulation: Vec<f64>, // height of snow per column
+    rng: rand::rngs::ThreadRng,
 }
 
 impl Snow {
@@ -39,6 +40,7 @@ impl Snow {
             height,
             flakes,
             accumulation: vec![0.0; width],
+            rng: rand::rng(),
         }
     }
 }
@@ -49,7 +51,6 @@ impl Animation for Snow {
     }
 
     fn update(&mut self, canvas: &mut Canvas, dt: f64, time: f64) {
-        let mut rng = rand::rng();
         self.width = canvas.width;
         self.height = canvas.height;
 
@@ -101,9 +102,9 @@ impl Animation for Snow {
                 }
 
                 // Reset flake at top
-                flake.y = rng.random_range(-(self.height as f64 * 0.3)..0.0);
-                flake.x = rng.random_range(0.0..self.width as f64);
-                flake.speed = rng.random_range(5.0..15.0);
+                flake.y = self.rng.random_range(-(self.height as f64 * 0.3)..0.0);
+                flake.x = self.rng.random_range(0.0..self.width as f64);
+                flake.speed = self.rng.random_range(5.0..15.0);
                 continue;
             }
 

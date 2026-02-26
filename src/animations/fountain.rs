@@ -11,6 +11,7 @@ pub struct Fountain {
     splashes: ParticleSystem,
     mist: ParticleSystem,
     emit_accum: f64,
+    rng: rand::rngs::ThreadRng,
 }
 
 impl Fountain {
@@ -121,6 +122,7 @@ impl Fountain {
             splashes: ParticleSystem::new(splash_config, (2000.0 * scale) as usize),
             mist: ParticleSystem::new(mist_config, (500.0 * scale) as usize),
             emit_accum: 0.0,
+            rng: rand::rng(),
         }
     }
 }
@@ -131,7 +133,6 @@ impl Animation for Fountain {
     }
 
     fn update(&mut self, canvas: &mut Canvas, dt: f64, time: f64) {
-        let mut rng = rand::rng();
         self.width = canvas.width;
         self.height = canvas.height;
 
@@ -160,9 +161,9 @@ impl Animation for Fountain {
         }
 
         // Emit mist near the base
-        self.mist.config.x = cx + rng.random_range(-5.0..5.0);
-        self.mist.config.y = bottom - rng.random_range(0.0..10.0);
-        if rng.random_range(0.0..1.0) < 0.3 {
+        self.mist.config.x = cx + self.rng.random_range(-5.0..5.0);
+        self.mist.config.y = bottom - self.rng.random_range(0.0..10.0);
+        if self.rng.random_range(0.0..1.0) < 0.3 {
             self.mist.emit(1);
         }
 

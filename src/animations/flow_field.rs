@@ -19,6 +19,7 @@ pub struct FlowField {
     noise: Perlin,
     trail: Vec<f64>,
     trail_colors: Vec<(u8, u8, u8)>,
+    rng: rand::rngs::ThreadRng,
 }
 
 impl FlowField {
@@ -47,6 +48,7 @@ impl FlowField {
             noise: Perlin::new(rng.random_range(0..u32::MAX)),
             trail: vec![0.0; size],
             trail_colors: vec![(0, 0, 0); size],
+            rng: rand::rng(),
         }
     }
 }
@@ -61,8 +63,6 @@ impl Animation for FlowField {
     }
 
     fn update(&mut self, canvas: &mut Canvas, dt: f64, time: f64) {
-        let mut rng = rand::rng();
-
         // Fade trails
         for v in &mut self.trail {
             *v *= 0.97;
@@ -95,8 +95,8 @@ impl Animation for FlowField {
 
             // Wrap around edges
             if p.x < 0.0 || p.x >= self.width as f64 || p.y < 0.0 || p.y >= self.height as f64 {
-                p.x = rng.random_range(0.0..self.width as f64);
-                p.y = rng.random_range(0.0..self.height as f64);
+                p.x = self.rng.random_range(0.0..self.width as f64);
+                p.y = self.rng.random_range(0.0..self.height as f64);
                 p.prev_x = p.x;
                 p.prev_y = p.y;
             }

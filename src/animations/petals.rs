@@ -21,6 +21,7 @@ pub struct Petals {
     wind: f64,
     wind_target: f64,
     wind_timer: f64,
+    rng: rand::rngs::ThreadRng,
 }
 
 impl Petals {
@@ -46,6 +47,7 @@ impl Petals {
             wind: 2.0,
             wind_target: 2.0,
             wind_timer: 0.0,
+            rng: rand::rng(),
         }
     }
 }
@@ -56,7 +58,6 @@ impl Animation for Petals {
     }
 
     fn update(&mut self, canvas: &mut Canvas, dt: f64, time: f64) {
-        let mut rng = rand::rng();
         self.width = canvas.width;
         self.height = canvas.height;
         let w = self.width as f64;
@@ -65,8 +66,8 @@ impl Animation for Petals {
         // Vary wind
         self.wind_timer -= dt;
         if self.wind_timer <= 0.0 {
-            self.wind_target = rng.random_range(-3.0..5.0);
-            self.wind_timer = rng.random_range(2.0..5.0);
+            self.wind_target = self.rng.random_range(-3.0..5.0);
+            self.wind_timer = self.rng.random_range(2.0..5.0);
         }
         self.wind += (self.wind_target - self.wind) * dt * 0.5;
 
@@ -90,11 +91,11 @@ impl Animation for Petals {
 
             // Reset when off screen
             if petal.y > h + 5.0 || petal.x > w + 10.0 || petal.x < -10.0 {
-                petal.x = rng.random_range(0.0..w);
-                petal.y = rng.random_range(-20.0..-2.0);
-                petal.vy = rng.random_range(3.0..8.0);
-                petal.vx = rng.random_range(-2.0..2.0);
-                petal.spin_speed = rng.random_range(-3.0..3.0);
+                petal.x = self.rng.random_range(0.0..w);
+                petal.y = self.rng.random_range(-20.0..-2.0);
+                petal.vy = self.rng.random_range(3.0..8.0);
+                petal.vx = self.rng.random_range(-2.0..2.0);
+                petal.spin_speed = self.rng.random_range(-3.0..3.0);
             }
 
             // Draw petal as a small cluster based on spin angle

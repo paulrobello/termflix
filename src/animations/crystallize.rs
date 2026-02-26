@@ -11,6 +11,7 @@ pub struct Crystallize {
     growth_timer: f64,
     steps_per_frame: usize,
     color_cycle: f64,
+    rng: rand::rngs::ThreadRng,
 }
 
 impl Crystallize {
@@ -43,6 +44,7 @@ impl Crystallize {
             growth_timer: 0.0,
             steps_per_frame: (50.0 * scale) as usize,
             color_cycle: 0.0,
+            rng: rand::rng(),
         }
     }
 }
@@ -92,7 +94,6 @@ impl Animation for Crystallize {
     }
 
     fn update(&mut self, canvas: &mut Canvas, dt: f64, time: f64) {
-        let mut rng = rand::rng();
         self.width = canvas.width;
         self.height = canvas.height;
         let w = self.width;
@@ -127,15 +128,15 @@ impl Animation for Crystallize {
         // Random walk steps
         for _ in 0..self.steps_per_frame {
             for walker in &mut self.walkers {
-                walker.0 += rng.random_range(-1.5..1.5);
-                walker.1 += rng.random_range(-1.5..1.5);
+                walker.0 += self.rng.random_range(-1.5..1.5);
+                walker.1 += self.rng.random_range(-1.5..1.5);
 
                 let ix = walker.0 as usize;
                 let iy = walker.1 as usize;
 
                 if ix >= w || iy >= h {
                     // Respawn from edge
-                    let angle = rng.random_range(0.0..std::f64::consts::TAU);
+                    let angle = self.rng.random_range(0.0..std::f64::consts::TAU);
                     let dist = (w.min(h) as f64 * 0.4).max(10.0);
                     walker.0 = w as f64 * 0.5 + angle.cos() * dist;
                     walker.1 = h as f64 * 0.5 + angle.sin() * dist;
@@ -176,7 +177,7 @@ impl Animation for Crystallize {
                     self.grid[iy * w + ix] = color_val.max(1);
 
                     // Respawn walker
-                    let angle = rng.random_range(0.0..std::f64::consts::TAU);
+                    let angle = self.rng.random_range(0.0..std::f64::consts::TAU);
                     let dist = (w.min(h) as f64 * 0.4).max(10.0);
                     walker.0 = w as f64 * 0.5 + angle.cos() * dist;
                     walker.1 = h as f64 * 0.5 + angle.sin() * dist;

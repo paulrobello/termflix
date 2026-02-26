@@ -18,6 +18,7 @@ pub struct Waterfall {
     mist: ParticleSystem,
     fall_x: f64,
     fall_width: f64,
+    rng: rand::rngs::ThreadRng,
 }
 
 impl Waterfall {
@@ -77,6 +78,7 @@ impl Waterfall {
             mist: ParticleSystem::new(mist_config, (1500.0 * scale) as usize),
             fall_x,
             fall_width,
+            rng: rand::rng(),
         }
     }
 }
@@ -87,7 +89,6 @@ impl Animation for Waterfall {
     }
 
     fn update(&mut self, canvas: &mut Canvas, dt: f64, time: f64) {
-        let mut rng = rand::rng();
         self.width = canvas.width;
         self.height = canvas.height;
         let h = self.height as f64;
@@ -122,11 +123,11 @@ impl Animation for Waterfall {
 
             if drop.y >= pool_y {
                 // Splash at bottom
-                drop.y = rng.random_range(-5.0..0.0);
+                drop.y = self.rng.random_range(-5.0..0.0);
                 drop.x =
-                    self.fall_x + rng.random_range(-self.fall_width * 0.5..self.fall_width * 0.5);
-                drop.vy = rng.random_range(15.0..35.0);
-                drop.brightness = rng.random_range(0.4..1.0);
+                    self.fall_x + self.rng.random_range(-self.fall_width * 0.5..self.fall_width * 0.5);
+                drop.vy = self.rng.random_range(15.0..35.0);
+                drop.brightness = self.rng.random_range(0.4..1.0);
             }
 
             let px = drop.x as usize;
@@ -173,10 +174,10 @@ impl Animation for Waterfall {
 
         // Emit mist at base
         self.mist.config.x =
-            self.fall_x + rng.random_range(-self.fall_width * 0.5..self.fall_width * 0.5);
+            self.fall_x + self.rng.random_range(-self.fall_width * 0.5..self.fall_width * 0.5);
         self.mist.config.y = pool_y;
         self.mist.config.wind = (time * 0.3).sin() * 5.0;
-        self.mist.emit(rng.random_range(4..10));
+        self.mist.emit(self.rng.random_range(4..10));
         self.mist.update(dt);
         self.mist.draw(canvas);
     }

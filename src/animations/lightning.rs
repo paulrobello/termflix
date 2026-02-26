@@ -15,6 +15,7 @@ pub struct Lightning {
     bolts: Vec<Bolt>,
     spawn_timer: f64,
     flash: f64,
+    rng: rand::rngs::ThreadRng,
 }
 
 impl Lightning {
@@ -25,37 +26,43 @@ impl Lightning {
             bolts: Vec::new(),
             spawn_timer: 0.0,
             flash: 0.0,
+            rng: rand::rng(),
         }
     }
 
-    fn generate_bolt(&self) -> Bolt {
-        let mut rng = rand::rng();
-        let start_x = rng.random_range(self.width as f64 * 0.1..self.width as f64 * 0.9);
+    fn generate_bolt(&mut self) -> Bolt {
+        let w = self.width;
+        let h = self.height;
+        let start_x = self.rng.random_range(w as f64 * 0.1..w as f64 * 0.9);
         let mut segments = Vec::new();
 
-        self.branch(
+        Self::branch_static(
             &mut segments,
             start_x,
             0.0,
-            self.height as f64 * 0.8,
+            h as f64 * 0.8,
             0,
-            &mut rng,
+            w,
+            h,
+            &mut self.rng,
         );
 
         Bolt {
             segments,
             brightness: 1.0,
-            life: rng.random_range(0.15..0.4),
+            life: self.rng.random_range(0.15..0.4),
         }
     }
 
-    fn branch(
-        &self,
+    #[allow(clippy::too_many_arguments)]
+    fn branch_static(
         segments: &mut Vec<(f64, f64, f64, f64)>,
         x: f64,
         y: f64,
         target_y: f64,
         depth: u32,
+        _width: usize,
+        height: usize,
         rng: &mut rand::rngs::ThreadRng,
     ) {
         if depth > 5 || y > target_y {
@@ -64,7 +71,7 @@ impl Lightning {
 
         let mut cx = x;
         let mut cy = y;
-        let step = self.height as f64 * 0.05;
+        let step = height as f64 * 0.05;
 
         while cy < target_y {
             let nx = cx + rng.random_range(-step * 1.5..step * 1.5);
@@ -75,12 +82,14 @@ impl Lightning {
             if depth < 3 && rng.random_range(0.0..1.0) < 0.15 {
                 let branch_target = ny + rng.random_range(step * 2.0..step * 5.0);
                 let branch_x = nx + rng.random_range(-step * 3.0..step * 3.0);
-                self.branch(
+                Self::branch_static(
                     segments,
                     nx,
                     ny,
                     branch_target.min(target_y),
                     depth + 1,
+                    _width,
+                    height,
                     rng,
                 );
                 // Continue the main bolt slightly offset
@@ -103,17 +112,17 @@ impl Animation for Lightning {
     }
 
     fn update(&mut self, canvas: &mut Canvas, dt: f64, _time: f64) {
-        let mut rng = rand::rng();
         self.width = canvas.width;
         self.height = canvas.height;
 
         // Spawn new bolts
         self.spawn_timer -= dt;
         if self.spawn_timer <= 0.0 {
-            self.bolts.push(self.generate_bolt());
+            let bolt = self.generate_bolt();
+            self.bolts.push(bolt);
             self.flash = 0.3;
             // Random interval between bolts
-            self.spawn_timer = rng.random_range(0.5..3.0);
+            self.spawn_timer = self.rng.random_range(0.5..3.0);
         }
 
         // Fade flash

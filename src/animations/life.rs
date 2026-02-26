@@ -16,6 +16,7 @@ pub struct GameOfLife {
     // Track previous state hash for oscillator detection
     prev_hash: u64,
     hash_stable_count: u32,
+    rng: rand::rngs::ThreadRng,
 }
 
 impl GameOfLife {
@@ -38,6 +39,7 @@ impl GameOfLife {
             stable_count: 0,
             prev_hash: 0,
             hash_stable_count: 0,
+            rng: rand::rng(),
         }
     }
 
@@ -78,10 +80,9 @@ impl GameOfLife {
         }
         // Inject chaos periodically to keep things interesting
         else if self.generation.is_multiple_of(300) {
-            let mut rng = rand::rng();
             // Spawn a random pattern (glider gun, r-pentomino, etc)
-            let cx = rng.random_range(10..self.width.saturating_sub(10).max(11));
-            let cy = rng.random_range(10..self.height.saturating_sub(10).max(11));
+            let cx = self.rng.random_range(10..self.width.saturating_sub(10).max(11));
+            let cy = self.rng.random_range(10..self.height.saturating_sub(10).max(11));
             // R-pentomino — classic long-lived pattern
             let pattern = [(0, 0), (1, 0), (-1, 1), (0, 1), (0, 2)];
             for (dx, dy) in pattern {

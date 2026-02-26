@@ -14,6 +14,7 @@ pub struct Matrix {
     width: usize,
     height: usize,
     drops: Vec<Drop>,
+    rng: rand::rngs::ThreadRng,
 }
 
 impl Matrix {
@@ -32,6 +33,7 @@ impl Matrix {
             width,
             height,
             drops,
+            rng: rand::rng(),
         }
     }
 }
@@ -46,7 +48,6 @@ impl Animation for Matrix {
     }
 
     fn update(&mut self, canvas: &mut Canvas, dt: f64, _time: f64) {
-        let mut rng = rand::rng();
         canvas.clear();
 
         for drop in &mut self.drops {
@@ -55,9 +56,9 @@ impl Animation for Matrix {
             // Reset drop when it falls off screen
             if drop.y as usize > self.height + drop.length {
                 drop.y = -(drop.length as f64);
-                drop.x = rng.random_range(0..self.width);
-                drop.speed = rng.random_range(4.0..20.0);
-                drop.length = rng.random_range(5..self.height / 2);
+                drop.x = self.rng.random_range(0..self.width);
+                drop.speed = self.rng.random_range(4.0..20.0);
+                drop.length = self.rng.random_range(5..self.height / 2);
             }
 
             let head = drop.y as isize;
