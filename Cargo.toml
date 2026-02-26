@@ -1,8 +1,8 @@
 [package]
 name = "termflix"
-version = "0.4.1"
+version = "0.4.2"
 edition = "2024"
-description = "Terminal animation player with 43 procedurally generated animations, multiple render modes, and true color support"
+description = "Terminal animation player with 44 procedurally generated animations, multiple render modes, and true color support"
 license = "MIT"
 repository = "https://github.com/paulrobello/termflix"
 homepage = "https://github.com/paulrobello/termflix"

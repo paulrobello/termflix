@@ -4,8 +4,33 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.4.2] - 2026-02-26
+
 ### Added
-- **Garden animation** — ASCII garden scene with six plant varieties (rose, daisy, tulip, tree, sunflower, fantasy) that only grow when raindrops hit them. Features a stationary starburst sun in the top-right corner, drifting clouds that randomly trigger rain bursts, raindrop splash effects, and per-plant randomised height. Rose stems interleave plain `|` and leafed `|~` rows for natural variety.
+- **Garden animation** (`garden`) — 44th animation. ASCII garden scene with six plant varieties (rose, daisy, tulip, tree, sunflower, fantasy) that only grow when raindrops hit them. Features a stationary starburst sun in the top-right corner, drifting clouds that randomly trigger rain bursts, raindrop splash effects, and per-plant randomised height. Rose stems interleave plain `|` and leafed `|~` rows for natural variety. Garden resets 60 seconds after all plants reach full bloom; ~25% of spots are randomly left bare each cycle for a natural, uneven look.
+- **External visual control** — Control the running animation over stdin (when stdin is not a TTY) or a watched file (`--data-file PATH`) using newline-delimited JSON. Supported fields: `animation`, `speed`, `intensity`, `color_shift`. `fire` and `plasma` respond to `intensity` and `color_shift` respectively.
+- **`supported_params()` on Animation trait** — Each animation can advertise which external parameters it handles, enabling future `--list-params <animation>` introspection.
+- **`on_resize` trait hook** — Animations implement `on_resize(width, height)` instead of detecting dimension changes inside `update()`. Eliminates a per-frame check from all 43 prior animations.
+- **Inline test suites** — Unit tests for config round-trip, `ExternalParams` JSON parsing, base64 encode/decode, animation factory, and canvas bounds/color operations.
+
+### Performance
+- **Boids O(N) neighbour search** — Replaced the O(N²) all-pairs loop with a spatial hash grid (cell size = perception radius). Neighbour lookup now checks only the 9 adjacent cells, cutting comparisons from ~90 000 to ~300 per frame at default scale.
+- **RNG moved to struct fields** — Eliminated per-frame `rand::rng()` calls across all animations that used randomness in `update()`.
+- **Raindrop colors precomputed** — `rain`, `particles`, and `fountain` now compute particle RGB at spawn time instead of every frame.
+
+### Fixed
+- **File watcher panics** — `--data-file` with a missing path or exhausted inotify limit no longer panics inside raw mode; errors are logged to stderr and the watcher is silently skipped.
+- **`animations::create()` panic** — Factory function now returns `Option<Box<dyn Animation>>` instead of `panic!`-ing on unknown names. Callers handle `None` cleanly.
+- **Garden right-side gap** — Integer-division accumulation in column placement left the rightmost ~10% of the screen unplanted. Switched to floating-point even distribution.
+- **Tree `|` above `Y`** — Separate `Y` and `\|/` rows in the tree shape produced a trunk character above the fork during partial growth. Merged into a single `\Y/` row; canopy widened to 5 / 7 `W` characters.
+- **Redundant bounds checks** removed from animations that double-guarded coordinates already bounds-checked by `Canvas::set_*`.
+- **Render threshold magic numbers** documented as named constants; Braille `unwrap_or` replaced with `unwrap()` plus invariant comment.
+- **`serde_json`** pinned to `"1.0"` (was loose `"1"`).
+- **`notify` crate** gains `mio` feature for correct Linux inotify support (was kqueue-only, fell back to polling on Linux).
+
+### Docs
+- `ARCHITECTURE.md` — full system design reference covering the animation trait, canvas/render pipeline, external control protocol, and frame pacing.
+- `EXTERNAL_ANIMATION.md` — user guide for the stdin/file JSON control protocol.
 
 ## [0.4.1] - 2026-02-25
 

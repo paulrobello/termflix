@@ -70,7 +70,7 @@ A terminal animation player with 44 procedurally generated animations, multiple 
 | `snake` | Self-playing Snake game AI | Half-block |
 | `invaders` | Space Invaders attract mode demo | Half-block |
 | `pong` | Self-playing Pong with AI paddles | Half-block |
-| `garden` | Garden scene with plants that grow when it rains | ASCII |
+| `garden` | Garden scene with six plant varieties that grow when it rains; resets after full bloom | ASCII |
 
 ## Installation
 
