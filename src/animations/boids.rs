@@ -2,6 +2,57 @@ use super::Animation;
 use crate::render::Canvas;
 use rand::RngExt;
 
+/// 2D spatial hash grid for O(1) average-case neighbor lookup.
+/// Cell size equals visual_range so only adjacent cells need checking.
+struct SpatialGrid {
+    cells: Vec<Vec<usize>>,
+    cols: usize,
+    rows: usize,
+    cell_size: f64,
+}
+
+impl SpatialGrid {
+    fn new(width: f64, height: f64, cell_size: f64) -> Self {
+        let cols = ((width / cell_size).ceil() as usize).max(1);
+        let rows = ((height / cell_size).ceil() as usize).max(1);
+        SpatialGrid {
+            cells: vec![Vec::new(); cols * rows],
+            cols,
+            rows,
+            cell_size,
+        }
+    }
+
+    fn clear(&mut self) {
+        for cell in &mut self.cells {
+            cell.clear();
+        }
+    }
+
+    fn insert(&mut self, idx: usize, x: f64, y: f64) {
+        let col = ((x / self.cell_size) as usize).min(self.cols.saturating_sub(1));
+        let row = ((y / self.cell_size) as usize).min(self.rows.saturating_sub(1));
+        self.cells[row * self.cols + col].push(idx);
+    }
+
+    /// Iterate over boid indices in the 3x3 cell neighborhood around (x, y).
+    fn neighbors(&self, x: f64, y: f64) -> impl Iterator<Item = usize> + '_ {
+        let col = (x / self.cell_size) as i32;
+        let row = (y / self.cell_size) as i32;
+        let cols = self.cols as i32;
+        let rows = self.rows as i32;
+        (row - 1..=row + 1).flat_map(move |r| {
+            (col - 1..=col + 1).flat_map(move |c| {
+                if c >= 0 && c < cols && r >= 0 && r < rows {
+                    self.cells[(r as usize) * self.cols + (c as usize)].iter().copied()
+                } else {
+                    [].iter().copied()
+                }
+            })
+        })
+    }
+}
+
 struct Boid {
     x: f64,
     y: f64,
@@ -15,6 +66,7 @@ pub struct Boids {
     width: usize,
     height: usize,
     boids: Vec<Boid>,
+    grid: SpatialGrid,
 }
 
 impl Boids {
@@ -39,6 +91,7 @@ impl Boids {
             width,
             height,
             boids,
+            grid: SpatialGrid::new(width as f64, height as f64, 25.0),
         }
     }
 }
@@ -51,6 +104,7 @@ impl Animation for Boids {
     fn on_resize(&mut self, width: usize, height: usize) {
         self.width = width;
         self.height = height;
+        self.grid = SpatialGrid::new(width as f64, height as f64, 25.0);
     }
 
     fn update(&mut self, canvas: &mut Canvas, dt: f64, _time: f64) {
@@ -59,23 +113,30 @@ impl Animation for Boids {
         let max_speed = 35.0;
         let min_speed = 10.0;
 
-        // Collect positions for rule calculations
-        let positions: Vec<(f64, f64, f64, f64)> =
+        // Build spatial grid for O(N) average-case neighbor lookup
+        self.grid.clear();
+        for (i, boid) in self.boids.iter().enumerate() {
+            self.grid.insert(i, boid.x, boid.y);
+        }
+
+        // Take a snapshot for reading while mutating boids
+        let snapshot: Vec<(f64, f64, f64, f64)> =
             self.boids.iter().map(|b| (b.x, b.y, b.vx, b.vy)).collect();
 
         for (i, boid) in self.boids.iter_mut().enumerate() {
-            let mut sep_x = 0.0;
-            let mut sep_y = 0.0;
-            let mut align_x = 0.0;
-            let mut align_y = 0.0;
-            let mut cohes_x = 0.0;
-            let mut cohes_y = 0.0;
-            let mut neighbors = 0;
+            let mut sep_x = 0.0f64;
+            let mut sep_y = 0.0f64;
+            let mut align_x = 0.0f64;
+            let mut align_y = 0.0f64;
+            let mut cohes_x = 0.0f64;
+            let mut cohes_y = 0.0f64;
+            let mut neighbors = 0usize;
 
-            for (j, &(ox, oy, ovx, ovy)) in positions.iter().enumerate() {
+            for j in self.grid.neighbors(boid.x, boid.y) {
                 if i == j {
                     continue;
                 }
+                let (ox, oy, ovx, ovy) = snapshot[j];
                 let dx = ox - boid.x;
                 let dy = oy - boid.y;
                 let dist = (dx * dx + dy * dy).sqrt();
