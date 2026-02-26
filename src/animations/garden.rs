@@ -37,9 +37,23 @@ const V2: &[PRow] = &[
 const V3: &[PRow] = &[
     &[(-1, '~', false), (0, '~', false)],
     &[(0, '|', false)],
-    &[(0, 'Y', false)],
-    &[(-1, '\\', false), (0, '|', false), (1, '/', false)],
-    &[(-1, 'W', true), (0, 'W', true), (1, 'W', true)],
+    &[(-1, '\\', false), (0, 'Y', false), (1, '/', false)],
+    &[
+        (-2, 'W', true),
+        (-1, 'W', true),
+        (0, 'W', true),
+        (1, 'W', true),
+        (2, 'W', true),
+    ],
+    &[
+        (-3, 'W', true),
+        (-2, 'W', true),
+        (-1, 'W', true),
+        (0, 'W', true),
+        (1, 'W', true),
+        (2, 'W', true),
+        (3, 'W', true),
+    ],
 ];
 
 // Variety 4: Sunflower — yellow bloom
@@ -120,46 +134,50 @@ pub struct Garden {
     splashes: Vec<Splash>,
     width: usize,
     height: usize,
+    scale: f64,
+    bloom_timer: Option<f64>, // Some(t) = seconds since all plants fully bloomed
     rng: rand::rngs::ThreadRng,
+}
+
+fn gen_plants(rng: &mut rand::rngs::ThreadRng, width: usize, scale: f64) -> Vec<Plant> {
+    let num_plants = ((width as f64 / 8.0) * scale).clamp(3.0, 20.0) as usize;
+    let slots = (num_plants + 1) as f64;
+    (0..num_plants)
+        .filter_map(|i| {
+            // ~25% chance a spot stays bare
+            if rng.random_bool(0.25) {
+                return None;
+            }
+            let variety = rng.random_range(0..VARIETIES.len());
+            let shape: Vec<PRow> = if variety == 0 {
+                let stem_rows = rng.random_range(2..=6_usize);
+                let mut s: Vec<PRow> = Vec::new();
+                for j in 0..stem_rows {
+                    let leafed = (j % 2 == 1) ^ rng.random_bool(0.3);
+                    s.push(if leafed { ROSE_STEM_LEAF } else { ROSE_STEM });
+                }
+                s.push(ROSE_BRANCH);
+                s.push(ROSE_BLOOM);
+                s
+            } else {
+                VARIETIES[variety].to_vec()
+            };
+            let col = ((width as f64 * (i as f64 + 1.0)) / slots) as usize;
+            Some(Plant {
+                col,
+                variety,
+                stage: 0,
+                shape,
+            })
+        })
+        .collect()
 }
 
 impl Garden {
     pub fn new(width: usize, height: usize, scale: f64) -> Self {
         let mut rng = rand::rng();
 
-        let num_plants = ((width as f64 / 8.0) * scale).clamp(3.0, 20.0) as usize;
-        let spacing = (width / (num_plants + 1)).max(1);
-        let plants: Vec<Plant> = (0..num_plants)
-            .map(|i| {
-                let variety = rng.random_range(0..VARIETIES.len());
-                let shape: Vec<PRow> = if variety == 0 {
-                    // Rose: plain stems × 1-3, leafed stems × 1-3, branch, bloom
-                    // Interleave plain | and leafed |~ rows (2–6 total)
-                    // so they're never all bunched together
-                    let stem_rows = rng.random_range(2..=6_usize);
-                    let mut s: Vec<PRow> = Vec::new();
-                    for i in 0..stem_rows {
-                        // Alternate base pattern (even=plain, odd=leafed)
-                        // with a 30% chance of flipping for natural variation
-                        let leafed = (i % 2 == 1) ^ rng.random_bool(0.3);
-                        s.push(if leafed { ROSE_STEM_LEAF } else { ROSE_STEM });
-                    }
-                    s.push(ROSE_BRANCH);
-                    s.push(ROSE_BLOOM);
-                    s
-                } else {
-                    // Other varieties: always use the full shape so Y/branch
-                    // characters never appear at the bottom during early growth
-                    VARIETIES[variety].to_vec()
-                };
-                Plant {
-                    col: spacing * (i + 1),
-                    variety,
-                    stage: 0,
-                    shape,
-                }
-            })
-            .collect();
+        let plants = gen_plants(&mut rng, width, scale);
 
         let num_clouds = ((width as f64 / 40.0) * scale).clamp(1.0, 4.0) as usize;
         let clouds: Vec<Cloud> = (0..num_clouds)
@@ -180,6 +198,8 @@ impl Garden {
             splashes: Vec::new(),
             width,
             height,
+            scale,
+            bloom_timer: None,
             rng: rand::rng(),
         }
     }
@@ -206,6 +226,22 @@ impl Animation for Garden {
 
         let ground_y = self.height - 1;
         let cloud_y: usize = 3;
+
+        // Bloom-timer: start counting once every plant is fully grown, reset after 60 s
+        let all_bloomed =
+            !self.plants.is_empty() && self.plants.iter().all(|p| p.stage >= p.shape.len());
+        if all_bloomed && self.bloom_timer.is_none() {
+            self.bloom_timer = Some(0.0);
+        }
+        if let Some(ref mut t) = self.bloom_timer {
+            *t += dt;
+            if *t >= 60.0 {
+                self.plants = gen_plants(&mut self.rng, self.width, self.scale);
+                self.drops.clear();
+                self.splashes.clear();
+                self.bloom_timer = None;
+            }
+        }
 
         canvas.clear();
 
