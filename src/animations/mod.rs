@@ -12,6 +12,7 @@ pub mod fire;
 pub mod fireflies;
 pub mod flow_field;
 pub mod fountain;
+pub mod garden;
 pub mod globe;
 pub mod hackerman;
 pub mod invaders;
@@ -80,6 +81,7 @@ pub const ANIMATIONS: &[(&str, &str)] = &[
     ("smoke", "Smoke rising with Perlin turbulence"),
     ("ripple", "Ripple interference from random drop points"),
     ("snow", "Snowfall with accumulation on the ground"),
+    ("garden", "Growing garden with rain, clouds, and blooming plants"),
     ("fireflies", "Fireflies blinking with warm glow"),
     ("dna", "Rotating DNA double helix with base pairs"),
     ("pulse", "Expanding pulse rings from center"),
@@ -127,6 +129,7 @@ pub const ANIMATION_NAMES: &[&str] = &[
     "smoke",
     "ripple",
     "snow",
+    "garden",
     "fireflies",
     "dna",
     "pulse",
@@ -175,6 +178,7 @@ pub fn create(name: &str, width: usize, height: usize, scale: f64) -> Box<dyn An
         "smoke" => Box::new(smoke::Smoke::new(width, height, scale)),
         "ripple" => Box::new(ripple::Ripple::new(width, height)),
         "snow" => Box::new(snow::Snow::new(width, height, scale)),
+        "garden" => Box::new(garden::Garden::new(width, height, scale)),
         "fireflies" => Box::new(fireflies::Fireflies::new(width, height, scale)),
         "dna" => Box::new(dna::Dna::new()),
         "pulse" => Box::new(pulse::Pulse::new(width, height)),
