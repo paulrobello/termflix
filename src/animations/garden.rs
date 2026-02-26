@@ -86,8 +86,8 @@ static ROSE_BLOOM: &[(i32, char, bool)] = &[(-1, '(', true), (0, '@', true), (1,
 struct Plant {
     col: usize,
     variety: usize,
-    stage: usize,              // 0 = seed; shape.len() = full bloom
-    shape: Vec<PRow>,          // rows bottom→top, generated at spawn
+    stage: usize,     // 0 = seed; shape.len() = full bloom
+    shape: Vec<PRow>, // rows bottom→top, generated at spawn
 }
 
 struct Raindrop {
@@ -150,7 +150,12 @@ impl Garden {
                     // characters never appear at the bottom during early growth
                     VARIETIES[variety].to_vec()
                 };
-                Plant { col: spacing * (i + 1), variety, stage: 0, shape }
+                Plant {
+                    col: spacing * (i + 1),
+                    variety,
+                    stage: 0,
+                    shape,
+                }
             })
             .collect();
 
@@ -209,7 +214,14 @@ impl Animation for Garden {
 
         // Ground row
         for x in 0..self.width {
-            canvas.set_char(x, ground_y, '=', GROUND_COLOR.0, GROUND_COLOR.1, GROUND_COLOR.2);
+            canvas.set_char(
+                x,
+                ground_y,
+                '=',
+                GROUND_COLOR.0,
+                GROUND_COLOR.1,
+                GROUND_COLOR.2,
+            );
         }
 
         // Static large starburst sun anchored at top-right corner.
@@ -219,22 +231,35 @@ impl Animation for Garden {
         let sun_cy = 1_i32;
         for &(dx, dy, ch) in &[
             // Body + left horizontal arm
-            (-5, 0, '*'), (-4, 0, '-'), (-3, 0, '-'), (-2, 0, '-'), (-1, 0, '('), (0, 0, '@'),
+            (-5, 0, '*'),
+            (-4, 0, '-'),
+            (-3, 0, '-'),
+            (-2, 0, '-'),
+            (-1, 0, '('),
+            (0, 0, '@'),
             // Top vertical (single step — rows above 0 clip)
             (0, -1, '|'),
             // NW diagonal (one step visible at row 0)
             (-1, -1, '\\'),
             // Bottom vertical arm
-            (0, 1, '|'), (0, 2, '|'), (0, 3, '*'),
+            (0, 1, '|'),
+            (0, 2, '|'),
+            (0, 3, '*'),
             // SW diagonal arm
-            (-1, 1, '/'), (-2, 2, '/'), (-3, 3, '/'),
+            (-1, 1, '/'),
+            (-2, 2, '/'),
+            (-3, 3, '/'),
         ] {
             let px = sun_cx + dx;
             let py = sun_cy + dy;
-            if px >= 0 && (px as usize) < canvas.width && py >= 0 && (py as usize) < canvas.height
-            {
+            if px >= 0 && (px as usize) < canvas.width && py >= 0 && (py as usize) < canvas.height {
                 canvas.set_char(
-                    px as usize, py as usize, ch, SUN_COLOR.0, SUN_COLOR.1, SUN_COLOR.2,
+                    px as usize,
+                    py as usize,
+                    ch,
+                    SUN_COLOR.0,
+                    SUN_COLOR.1,
+                    SUN_COLOR.2,
                 );
             }
         }
