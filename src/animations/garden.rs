@@ -2,7 +2,8 @@ use super::Animation;
 use crate::render::{Canvas, RenderMode};
 use rand::RngExt;
 
-// Each cell: (x_offset_from_plant_center, character, use_flower_color)
+/// A slice of (column_offset, character, is_colored) tuples describing one row of a plant shape.
+/// The `'static` lifetime means these are compile-time constant arrays embedded in the binary.
 type PRow = &'static [(i32, char, bool)];
 
 // Variety 0: Rose — orange bloom

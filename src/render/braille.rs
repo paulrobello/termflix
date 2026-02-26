@@ -17,7 +17,10 @@ const DOT_MAP: [(usize, usize, u32); 8] = [
     (1, 3, 0x80),
 ];
 
-const THRESHOLD: f64 = 0.3;
+/// Minimum pixel brightness [0.0..=1.0] to render a braille dot.
+/// Pixels at or below this value are treated as dark/empty.
+/// Calibrated so mid-intensity animations fill ~50% of dots.
+const BRIGHTNESS_THRESHOLD: f64 = 0.3;
 
 pub fn render(canvas: &Canvas) -> String {
     let term_cols = canvas.width / 2;
@@ -43,7 +46,7 @@ pub fn render(canvas: &Canvas) -> String {
                 let y = py + dy;
                 if x < canvas.width && y < canvas.height {
                     let idx = y * canvas.width + x;
-                    if canvas.pixels[idx] > THRESHOLD {
+                    if canvas.pixels[idx] > BRIGHTNESS_THRESHOLD {
                         bits |= bit;
                         let (r, g, b) = canvas.colors[idx];
                         total_r += r as u32;
@@ -54,7 +57,12 @@ pub fn render(canvas: &Canvas) -> String {
                 }
             }
 
-            let ch = char::from_u32(BRAILLE_OFFSET + bits).unwrap_or(' ');
+            // bits is a mask of 8 flags so its range is 0x00..=0xFF.
+            // BRAILLE_OFFSET (0x2800) + any value in 0x00..=0xFF is always a valid
+            // Unicode scalar in the Braille Patterns block (U+2800–U+28FF).
+            debug_assert!(bits <= 0xFF);
+            let ch = char::from_u32(BRAILLE_OFFSET + bits)
+                .expect("braille bits 0x00..=0xFF always produce valid Unicode");
 
             if use_color && lit_count > 0 {
                 let r = (total_r / lit_count) as u8;

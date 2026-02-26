@@ -25,6 +25,10 @@ fn color_to_bg(color: Color) -> String {
     }
 }
 
+/// Pixel brightness below which a half-block cell is treated as background (dark/empty).
+/// Intentionally much lower than the braille threshold (0.3): half-block renders the full
+/// brightness value via color scaling, so near-black pixels are visually correct as dark
+/// background rather than being clipped. A low threshold preserves this detail.
 const DARK_THRESHOLD: f64 = 0.02;
 
 pub fn render(canvas: &Canvas) -> String {
