@@ -26,7 +26,7 @@ const V1: &[PRow] = &[
 // Variety 2: Tulip — magenta bloom
 const V2: &[PRow] = &[
     &[(0, ',', false)],
-    &[(-1, 'b', false), (0, '|', false)],
+    &[(0, 'b', false)],
     &[(0, '|', false)],
     &[(-1, '(', true), (1, ')', true)],
     &[(-1, '{', true), (0, 'a', true), (1, '}', true)],
