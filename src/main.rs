@@ -9,7 +9,7 @@ use animations::Animation;
 use clap::Parser;
 use crossterm::{
     cursor,
-    event::{self, Event, KeyCode, KeyEvent, KeyEventKind, EnableFocusChange, DisableFocusChange},
+    event::{self, DisableFocusChange, EnableFocusChange, Event, KeyCode, KeyEvent, KeyEventKind},
     execute, terminal,
 };
 use external::{CurrentState, ExternalParams, ParamsSource, spawn_reader};
@@ -146,7 +146,10 @@ fn main() -> io::Result<()> {
 
     // Validate animation name before entering raw mode so errors print cleanly
     if !animations::ANIMATION_NAMES.contains(&anim_name.as_str()) {
-        eprintln!("Unknown animation: '{}'\n\nAvailable animations:", anim_name);
+        eprintln!(
+            "Unknown animation: '{}'\n\nAvailable animations:",
+            anim_name
+        );
         for &(name, desc) in animations::ANIMATIONS {
             eprintln!("  {:<12} {}", name, desc);
         }
@@ -493,24 +496,24 @@ fn run_loop(
         }
 
         // Handle animation switch from external params
-        if let Some(name) = ext_state.take_animation_change() {
-            if animations::ANIMATION_NAMES.contains(&name.as_str()) {
-                anim_index = animations::ANIMATION_NAMES
-                    .iter()
-                    .position(|&n| n == name.as_str())
-                    .unwrap_or(anim_index);
-                anim = animations::create(
-                    animations::ANIMATION_NAMES[anim_index],
-                    canvas.width,
-                    canvas.height,
-                    scale,
-                );
-                if explicit_render.is_none() {
-                    render_mode = anim.preferred_render();
-                    needs_rebuild = true;
-                }
-                cycle_start = Instant::now();
+        if let Some(name) = ext_state.take_animation_change()
+            && animations::ANIMATION_NAMES.contains(&name.as_str())
+        {
+            anim_index = animations::ANIMATION_NAMES
+                .iter()
+                .position(|&n| n == name.as_str())
+                .unwrap_or(anim_index);
+            anim = animations::create(
+                animations::ANIMATION_NAMES[anim_index],
+                canvas.width,
+                canvas.height,
+                scale,
+            );
+            if explicit_render.is_none() {
+                render_mode = anim.preferred_render();
+                needs_rebuild = true;
             }
+            cycle_start = Instant::now();
             // Unknown animation names are silently ignored
         }
 
@@ -526,19 +529,19 @@ fn run_loop(
         }
 
         // Handle render mode change from external params
-        if let Some(render_name) = ext_state.take_render_change() {
-            if let Some(new_mode) = parse_render_mode(&render_name) {
-                render_mode = new_mode;
-                needs_rebuild = true;
-            }
+        if let Some(render_name) = ext_state.take_render_change()
+            && let Some(new_mode) = parse_render_mode(&render_name)
+        {
+            render_mode = new_mode;
+            needs_rebuild = true;
         }
 
         // Handle color mode change from external params
-        if let Some(color_name) = ext_state.take_color_change() {
-            if let Some(new_mode) = parse_color_mode(&color_name) {
-                color_mode = new_mode;
-                needs_rebuild = true;
-            }
+        if let Some(color_name) = ext_state.take_color_change()
+            && let Some(new_mode) = parse_color_mode(&color_name)
+        {
+            color_mode = new_mode;
+            needs_rebuild = true;
         }
 
         // If a rebuild was triggered by external params, skip this frame

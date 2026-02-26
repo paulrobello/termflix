@@ -62,20 +62,20 @@ const V5: &[PRow] = &[
 const VARIETIES: &[&[PRow]] = &[V0, V1, V2, V3, V4, V5];
 
 const FLOWER_COLORS: [(u8, u8, u8); 6] = [
-    (255, 100,  30),   // orange  — rose
-    (100, 180, 255),   // blue    — daisy
-    (220,  80, 200),   // magenta — tulip
-    ( 80, 220,  80),   // green   — tree
-    (255, 220,   0),   // yellow  — sunflower
-    (180, 100, 255),   // purple  — fantasy
+    (255, 100, 30),  // orange  — rose
+    (100, 180, 255), // blue    — daisy
+    (220, 80, 200),  // magenta — tulip
+    (80, 220, 80),   // green   — tree
+    (255, 220, 0),   // yellow  — sunflower
+    (180, 100, 255), // purple  — fantasy
 ];
 
-const STEM_COLOR:   (u8, u8, u8) = ( 60, 180,  60);
-const GROUND_COLOR: (u8, u8, u8) = (120,  80,  40);
-const SUN_COLOR:    (u8, u8, u8) = (255, 220,  50);
-const CLOUD_COLOR:  (u8, u8, u8) = (200, 200, 220);
-const RAIN_COLOR:   (u8, u8, u8) = (150, 200, 255);
-const SKY_DIM:      (u8, u8, u8) = ( 15,  25,  50);
+const STEM_COLOR: (u8, u8, u8) = (60, 180, 60);
+const GROUND_COLOR: (u8, u8, u8) = (120, 80, 40);
+const SUN_COLOR: (u8, u8, u8) = (255, 220, 50);
+const CLOUD_COLOR: (u8, u8, u8) = (200, 200, 220);
+const RAIN_COLOR: (u8, u8, u8) = (150, 200, 255);
+const SKY_DIM: (u8, u8, u8) = (15, 25, 50);
 
 struct Plant {
     col: usize,
@@ -104,6 +104,7 @@ struct Splash {
     ttl: f64,
 }
 
+/// Growing garden with sun, drifting clouds, rain, and six blooming plant varieties.
 pub struct Garden {
     plants: Vec<Plant>,
     clouds: Vec<Cloud>,
@@ -185,7 +186,14 @@ impl Animation for Garden {
 
         // Ground row
         for x in 0..self.width {
-            canvas.set_char(x, ground_y, '=', GROUND_COLOR.0, GROUND_COLOR.1, GROUND_COLOR.2);
+            canvas.set_char(
+                x,
+                ground_y,
+                '=',
+                GROUND_COLOR.0,
+                GROUND_COLOR.1,
+                GROUND_COLOR.2,
+            );
         }
 
         // Sun drifts left→right, wraps
@@ -196,7 +204,14 @@ impl Animation for Garden {
         for (i, ch) in ['(', '*', ')'].iter().enumerate() {
             let px = self.sun_x as i32 + i as i32;
             if px >= 0 && (px as usize) < self.width {
-                canvas.set_char(px as usize, sun_y, *ch, SUN_COLOR.0, SUN_COLOR.1, SUN_COLOR.2);
+                canvas.set_char(
+                    px as usize,
+                    sun_y,
+                    *ch,
+                    SUN_COLOR.0,
+                    SUN_COLOR.1,
+                    SUN_COLOR.2,
+                );
             }
         }
 
@@ -251,11 +266,21 @@ impl Animation for Garden {
                 let ch = match i {
                     0 => '(',
                     n if n == cloud.width as i32 - 1 => ')',
-                    _ => if cloud.raining { '~' } else { '-' },
+                    _ => {
+                        if cloud.raining {
+                            '~'
+                        } else {
+                            '-'
+                        }
+                    }
                 };
                 canvas.set_char(
-                    px as usize, cloud_y,
-                    ch, CLOUD_COLOR.0, CLOUD_COLOR.1, CLOUD_COLOR.2,
+                    px as usize,
+                    cloud_y,
+                    ch,
+                    CLOUD_COLOR.0,
+                    CLOUD_COLOR.1,
+                    CLOUD_COLOR.2,
                 );
             }
         }
@@ -304,8 +329,12 @@ impl Animation for Garden {
                     let px = s.x as i32 + i as i32 - 1;
                     if px >= 0 && (px as usize) < canvas.width && s.y < canvas.height {
                         canvas.set_char(
-                            px as usize, s.y,
-                            ch, RAIN_COLOR.0, RAIN_COLOR.1, RAIN_COLOR.2,
+                            px as usize,
+                            s.y,
+                            ch,
+                            RAIN_COLOR.0,
+                            RAIN_COLOR.1,
+                            RAIN_COLOR.2,
                         );
                     }
                 }
@@ -342,7 +371,11 @@ impl Animation for Garden {
                     if px < 0 || (px as usize) >= canvas.width {
                         continue;
                     }
-                    let (r, g, b) = if is_flower && is_top { (fr, fg, fb) } else { (sr, sg, sb) };
+                    let (r, g, b) = if is_flower && is_top {
+                        (fr, fg, fb)
+                    } else {
+                        (sr, sg, sb)
+                    };
                     canvas.set_char(px as usize, y as usize, ch, r, g, b);
                 }
             }

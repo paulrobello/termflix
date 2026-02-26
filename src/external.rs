@@ -120,10 +120,10 @@ pub fn spawn_reader(source: ParamsSource) -> std::sync::mpsc::Receiver<ExternalP
                 for line in stdin.lines() {
                     match line {
                         Ok(l) => {
-                            if let Ok(params) = serde_json::from_str::<ExternalParams>(&l) {
-                                if tx.send(params).is_err() {
-                                    break;
-                                }
+                            if let Ok(params) = serde_json::from_str::<ExternalParams>(&l)
+                                && tx.send(params).is_err()
+                            {
+                                break;
                             }
                         }
                         Err(_) => break,
@@ -134,14 +134,12 @@ pub fn spawn_reader(source: ParamsSource) -> std::sync::mpsc::Receiver<ExternalP
         ParamsSource::File(path) => {
             std::thread::spawn(move || {
                 // Read the file once on startup if it already exists
-                if let Ok(contents) = std::fs::read_to_string(&path) {
-                    if let Some(line) = contents.lines().filter(|l| !l.trim().is_empty()).last() {
-                        if let Ok(params) = serde_json::from_str::<ExternalParams>(line) {
-                            if tx.send(params).is_err() {
-                                return;
-                            }
-                        }
-                    }
+                if let Ok(contents) = std::fs::read_to_string(&path)
+                    && let Some(line) = contents.lines().rfind(|l| !l.trim().is_empty())
+                    && let Ok(params) = serde_json::from_str::<ExternalParams>(line)
+                    && tx.send(params).is_err()
+                {
+                    return;
                 }
 
                 let (file_tx, file_rx) = std::sync::mpsc::channel();
@@ -149,32 +147,15 @@ pub fn spawn_reader(source: ParamsSource) -> std::sync::mpsc::Receiver<ExternalP
                     let _ = file_tx.send(res);
                 })
                 .unwrap();
-                notify::Watcher::watch(
-                    &mut watcher,
-                    &path,
-                    notify::RecursiveMode::NonRecursive,
-                )
-                .unwrap();
-                loop {
-                    match file_rx.recv() {
-                        Ok(Ok(_event)) => {
-                            if let Ok(contents) = std::fs::read_to_string(&path) {
-                                let last_line = contents
-                                    .lines()
-                                    .filter(|l| !l.trim().is_empty())
-                                    .last();
-                                if let Some(line) = last_line {
-                                    if let Ok(params) =
-                                        serde_json::from_str::<ExternalParams>(line)
-                                    {
-                                        if tx.send(params).is_err() {
-                                            break;
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                        _ => break,
+                notify::Watcher::watch(&mut watcher, &path, notify::RecursiveMode::NonRecursive)
+                    .unwrap();
+                while let Ok(Ok(_event)) = file_rx.recv() {
+                    if let Ok(contents) = std::fs::read_to_string(&path)
+                        && let Some(line) = contents.lines().rfind(|l| !l.trim().is_empty())
+                        && let Ok(params) = serde_json::from_str::<ExternalParams>(line)
+                        && tx.send(params).is_err()
+                    {
+                        break;
                     }
                 }
             });
