@@ -29,7 +29,7 @@ Comprehensive technical architecture reference for termflix — a single-binary 
 
 ## Overview
 
-termflix renders 43 procedurally generated animations directly in the terminal using Unicode sub-cell characters. All animation logic writes to a mode-agnostic pixel buffer; the renderer translates that buffer into ANSI escape sequences appropriate for the configured render and color modes. The result is a clean separation between simulation and display that allows both to evolve independently.
+termflix renders 44 procedurally generated animations directly in the terminal using Unicode sub-cell characters. All animation logic writes to a mode-agnostic pixel buffer; the renderer translates that buffer into ANSI escape sequences appropriate for the configured render and color modes. The result is a clean separation between simulation and display that allows both to evolve independently.
 
 The binary is fully synchronous — one main thread drives the event loop, a single optional background thread reads external control parameters, and `crossterm` handles terminal I/O.
 
@@ -609,14 +609,14 @@ classDiagram
 
 ## Animation Catalog
 
-termflix ships 43 animations, organized by visual category. The `create()` factory in `animations/mod.rs` maps each name to its concrete type.
+termflix ships 44 animations, organized by visual category. The `create()` factory in `animations/mod.rs` maps each name to its concrete type.
 
 ```mermaid
 graph TD
-    CAT["43 Animations"]
+    CAT["44 Animations"]
 
     subgraph FIRE["Fire / Fluid"]
-        F1[fire] & F2[smoke] & F3[lava] & F4[campfire] & F5[waterfall] & F6[steam]
+        F1[fire] & F2[smoke] & F3[lava] & F4[campfire] & F5[waterfall]
     end
 
     subgraph PART["Particle"]
@@ -632,7 +632,7 @@ graph TD
     end
 
     subgraph NATURE["Nature"]
-        N1[ocean] & N2[boids] & N3[cells] & N4[life]
+        N1[ocean] & N2[boids] & N3[cells] & N4[life] & N5[garden]
     end
 
     subgraph TECH["Tech / Retro"]
@@ -670,6 +670,7 @@ graph TD
 | `lava` | Fire/Fluid | Lava lamp blobs rising, merging, and splitting |
 | `campfire` | Fire/Fluid | Campfire with rising ember sparks |
 | `waterfall` | Fire/Fluid | Cascading water with mist spray |
+| `garden` | Nature | Growing garden with rain, clouds, and blooming plants |
 | `particles` | Particle | Fireworks bursting with physics and fade |
 | `rain` | Particle | Raindrops with splash particles and wind |
 | `fountain` | Particle | Water fountain with jets, splashes, and mist |

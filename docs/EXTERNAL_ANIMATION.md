@@ -253,7 +253,7 @@ Every animation implements the `Animation` trait defined in `src/animations/mod.
 fn set_params(&mut self, _params: &crate::external::ExternalParams) {}
 ```
 
-All 43 animations inherit this default. Most animations do not need to inspect external params because `speed`, `intensity`, and `color_shift` are handled globally by the main loop and canvas post-processing. Only animations that want to respond to a parameter **semantically** — wiring it to an internal simulation variable — need to override `set_params`.
+All 44 animations inherit this default. Most animations do not need to inspect external params because `speed`, `intensity`, and `color_shift` are handled globally by the main loop and canvas post-processing. Only animations that want to respond to a parameter **semantically** — wiring it to an internal simulation variable — need to override `set_params`.
 
 ### Semantic Overrides
 
