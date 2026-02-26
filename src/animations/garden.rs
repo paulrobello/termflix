@@ -77,11 +77,17 @@ const CLOUD_COLOR: (u8, u8, u8) = (200, 200, 220);
 const RAIN_COLOR: (u8, u8, u8) = (150, 200, 255);
 const SKY_DIM: (u8, u8, u8) = (15, 25, 50);
 
+// Static rows used to build rose shapes dynamically at spawn time
+static ROSE_STEM: &[(i32, char, bool)] = &[(0, '|', false)];
+static ROSE_STEM_LEAF: &[(i32, char, bool)] = &[(0, '|', false), (1, '~', false)];
+static ROSE_BRANCH: &[(i32, char, bool)] = &[(0, 'Y', false)];
+static ROSE_BLOOM: &[(i32, char, bool)] = &[(-1, '(', true), (0, '@', true), (1, ')', true)];
+
 struct Plant {
     col: usize,
     variety: usize,
-    stage: usize,     // 0 = seed, max_rows = full bloom
-    max_rows: usize,  // randomised height cap: 2–5 rows
+    stage: usize,              // 0 = seed; shape.len() = full bloom
+    shape: Vec<PRow>,          // rows bottom→top, generated at spawn
 }
 
 struct Raindrop {
@@ -122,11 +128,29 @@ impl Garden {
         let num_plants = ((width as f64 / 8.0) * scale).clamp(3.0, 20.0) as usize;
         let spacing = (width / (num_plants + 1)).max(1);
         let plants: Vec<Plant> = (0..num_plants)
-            .map(|i| Plant {
-                col: spacing * (i + 1),
-                variety: rng.random_range(0..VARIETIES.len()),
-                stage: 0,
-                max_rows: rng.random_range(2..=5),
+            .map(|i| {
+                let variety = rng.random_range(0..VARIETIES.len());
+                let shape: Vec<PRow> = if variety == 0 {
+                    // Rose: plain stems × 1-3, leafed stems × 1-3, branch, bloom
+                    let plain = rng.random_range(1..=3_usize);
+                    let leafed = rng.random_range(1..=3_usize);
+                    let mut s: Vec<PRow> = Vec::new();
+                    for _ in 0..plain {
+                        s.push(ROSE_STEM);
+                    }
+                    for _ in 0..leafed {
+                        s.push(ROSE_STEM_LEAF);
+                    }
+                    s.push(ROSE_BRANCH);
+                    s.push(ROSE_BLOOM);
+                    s
+                } else {
+                    // Other varieties: take the top N rows so bloom is always included
+                    let v = VARIETIES[variety];
+                    let rows = rng.random_range(3..=v.len());
+                    v[v.len() - rows..].to_vec()
+                };
+                Plant { col: spacing * (i + 1), variety, stage: 0, shape }
             })
             .collect();
 
@@ -308,7 +332,7 @@ impl Animation for Garden {
             for plant in &mut self.plants {
                 let lo = plant.col.saturating_sub(2);
                 let hi = plant.col + 2;
-                if hit_x >= lo && hit_x <= hi && plant.stage < plant.max_rows {
+                if hit_x >= lo && hit_x <= hi && plant.stage < plant.shape.len() {
                     plant.stage += 1;
                 }
             }
@@ -356,8 +380,8 @@ impl Animation for Garden {
                 continue;
             }
 
-            let rows = VARIETIES[plant.variety];
-            let rows_to_draw = plant.stage.min(plant.max_rows).min(rows.len());
+            let rows = &plant.shape;
+            let rows_to_draw = plant.stage.min(rows.len());
 
             for (row_idx, row) in rows[..rows_to_draw].iter().enumerate() {
                 let y = ground_y as i32 - 1 - row_idx as i32;
