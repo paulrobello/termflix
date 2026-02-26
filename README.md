@@ -5,7 +5,7 @@
 ![Arch x86-64 | ARM | AppleSilicon](https://img.shields.io/badge/arch-x86--64%20%7C%20ARM%20%7C%20AppleSilicon-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
-A terminal animation player with 43 procedurally generated animations, multiple render modes, and true color support. Low CPU impact, works great in tmux, only needs your terminal.
+A terminal animation player with 44 procedurally generated animations, multiple render modes, and true color support. Low CPU impact, works great in tmux, only needs your terminal.
 
 [!["Buy Me A Coffee"](https://www.buymeacoffee.com/assets/img/custom_images/orange_img.png)](https://buymeacoffee.com/probello3)
 
@@ -13,7 +13,7 @@ A terminal animation player with 43 procedurally generated animations, multiple 
 
 ## Features
 
-- **43 Animations** — Fire, matrix rain, starfields, plasma, ocean waves, aurora, lightning, and much more
+- **44 Animations** — Fire, matrix rain, starfields, plasma, ocean waves, aurora, lightning, and much more
 - **3 Render Modes** — Braille (highest resolution), half-block, and ASCII density mapping
 - **4 Color Modes** — Mono, ANSI 16, ANSI 256, and 24-bit true color
 - **Per-Animation Defaults** — Each animation auto-selects its best render mode
@@ -70,6 +70,7 @@ A terminal animation player with 43 procedurally generated animations, multiple 
 | `snake` | Self-playing Snake game AI | Half-block |
 | `invaders` | Space Invaders attract mode demo | Half-block |
 | `pong` | Self-playing Pong with AI paddles | Half-block |
+| `garden` | Garden scene with plants that grow when it rains | ASCII |
 
 ## Installation
 
