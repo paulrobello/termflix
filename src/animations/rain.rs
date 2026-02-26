@@ -10,6 +10,9 @@ struct Raindrop {
     length: f64,
     wind_offset: f64,
     depth: f64, // 0.0 = far back, 1.0 = foreground
+    r: u8,      // base color precomputed from depth
+    g: u8,
+    b: u8,
 }
 
 /// Rain with splash particles on impact
@@ -30,6 +33,9 @@ impl Rain {
         let drops = (0..num_drops)
             .map(|_| {
                 let depth = rng.random_range(0.0..1.0);
+                let r = (60.0 + 80.0 * depth) as u8;
+                let g = (80.0 + 90.0 * depth) as u8;
+                let b = (120.0 + 135.0 * depth) as u8;
                 Raindrop {
                     x: rng.random_range(0.0..width as f64),
                     y: rng.random_range(-(height as f64)..height as f64),
@@ -37,6 +43,9 @@ impl Rain {
                     length: 1.0 + depth * 5.0,  // back: short, front: long
                     wind_offset: rng.random_range(-0.5..0.5),
                     depth,
+                    r,
+                    g,
+                    b,
                 }
             })
             .collect();
@@ -126,10 +135,7 @@ impl Animation for Rain {
                 let py = (drop.y - t * drop.length * 0.5) as usize;
                 if py < canvas.height {
                     let brightness = depth_brightness * (0.5 + 0.5 * (1.0 - t));
-                    let r = (60.0 + 80.0 * drop.depth) as u8;
-                    let g = (80.0 + 90.0 * drop.depth) as u8;
-                    let b = (120.0 + 135.0 * drop.depth) as u8;
-                    canvas.set_colored(px, py, brightness, r, g, b);
+                    canvas.set_colored(px, py, brightness, drop.r, drop.g, drop.b);
                 }
             }
 
@@ -144,6 +150,7 @@ impl Animation for Rain {
                 }
 
                 // Reset drop at top, keep same depth layer
+                // depth (and thus r/g/b) preserved across resets
                 drop.y = rng.random_range(-(self.height as f64 * 0.3)..0.0);
                 drop.x = rng.random_range(0.0..self.width as f64);
                 drop.speed = 15.0 + drop.depth * 50.0;
