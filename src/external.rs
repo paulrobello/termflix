@@ -143,12 +143,21 @@ pub fn spawn_reader(source: ParamsSource) -> std::sync::mpsc::Receiver<ExternalP
                 }
 
                 let (file_tx, file_rx) = std::sync::mpsc::channel();
-                let mut watcher = notify::recommended_watcher(move |res| {
+                let mut watcher = match notify::recommended_watcher(move |res| {
                     let _ = file_tx.send(res);
-                })
-                .unwrap();
-                notify::Watcher::watch(&mut watcher, &path, notify::RecursiveMode::NonRecursive)
-                    .unwrap();
+                }) {
+                    Ok(w) => w,
+                    Err(e) => {
+                        eprintln!("termflix: could not create file watcher: {e}");
+                        return;
+                    }
+                };
+                if let Err(e) =
+                    notify::Watcher::watch(&mut watcher, &path, notify::RecursiveMode::NonRecursive)
+                {
+                    eprintln!("termflix: could not watch {}: {e}", path.display());
+                    return;
+                }
                 while let Ok(Ok(_event)) = file_rx.recv() {
                     if let Ok(contents) = std::fs::read_to_string(&path)
                         && let Some(line) = contents.lines().rfind(|l| !l.trim().is_empty())
