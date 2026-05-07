@@ -150,6 +150,16 @@ impl Animation for Snake {
         "snake"
     }
 
+    fn set_params(&mut self, params: &crate::external::ExternalParams) {
+        if let Some(speed) = params.speed {
+            self.move_interval = speed.clamp(0.02, 0.2);
+        }
+    }
+
+    fn supported_params(&self) -> &'static [(&'static str, f64, f64)] {
+        &[("speed", 0.02, 0.2)]
+    }
+
     fn update(&mut self, canvas: &mut Canvas, dt: f64, _time: f64) {
         let cw = canvas.width;
         let ch = canvas.height;

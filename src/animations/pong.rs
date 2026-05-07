@@ -14,6 +14,7 @@ pub struct Pong {
     left_score: u32,
     right_score: u32,
     serve_timer: f64,
+    speed_mult: f64,
     rng: rand::rngs::ThreadRng,
 }
 
@@ -38,6 +39,7 @@ impl Pong {
             left_score: 0,
             right_score: 0,
             serve_timer: 0.0,
+            speed_mult: 1.0,
             rng: rand::rng(),
         }
     }
@@ -61,6 +63,16 @@ impl Animation for Pong {
         "pong"
     }
 
+    fn set_params(&mut self, params: &crate::external::ExternalParams) {
+        if let Some(speed) = params.speed {
+            self.speed_mult = speed.clamp(0.2, 3.0);
+        }
+    }
+
+    fn supported_params(&self) -> &'static [(&'static str, f64, f64)] {
+        &[("speed", 0.2, 3.0)]
+    }
+
     fn update(&mut self, canvas: &mut Canvas, dt: f64, _time: f64) {
         let w = canvas.width as f64;
         let h = canvas.height as f64;
@@ -76,8 +88,8 @@ impl Animation for Pong {
             // Still draw everything, just don't move ball
         } else {
             // Move ball
-            self.ball_x += self.ball_vx * dt;
-            self.ball_y += self.ball_vy * dt;
+            self.ball_x += self.ball_vx * self.speed_mult * dt;
+            self.ball_y += self.ball_vy * self.speed_mult * dt;
 
             // Bounce off top/bottom
             if self.ball_y <= 0.0 {
