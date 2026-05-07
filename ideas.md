@@ -19,13 +19,8 @@ Accept MIDI or OSC messages to drive animation parameters in real time. Knobs co
 ### [control] Audio-Reactive Visualizer (large)
 Replace the fake spectrum in `visualizer` with actual audio input (e.g., via CPAL or PulseAudio). Real FFT analysis driving bar heights, color shifts, and animation intensity. Could also modulate other animations' parameters based on beat detection.
 
-### [control] Per-Animation Exposed Parameters (small)
-Only `fire` and `plasma` currently implement `set_params()` / `supported_params()`. Expose tunable parameters for more animations:
-- `boids`: cohesion, alignment, separation, speed
-- `sort`: algorithm selection, array size
-- `snake`/`pong`: game speed, AI aggressiveness
-- `particles`: burst size, gravity, trail length
-- `wave`: frequency, amplitude, source count
+### ~~[control] Per-Animation Exposed Parameters~~ (done)
+Exposed params on boids (cohesion/separation), particles (gravity/drag), wave (amplitude/frequency), sort (speed), snake (speed), pong (speed). Now 8 animations support external params.
 
 ---
 
@@ -98,14 +93,14 @@ Add a `--preview` flag that renders a single representative frame of each animat
 ### [ux] Search / Filter Animation List (small)
 Enhance `--list` output with optional filtering: `termflix --list fire` shows only animations matching "fire". Useful when the list grows beyond what fits on screen.
 
-### [ux] Transition Effects Between Animations (small)
-When cycling between animations (via hotkey or auto-cycle), add a brief fade/crossfade transition instead of an instant cut. A simple brightness fade-out over 5-10 frames would look much smoother.
+### ~~[ux] Transition Effects Between Animations~~ (done)
+8-frame fade-out/fade-in transition when switching animations via hotkey, auto-cycle, or external control.
 
 ### [ux] Information Overlay (small)
 Add a hotkey (e.g., `i`) that temporarily shows an overlay with the current animation's name, description, and tunable parameters. Disappears after a few seconds or on next keypress.
 
-### [ux] Configurable Keybindings (medium)
-Allow users to remap hotkeys via config file. Some users may want `Space` for next animation instead of `Right`, or `Enter` to quit. Stores keymap in config.toml.
+### ~~[ux] Configurable Keybindings~~ (done)
+Remappable hotkeys via `[keybindings]` section in config.toml. Supports single chars, special keys, and modifier combos.
 
 ### [ux] Progress Bar for Auto-Cycle (small)
 When auto-cycle is active, show a thin progress bar at the bottom indicating how long until the next animation switch. Gives visual rhythm to the cycle.
@@ -133,22 +128,22 @@ Document or provide helper scripts for integrating `--screensaver` mode with com
 
 ## Dead Code Cleanup
 
-### [cleanup] Register or Remove `vortex` Animation (small)
-`vortex.rs` exists and is declared in `mod.rs` but is not registered in `ANIMATIONS`, `ANIMATION_NAMES`, or `create()`. Either register it as a 56th animation or remove it if incomplete.
+### ~~[cleanup] Register or Remove `vortex` Animation~~ (done)
+Removed `vortex.rs` — was dead code never compiled.
 
 ---
 
 ## Priority Quick Picks
 
 **Quick wins (< 1 hour):**
-- Register/remove `vortex` animation
+- ~~Register/remove `vortex` animation~~ (done)
 - `--list` filtering (`termflix --list fire`)
-- Expose params on 3-5 more animations
+- ~~Expose params on 3-5 more animations~~ (done)
 
 **Medium effort (1-4 hours):**
 - Macro-based animation registration
 - Custom color palettes in config
-- Transition effects between animations
+- ~~Transition effects between animations~~ (done)
 
 **Large effort (full day+):**
 - Audio-reactive visualizer
