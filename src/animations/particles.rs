@@ -21,6 +21,8 @@ pub struct Particles {
     particles: Vec<Particle>,
     spawn_timer: f64,
     rng: rand::rngs::ThreadRng,
+    gravity: f64,
+    drag: f64,
 }
 
 impl Particles {
@@ -31,6 +33,8 @@ impl Particles {
             particles: Vec::with_capacity((2000.0 * scale) as usize),
             spawn_timer: 0.0,
             rng: rand::rng(),
+            gravity: 15.0,
+            drag: 0.99,
         }
     }
 
@@ -79,6 +83,19 @@ impl Animation for Particles {
         self.height = height;
     }
 
+    fn set_params(&mut self, params: &crate::external::ExternalParams) {
+        if let Some(intensity) = params.intensity {
+            self.gravity = intensity.clamp(0.0, 40.0);
+        }
+        if let Some(cs) = params.color_shift {
+            self.drag = cs.clamp(0.9, 1.0);
+        }
+    }
+
+    fn supported_params(&self) -> &'static [(&'static str, f64, f64)] {
+        &[("intensity", 0.0, 40.0), ("color_shift", 0.9, 1.0)]
+    }
+
     fn update(&mut self, canvas: &mut Canvas, dt: f64, _time: f64) {
         // Spawn
         self.spawn_timer += dt;
@@ -91,8 +108,8 @@ impl Animation for Particles {
         for p in &mut self.particles {
             p.x += p.vx * dt;
             p.y += p.vy * dt;
-            p.vy += 15.0 * dt; // gravity
-            p.vx *= 0.99; // drag
+            p.vy += self.gravity * dt; // gravity
+            p.vx *= self.drag; // drag
             p.life -= dt;
         }
 
