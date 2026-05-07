@@ -2,9 +2,10 @@ name: Gallery
 
 # Builds the PNG+GIF gallery and deploys it to GitHub Pages.
 #
-# REPO SETUP (one-time): in the repo Settings → Pages, set
-# "Build and deployment" → Source to "GitHub Actions". Without that,
-# the deploy-pages step will fail with a 404.
+# REPO SETUP: `actions/configure-pages` is invoked with
+# `enablement: true`, so the workflow will auto-enable Pages on the
+# first run (provided the repo's Settings → Pages allows
+# "GitHub Actions" as a source — which is the default).
 
 on:
   push:
@@ -63,6 +64,8 @@ jobs:
 
       - name: Configure Pages
         uses: actions/configure-pages@v5
+        with:
+          enablement: true
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3

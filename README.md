@@ -256,7 +256,7 @@ make gallery ARGS="fire --gallery-dir /tmp/g"
 
 The `gallery/` directory is gitignored — never commit the generated binaries; let CI publish them.
 
-GitHub Pages must be enabled once for this repo: **Settings → Pages → Build and deployment → Source: GitHub Actions**. Without that, the deploy step fails with a 404.
+The workflow auto-enables Pages on its first run via `actions/configure-pages` with `enablement: true`. If your fork has Pages disabled organization-wide, flip **Settings → Pages → Build and deployment → Source** to **GitHub Actions** manually before the first run.
 
 ## Contributing
 
