@@ -1,8 +1,10 @@
 mod animations;
 mod config;
 mod external;
+mod gallery;
 pub mod generators;
 mod gif;
+mod png;
 mod record;
 mod render;
 
@@ -107,6 +109,30 @@ struct Cli {
     /// Profile per-frame timing and print summary on exit
     #[arg(long)]
     profile: bool,
+
+    /// Capture animations as PNG+GIF gallery (optional: comma-separated animation names)
+    #[arg(long)]
+    gallery: Option<Option<String>>,
+
+    /// Output directory for gallery captures (default: ./gallery)
+    #[arg(long)]
+    gallery_dir: Option<String>,
+
+    /// Terminal width in cells for gallery captures (default: 80)
+    #[arg(long)]
+    gallery_cols: Option<usize>,
+
+    /// Terminal height in cells for gallery captures (default: 25)
+    #[arg(long)]
+    gallery_rows: Option<usize>,
+
+    /// Seconds of simulated time before PNG capture (default: 3.0)
+    #[arg(long)]
+    gallery_wait: Option<f64>,
+
+    /// Total seconds of GIF recording for gallery captures (default: 5.0)
+    #[arg(long)]
+    gallery_duration: Option<f64>,
 }
 
 fn main() -> io::Result<()> {
@@ -142,6 +168,28 @@ fn main() -> io::Result<()> {
         println!("Config file: {}", path);
         println!("{:#?}", cfg);
         return Ok(());
+    }
+
+    // --gallery: capture animations to PNG+GIF
+    if let Some(ref names) = cli.gallery {
+        let names = names.as_ref().map(|s| {
+            s.split(',')
+                .map(|n| n.trim().to_string())
+                .filter(|n| !n.is_empty())
+                .collect::<Vec<_>>()
+        });
+        let config = gallery::GalleryConfig {
+            dir: cli
+                .gallery_dir
+                .unwrap_or_else(|| "./gallery".to_string())
+                .into(),
+            cols: cli.gallery_cols.unwrap_or(80),
+            rows: cli.gallery_rows.unwrap_or(25),
+            wait_secs: cli.gallery_wait.unwrap_or(3.0),
+            duration_secs: cli.gallery_duration.unwrap_or(5.0),
+            names,
+        };
+        return gallery::run_gallery(&config);
     }
 
     if let Some(ref play_path) = cli.play {

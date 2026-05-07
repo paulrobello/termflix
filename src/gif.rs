@@ -11,11 +11,11 @@ use std::io::Write;
 // ---------------------------------------------------------------------------
 
 #[derive(Clone)]
-struct Cell {
-    ch: u8,
-    r: u8,
-    g: u8,
-    b: u8,
+pub struct Cell {
+    pub ch: u8,
+    pub r: u8,
+    pub g: u8,
+    pub b: u8,
 }
 
 impl Default for Cell {
@@ -29,7 +29,7 @@ impl Default for Cell {
     }
 }
 
-struct VirtualTerminal {
+pub struct VirtualTerminal {
     cells: Vec<Cell>,
     cols: usize,
     rows: usize,
@@ -41,7 +41,7 @@ struct VirtualTerminal {
 }
 
 impl VirtualTerminal {
-    fn new(cols: usize, rows: usize) -> Self {
+    pub fn new(cols: usize, rows: usize) -> Self {
         VirtualTerminal {
             cells: vec![Cell::default(); cols * rows],
             cols,
@@ -54,11 +54,11 @@ impl VirtualTerminal {
         }
     }
 
-    fn cell(&self, row: usize, col: usize) -> &Cell {
+    pub fn cell(&self, row: usize, col: usize) -> &Cell {
         &self.cells[row * self.cols + col]
     }
 
-    fn process(&mut self, data: &str) {
+    pub fn process(&mut self, data: &str) {
         let bytes = data.as_bytes();
         let len = bytes.len();
         let mut i = 0;
