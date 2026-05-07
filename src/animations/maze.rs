@@ -65,26 +65,25 @@ impl Maze {
     }
 
     fn build_grid(&mut self) {
-        // Each maze cell maps to a 3x3 character area in the canvas:
-        //   #.#    # = wall char, . = passage char
-        //   ...    center row/col are the passage between cells
-        //   #.#
-        // So grid fits: grid_w = (width - 1) / 3, grid_h = (height - 1) / 3
-        self.grid_w = if self.width >= 4 {
-            (self.width - 1) / 3
+        // Each maze cell occupies a 2x2 pixel area; walls are shared with neighbors:
+        //   #.    # = pillar/wall, . = passage
+        //   ..    The next cell's pillar is the right wall of this one.
+        // So grid fits: grid_w = (width - 1) / 2, grid_h = (height - 1) / 2
+        self.grid_w = if self.width >= 3 {
+            (self.width - 1) / 2
         } else {
             1
         };
-        self.grid_h = if self.height >= 4 {
-            (self.height - 1) / 3
+        self.grid_h = if self.height >= 3 {
+            (self.height - 1) / 2
         } else {
             1
         };
         // Cap so the rendered area fits within canvas
-        while self.grid_w * 3 + 1 > self.width && self.grid_w > 0 {
+        while self.grid_w * 2 + 1 > self.width && self.grid_w > 0 {
             self.grid_w -= 1;
         }
-        while self.grid_h * 3 + 1 > self.height && self.grid_h > 0 {
+        while self.grid_h * 2 + 1 > self.height && self.grid_h > 0 {
             self.grid_h -= 1;
         }
         self.grid_w = self.grid_w.max(2);
@@ -307,8 +306,8 @@ impl Maze {
         for gy in 0..self.grid_h {
             for gx in 0..self.grid_w {
                 let cell = &self.grid[self.idx(gx, gy)];
-                let base_x = gx * 3;
-                let base_y = gy * 3;
+                let base_x = gx * 2;
+                let base_y = gy * 2;
 
                 // Center of the cell
                 let (cr, cg, cb) = match cell.state {
@@ -408,11 +407,11 @@ impl Maze {
         }
 
         // Draw bottom border wall
-        let bottom_y = self.grid_h * 3;
+        let bottom_y = self.grid_h * 2;
         if bottom_y < ch {
             for gx in 0..self.grid_w {
                 let cell = &self.grid[self.idx(gx, self.grid_h - 1)];
-                let bx = gx * 3;
+                let bx = gx * 2;
                 // Corner
                 if bx < cw {
                     canvas.set_colored(bx, bottom_y, 1.0, wall_r, wall_g, wall_b);
@@ -437,11 +436,11 @@ impl Maze {
         }
 
         // Draw right border wall
-        let right_x = self.grid_w * 3;
+        let right_x = self.grid_w * 2;
         if right_x < cw {
             for gy in 0..self.grid_h {
                 let cell = &self.grid[self.idx(self.grid_w - 1, gy)];
-                let by = gy * 3;
+                let by = gy * 2;
                 // Corner
                 if by < ch {
                     canvas.set_colored(right_x, by, 1.0, wall_r, wall_g, wall_b);
