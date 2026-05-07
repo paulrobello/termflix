@@ -345,7 +345,14 @@ impl Maze {
                             center_b,
                         );
                     } else {
-                        canvas.set_colored(base_x + 1, base_y + 1, 1.0, center_r, center_g, center_b);
+                        canvas.set_colored(
+                            base_x + 1,
+                            base_y + 1,
+                            1.0,
+                            center_r,
+                            center_g,
+                            center_b,
+                        );
                     }
                 }
 

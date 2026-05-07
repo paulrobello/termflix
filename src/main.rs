@@ -41,9 +41,9 @@ struct Cli {
     #[arg(short, long)]
     fps: Option<u32>,
 
-    /// List available animations and exit
+    /// List available animations and exit (optional: filter by substring)
     #[arg(short, long)]
-    list: bool,
+    list: Option<Option<String>>,
 
     /// Cycle through all animations (seconds per animation, 0 = disabled)
     #[arg(long)]
@@ -103,6 +103,10 @@ struct Cli {
     /// Enable CRT scanline effect
     #[arg(long)]
     scanlines: bool,
+
+    /// Profile per-frame timing and print summary on exit
+    #[arg(long)]
+    profile: bool,
 }
 
 fn main() -> io::Result<()> {
@@ -165,10 +169,22 @@ fn main() -> io::Result<()> {
         return player.play();
     }
 
-    if cli.list {
+    if let Some(filter) = cli.list {
         println!("Available animations:");
+        let filter = filter.as_deref().map(|s| s.to_lowercase());
+        let mut count = 0;
         for &(name, desc) in animations::ANIMATIONS {
+            if let Some(ref f) = filter
+                && !name.to_lowercase().contains(f)
+                && !desc.to_lowercase().contains(f)
+            {
+                continue;
+            }
             println!("  {:<12} {}", name, desc);
+            count += 1;
+        }
+        if let Some(ref f) = filter {
+            println!("\n  {} animation(s) matching '{}'", count, f);
         }
         println!("\nRender modes: braille, half-block, ascii");
         println!("Color modes: mono, ansi16, ansi256, true-color");
@@ -281,6 +297,7 @@ fn main() -> io::Result<()> {
         postproc,
         default_bloom,
         &keybindings,
+        cli.profile,
     );
 
     // Restore terminal — disable raw mode first (doesn't write to stdout)
@@ -357,6 +374,78 @@ const COLOR_MODES: [ColorMode; 4] = [
 
 const TRANSITION_FRAMES: u8 = 8;
 
+struct FrameProfile {
+    update_us: Vec<f64>,
+    render_us: Vec<f64>,
+    total_us: Vec<f64>,
+    anim_name: String,
+}
+
+impl FrameProfile {
+    fn new(anim_name: &str) -> Self {
+        Self {
+            update_us: Vec::new(),
+            render_us: Vec::new(),
+            total_us: Vec::new(),
+            anim_name: anim_name.to_string(),
+        }
+    }
+
+    fn record(&mut self, update_dur: Duration, render_dur: Duration, total_dur: Duration) {
+        self.update_us.push(update_dur.as_secs_f64() * 1e6);
+        self.render_us.push(render_dur.as_secs_f64() * 1e6);
+        self.total_us.push(total_dur.as_secs_f64() * 1e6);
+    }
+
+    fn print_summary(&self) {
+        if self.total_us.is_empty() {
+            return;
+        }
+        let n = self.total_us.len();
+        let stats = |data: &[f64]| -> (f64, f64, f64, f64, f64) {
+            let mut sorted = data.to_vec();
+            sorted.sort_by(|a, b| a.partial_cmp(b).unwrap());
+            let sum: f64 = sorted.iter().sum();
+            let p95_idx = ((n as f64) * 0.95).ceil() as usize - 1;
+            (
+                sum / n as f64,
+                sorted[0],
+                sorted[n - 1],
+                sorted[p95_idx.min(n - 1)],
+                sum / 1e6, // total seconds
+            )
+        };
+        println!("\n=== Profile: {} ({} frames) ===", self.anim_name, n);
+        println!(
+            "{:<12} {:>10} {:>10} {:>10} {:>10}",
+            "", "avg µs", "min µs", "max µs", "p95 µs"
+        );
+        let (avg, min, max, p95, _) = stats(&self.update_us);
+        println!(
+            "{:<12} {:>10.1} {:>10.1} {:>10.1} {:>10.1}",
+            "update", avg, min, max, p95
+        );
+        let (avg, min, max, p95, _) = stats(&self.render_us);
+        println!(
+            "{:<12} {:>10.1} {:>10.1} {:>10.1} {:>10.1}",
+            "render", avg, min, max, p95
+        );
+        let (avg, min, max, p95, total_secs) = stats(&self.total_us);
+        println!(
+            "{:<12} {:>10.1} {:>10.1} {:>10.1} {:>10.1}",
+            "total", avg, min, max, p95
+        );
+        if total_secs > 0.0 {
+            println!(
+                "Avg FPS: {:.1} | Total time: {:.2}s",
+                n as f64 / total_secs,
+                total_secs
+            );
+        }
+        println!();
+    }
+}
+
 enum TransitionState {
     None,
     FadingOut {
@@ -392,6 +481,7 @@ fn run_loop(
     mut postproc: PostProcessConfig,
     default_bloom: f64,
     keybindings: &KeyBindings,
+    profile: bool,
 ) -> io::Result<()> {
     let (mut cols, mut rows) = terminal::size()?;
     let is_tmux = std::env::var("TMUX").is_ok();
@@ -450,7 +540,8 @@ fn run_loop(
     let mut ext_state = CurrentState::default();
     let mut transition = TransitionState::None;
     let mut virtual_time: f64 = 0.0;
-    loop {
+    let mut frame_profile = profile.then(|| FrameProfile::new(initial_anim));
+    let result: io::Result<()> = 'outer: loop {
         // Use event::poll as frame timer — properly yields to OS for signal handling
         let time_to_next = adaptive_frame_dur.saturating_sub(last_frame.elapsed());
         if event::poll(time_to_next)? {
@@ -471,10 +562,10 @@ fn run_loop(
                     }) => {
                         // Ctrl+C always quits
                         if code == KeyCode::Char('c') && modifiers.contains(KeyModifiers::CONTROL) {
-                            return Ok(());
+                            break 'outer Ok(());
                         }
                         if screensaver {
-                            return Ok(());
+                            break 'outer Ok(());
                         }
                         match code {
                             kc if keybindings.quit.contains(&kc) => {
@@ -487,7 +578,7 @@ fn run_loop(
                                     terminal::enable_raw_mode()?;
                                     execute!(stdout, terminal::EnterAlternateScreen, cursor::Hide)?;
                                 }
-                                return Ok(());
+                                break 'outer Ok(());
                             }
                             kc if keybindings.next.contains(&kc) => {
                                 anim_index = (anim_index + 1) % animations::ANIMATION_NAMES.len();
@@ -524,13 +615,17 @@ fn run_loop(
                                 needs_rebuild = true;
                             }
                             KeyCode::Char('b') => {
-                                postproc.bloom = if postproc.bloom > 0.0 { 0.0 } else { default_bloom };
+                                postproc.bloom = if postproc.bloom > 0.0 {
+                                    0.0
+                                } else {
+                                    default_bloom
+                                };
                             }
                             _ => {}
                         }
                     }
                     Event::FocusGained if screensaver => {
-                        return Ok(());
+                        break 'outer Ok(());
                     }
                     _ => {}
                 }
@@ -652,7 +747,9 @@ fn run_loop(
         anim.set_params(ext_state.params());
 
         // Update animation
+        let update_start = Instant::now();
         anim.update(&mut canvas, effective_dt, virtual_time);
+        let update_dur = update_start.elapsed();
 
         // Transition fade processing
         let transition_factor = match &mut transition {
@@ -707,7 +804,15 @@ fn run_loop(
         canvas.post_process(&postproc);
 
         // Render to string
+        let render_start = Instant::now();
         let frame = canvas.render();
+        let render_dur = render_start.elapsed();
+
+        // Profile this frame
+        if let Some(ref mut p) = frame_profile {
+            let total_dur = update_dur + render_dur;
+            p.record(update_dur, render_dur, total_dur);
+        }
 
         // Record if active
         if let Some(ref mut rec) = recorder {
@@ -787,7 +892,7 @@ fn run_loop(
                         || (code == KeyCode::Char('c')
                             && modifiers.contains(KeyModifiers::CONTROL)))
                 {
-                    return Ok(());
+                    break 'outer Ok(());
                 }
                 let chunk_end = (written + 16384).min(buf.len());
                 let n = unsafe {
@@ -812,14 +917,14 @@ fn run_loop(
                             || (code == KeyCode::Char('c')
                                 && modifiers.contains(KeyModifiers::CONTROL)))
                     {
-                        return Ok(());
+                        break 'outer Ok(());
                     }
                 } else if n < 0 {
                     let err = io::Error::last_os_error();
                     if err.kind() == io::ErrorKind::Interrupted {
                         continue;
                     }
-                    return Err(err);
+                    break 'outer Err(err);
                 }
             }
         }
@@ -847,7 +952,11 @@ fn run_loop(
                 Duration::from_secs_f64((write_time_ema * 1.1).max(frame_dur.as_secs_f64()));
             adaptive_frame_dur = target.min(Duration::from_millis(200)); // cap at 5fps minimum
         }
+    };
+    if let Some(ref p) = frame_profile {
+        p.print_summary();
     }
+    result
 }
 
 fn detect_recording_size(frames: &[record::Frame]) -> (usize, usize) {

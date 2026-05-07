@@ -65,18 +65,12 @@ Show a timestamp and frame counter overlay during playback for debugging/demo pu
 ### [arch] Threaded Canvas Rendering (large)
 Move rendering off the main thread. The main loop currently computes the animation update and renders synchronously. With a double-buffered canvas, update could run on one thread while the previous frame renders on another, potentially doubling throughput.
 
-### [arch] Profile-Guided Animation Tuning (small)
-Add a `--profile` mode that measures per-frame update and render times and outputs a summary on exit. Helps identify which animations need optimization and validates that changes improve performance.
-
 ---
 
 ## UX & Polish
 
 ### [ux] Animation Preview Thumbnails (small)
 Add a `--preview` flag that renders a single representative frame of each animation to stdout as a static snapshot, useful for picking an animation without launching the full player.
-
-### [ux] Search / Filter Animation List (small)
-Enhance `--list` output with optional filtering: `termflix --list fire` shows only animations matching "fire". Useful when the list grows beyond what fits on screen.
 
 ### [ux] Information Overlay (small)
 Add a hotkey (e.g., `i`) that temporarily shows an overlay with the current animation's name, description, and tunable parameters. Disappears after a few seconds or on next keypress.
@@ -108,10 +102,11 @@ Document or provide helper scripts for integrating `--screensaver` mode with com
 ## Priority Quick Picks
 
 **Quick wins (< 1 hour):**
-- `--list` filtering (`termflix --list fire`)
+- Information overlay (`i` key)
 
 **Medium effort (1-4 hours):**
 - Custom color palettes in config
+- Progress bar for auto-cycle
 
 **Large effort (full day+):**
 - Audio-reactive visualizer

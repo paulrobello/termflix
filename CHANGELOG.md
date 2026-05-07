@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added
+- **`--list` filtering** — `termflix --list fire` shows only animations matching the substring in name or description (case-insensitive). Bare `--list` still shows all.
+- **`--profile` mode** — `termflix --profile <anim>` runs the animation and prints a timing summary on exit: avg/min/max/p95 for update time, render time, and total frame time, plus avg FPS.
+
+### Added
 - **Post-processing effects** — Bloom/glow, vignette (edge darkening), and CRT scanline effects configurable via `--bloom-intensity`, `--bloom-threshold`, `--vignette`, `--scanlines` CLI flags or `[postproc]` section in config. Press `b` to toggle bloom at runtime.
 - **Maze gap fix** — Walls and passages now render as solid colored pixels instead of ASCII characters, eliminating visible gaps in half-block mode.
 - **Rainforest improvements** — Default render mode changed to half-block. Vegetation density increased (~2x foreground trees, ~1.7x mid-ground trees, ~2x ferns).
