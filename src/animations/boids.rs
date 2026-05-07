@@ -69,6 +69,8 @@ pub struct Boids {
     height: usize,
     boids: Vec<Boid>,
     grid: SpatialGrid,
+    cohes_factor: f64,
+    sep_factor: f64,
 }
 
 impl Boids {
@@ -94,6 +96,8 @@ impl Boids {
             height,
             boids,
             grid: SpatialGrid::new(width as f64, height as f64, 25.0),
+            cohes_factor: 0.005,
+            sep_factor: 2.0,
         }
     }
 }
@@ -107,6 +111,19 @@ impl Animation for Boids {
         self.width = width;
         self.height = height;
         self.grid = SpatialGrid::new(width as f64, height as f64, 25.0);
+    }
+
+    fn set_params(&mut self, params: &crate::external::ExternalParams) {
+        if let Some(intensity) = params.intensity {
+            self.cohes_factor = intensity.clamp(0.001, 0.05);
+        }
+        if let Some(cs) = params.color_shift {
+            self.sep_factor = cs.clamp(0.5, 5.0);
+        }
+    }
+
+    fn supported_params(&self) -> &'static [(&'static str, f64, f64)] {
+        &[("intensity", 0.001, 0.05), ("color_shift", 0.5, 5.0)]
     }
 
     fn update(&mut self, canvas: &mut Canvas, dt: f64, _time: f64) {
@@ -167,9 +184,9 @@ impl Animation for Boids {
             }
 
             // Apply forces
-            let sep_factor = 2.0;
+            let sep_factor = self.sep_factor;
             let align_factor = 0.05;
-            let cohes_factor = 0.005;
+            let cohes_factor = self.cohes_factor;
 
             boid.vx += sep_x * sep_factor + align_x * align_factor + cohes_x * cohes_factor;
             boid.vy += sep_y * sep_factor + align_y * align_factor + cohes_y * cohes_factor;
