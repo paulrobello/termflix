@@ -105,6 +105,7 @@ fn main() -> io::Result<()> {
 
     // Load config file (defaults if not found)
     let cfg = config::load_config();
+    let keybindings = build_keybindings(&cfg);
 
     let data_file = cli.data_file.clone().or(cfg.data_file.clone());
 
@@ -212,6 +213,7 @@ fn main() -> io::Result<()> {
         cli.screensaver,
         cli.record.as_deref(),
         data_file,
+        &keybindings,
     );
 
     // Restore terminal — disable raw mode first (doesn't write to stdout)
@@ -320,6 +322,7 @@ fn run_loop(
     screensaver: bool,
     record_path: Option<&str>,
     data_file: Option<String>,
+    keybindings: &KeyBindings,
 ) -> io::Result<()> {
     let (mut cols, mut rows) = terminal::size()?;
     let is_tmux = std::env::var("TMUX").is_ok();
@@ -405,7 +408,7 @@ fn run_loop(
                             return Ok(());
                         }
                         match code {
-                            KeyCode::Char('q') | KeyCode::Esc => {
+                            kc if keybindings.quit.contains(&kc) => {
                                 if let (Some(rec), Some(path)) = (recorder.take(), record_path) {
                                     let mut stdout = io::stdout();
                                     execute!(stdout, cursor::Show, terminal::LeaveAlternateScreen)?;
@@ -417,12 +420,12 @@ fn run_loop(
                                 }
                                 return Ok(());
                             }
-                            KeyCode::Right | KeyCode::Char('n') => {
+                            kc if keybindings.next.contains(&kc) => {
                                 anim_index = (anim_index + 1) % animations::ANIMATION_NAMES.len();
                                 start_transition(&mut transition, anim_index);
                                 cycle_start = Instant::now();
                             }
-                            KeyCode::Left | KeyCode::Char('p') => {
+                            kc if keybindings.prev.contains(&kc) => {
                                 anim_index = if anim_index == 0 {
                                     animations::ANIMATION_NAMES.len() - 1
                                 } else {
@@ -431,7 +434,7 @@ fn run_loop(
                                 start_transition(&mut transition, anim_index);
                                 cycle_start = Instant::now();
                             }
-                            KeyCode::Char('r') => {
+                            kc if keybindings.render.contains(&kc) => {
                                 let idx = RENDER_MODES
                                     .iter()
                                     .position(|&m| m == render_mode)
@@ -439,7 +442,7 @@ fn run_loop(
                                 render_mode = RENDER_MODES[(idx + 1) % RENDER_MODES.len()];
                                 needs_rebuild = true;
                             }
-                            KeyCode::Char('c') => {
+                            kc if keybindings.color.contains(&kc) => {
                                 let idx = COLOR_MODES
                                     .iter()
                                     .position(|&m| m == color_mode)
@@ -447,7 +450,7 @@ fn run_loop(
                                 color_mode = COLOR_MODES[(idx + 1) % COLOR_MODES.len()];
                                 needs_rebuild = true;
                             }
-                            KeyCode::Char('h') => {
+                            kc if keybindings.status.contains(&kc) => {
                                 hide_status = !hide_status;
                                 needs_rebuild = true;
                             }
@@ -705,7 +708,7 @@ fn run_loop(
                         modifiers,
                         ..
                     }) = event::read()?
-                    && (matches!(code, KeyCode::Char('q') | KeyCode::Esc)
+                    && (keybindings.quit.contains(&code)
                         || (code == KeyCode::Char('c')
                             && modifiers.contains(KeyModifiers::CONTROL)))
                 {
@@ -730,7 +733,7 @@ fn run_loop(
                             modifiers,
                             ..
                         }) = event::read()?
-                        && (matches!(code, KeyCode::Char('q') | KeyCode::Esc)
+                        && (keybindings.quit.contains(&code)
                             || (code == KeyCode::Char('c')
                                 && modifiers.contains(KeyModifiers::CONTROL)))
                     {
@@ -788,5 +791,95 @@ fn parse_color_mode(s: &str) -> Option<ColorMode> {
         "ansi256" => Some(ColorMode::Ansi256),
         "true-color" | "truecolor" => Some(ColorMode::TrueColor),
         _ => None,
+    }
+}
+
+fn parse_key_binding(s: &str) -> Option<(KeyCode, KeyModifiers)> {
+    let s = s.trim();
+    if let Some((mods, key)) = s.split_once('+') {
+        let key_code = parse_key_code(key.trim())?;
+        let modifiers = match mods.trim().to_ascii_lowercase().as_str() {
+            "ctrl" => KeyModifiers::CONTROL,
+            "alt" => KeyModifiers::ALT,
+            "shift" => KeyModifiers::SHIFT,
+            _ => return None,
+        };
+        return Some((key_code, modifiers));
+    }
+    let key_code = parse_key_code(s)?;
+    Some((key_code, KeyModifiers::NONE))
+}
+
+fn parse_key_code(s: &str) -> Option<KeyCode> {
+    match s {
+        "Left" => Some(KeyCode::Left),
+        "Right" => Some(KeyCode::Right),
+        "Up" => Some(KeyCode::Up),
+        "Down" => Some(KeyCode::Down),
+        "Esc" => Some(KeyCode::Esc),
+        "Enter" => Some(KeyCode::Enter),
+        "Space" => Some(KeyCode::Char(' ')),
+        "Tab" => Some(KeyCode::Tab),
+        s if s.len() == 1 => Some(KeyCode::Char(s.chars().next().unwrap())),
+        _ => None,
+    }
+}
+
+struct KeyBindings {
+    next: Vec<KeyCode>,
+    prev: Vec<KeyCode>,
+    quit: Vec<KeyCode>,
+    render: Vec<KeyCode>,
+    color: Vec<KeyCode>,
+    status: Vec<KeyCode>,
+}
+
+impl KeyBindings {
+    fn defaults() -> Self {
+        KeyBindings {
+            next: vec![KeyCode::Right, KeyCode::Char('n')],
+            prev: vec![KeyCode::Left, KeyCode::Char('p')],
+            quit: vec![KeyCode::Char('q'), KeyCode::Esc],
+            render: vec![KeyCode::Char('r')],
+            color: vec![KeyCode::Char('c')],
+            status: vec![KeyCode::Char('h')],
+        }
+    }
+}
+
+fn build_keybindings(cfg: &config::Config) -> KeyBindings {
+    let kb = cfg.keybindings.as_ref();
+    let defaults = KeyBindings::defaults();
+    KeyBindings {
+        next: kb
+            .and_then(|m| m.get("next"))
+            .and_then(|s| parse_key_binding(s))
+            .map(|(c, _)| vec![c])
+            .unwrap_or(defaults.next),
+        prev: kb
+            .and_then(|m| m.get("prev"))
+            .and_then(|s| parse_key_binding(s))
+            .map(|(c, _)| vec![c])
+            .unwrap_or(defaults.prev),
+        quit: kb
+            .and_then(|m| m.get("quit"))
+            .and_then(|s| parse_key_binding(s))
+            .map(|(c, _)| vec![c])
+            .unwrap_or(defaults.quit),
+        render: kb
+            .and_then(|m| m.get("render"))
+            .and_then(|s| parse_key_binding(s))
+            .map(|(c, _)| vec![c])
+            .unwrap_or(defaults.render),
+        color: kb
+            .and_then(|m| m.get("color"))
+            .and_then(|s| parse_key_binding(s))
+            .map(|(c, _)| vec![c])
+            .unwrap_or(defaults.color),
+        status: kb
+            .and_then(|m| m.get("status"))
+            .and_then(|s| parse_key_binding(s))
+            .map(|(c, _)| vec![c])
+            .unwrap_or(defaults.status),
     }
 }
