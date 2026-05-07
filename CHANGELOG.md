@@ -4,6 +4,29 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+- **10 new animations** (55 total, up from 44):
+  - **Maze** (`maze`) — Animated maze generation using recursive backtracking with step-by-step wall carving, BFS flood-fill solving showing explored cells, and highlighted solution path. Resets and generates a new maze after display. Ascii render mode.
+  - **Tetris** (`tetris`) — Self-playing Tetris with all 7 tetrominoes, AI piece placement using weighted heuristic scoring (line clears, height, holes, bumpiness), ghost piece preview, line-clear flash animation, next-piece preview HUD, and speed progression. HalfBlock render mode.
+  - **Metaballs** (`metaballs`) — Organic blobs merging and splitting using thresholded distance fields. 4–6 bouncing balls with HSV-blended colors, smooth edge fade near threshold, and bright core glow. HalfBlock render mode.
+  - **Flappy Bird** (`flappy_bird`) — Self-playing Flappy Bird with AI controller, gravity physics, scrolling pipe obstacles with adaptive gap sizing, collision detection, score display, and game-over reset. HalfBlock render mode.
+  - **Automata** (`automata`) — Cellular automata cycling through 6 rulesets (Conway's Life, Highlife, Day & Night, Seeds, Diamoeba, Replicator). Cell age tracking with warm color gradient, double-buffered grid, auto-cycle every 17 seconds with dead-grid early reset. HalfBlock render mode.
+  - **Pendulum** (`pendulum`) — Pendulum wave with 20 pendulums at slightly different periods creating mesmerizing phase patterns. Rainbow-colored bobs with DDA-rendered rods, ghost trails, and pivot dots. Pure math, no stored state. HalfBlock render mode.
+  - **Voronoi** (`voronoi`) — Animated Voronoi diagram with 8–15 drifting seed points, distance-based brightness dimming, white edge detection at cell boundaries, and periodic Lloyd relaxation toward uniform cell distribution. HalfBlock render mode.
+  - **N-Body** (`nbody`) — N-body gravitational simulation with 5–8 orbiting masses, Euler integration with 2 sub-steps per frame, fading color trails, collision/merging with mass-weighted averaging, and respawn when bodies deplete. HalfBlock render mode.
+  - **Rainforest** (`rainforest`) — Layered rainforest scene with parallax scrolling across 3 depth layers (background mountains, mid-ground trees, foreground canopy), falling leaves with horizontal sway, periodic rain bursts, and tropical birds. Ascii render mode.
+  - **Reaction Diffusion** (`reaction_diffusion`) — Gray-Scott reaction-diffusion system producing organic coral/brain patterns. Downsampled simulation grid (1/4 canvas) for performance, 9-point Laplacian stencil, auto-reseed every 30 seconds. HalfBlock render mode.
+- **Matrix rain depth enhancement** — `matrix` animation now renders 3 depth layers (far/dim/slow, mid/medium, near/bright/fast) with different drop counts, speeds, trail lengths, and head colors, creating parallax depth.
+
+### Dependencies
+- Updated `clap` 4.5 → 4.6
+- Updated `notify` 7 → 8 (no API changes for our usage)
+- Updated `toml` 1.0 → 1.1
+- Loosened pin on `serde`, `serde_json`, `libc`, `rand`, `dirs` to semver-compatible ranges
+
+### Fixed
+- Collapsible `match` arm for `Event::FocusGained` in screensaver mode (clippy `collapsible_match`)
+
 ## [0.4.2] - 2026-02-26
 
 ### Added

@@ -14,11 +14,11 @@ authors = ["Paul Robello <probello@gmail.com>"]
 [dependencies]
 crossterm = "0.29.0"
 noise = "0.9.0"
-clap = { version = "4.5.60", features = ["derive"] }
-rand = "0.10.0"
-libc = "0.2.182"
-toml = "1.0.3"
-serde = { version = "1.0.228", features = ["derive"] }
-serde_json = "1.0"
-notify = { version = "7", default-features = false, features = ["macos_kqueue", "mio"] }
-dirs = "6.0.0"
+clap = { version = "4.6", features = ["derive"] }
+rand = "0.10"
+libc = "0.2"
+toml = "1.1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+notify = { version = "8", default-features = false, features = ["macos_kqueue", "mio"] }
+dirs = "6"

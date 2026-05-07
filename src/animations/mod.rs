@@ -1,5 +1,6 @@
 pub mod atom;
 pub mod aurora;
+pub mod automata;
 pub mod blackhole;
 pub mod boids;
 pub mod campfire;
@@ -10,6 +11,7 @@ pub mod dragon;
 pub mod eclipse;
 pub mod fire;
 pub mod fireflies;
+pub mod flappy_bird;
 pub mod flow_field;
 pub mod fountain;
 pub mod garden;
@@ -22,14 +24,20 @@ pub mod life;
 pub mod lightning;
 pub mod mandelbrot;
 pub mod matrix;
+pub mod maze;
+pub mod metaballs;
+pub mod nbody;
 pub mod ocean;
 pub mod particles;
+pub mod pendulum;
 pub mod petals;
 pub mod plasma;
 pub mod pong;
 pub mod pulse;
 pub mod radar;
 pub mod rain;
+pub mod rainforest;
+pub mod reaction_diffusion;
 pub mod ripple;
 pub mod sandstorm;
 pub mod sierpinski;
@@ -39,7 +47,9 @@ pub mod snow;
 pub mod sort;
 pub mod spiral;
 pub mod starfield;
+pub mod tetris;
 pub mod visualizer;
+pub mod voronoi;
 pub mod waterfall;
 pub mod wave;
 
@@ -83,6 +93,7 @@ pub const ANIMATIONS: &[(&str, &str)] = &[
     ("wave", "Sine wave interference from moving sources"),
     ("life", "Conway's Game of Life cellular automaton"),
     ("particles", "Fireworks bursting with physics and fade"),
+    ("pendulum", "Pendulum wave with mesmerizing phase patterns"),
     ("rain", "Raindrops with splash particles and wind"),
     ("fountain", "Water fountain with jets, splashes, and mist"),
     ("flow", "Perlin noise flow field with particle trails"),
@@ -109,20 +120,50 @@ pub const ANIMATIONS: &[(&str, &str)] = &[
     ("eclipse", "Moon crossing sun with corona rays"),
     ("blackhole", "Black hole with accretion disk and lensing"),
     ("radar", "Rotating radar sweep with fading blips"),
+    (
+        "rainforest",
+        "Layered rainforest with parallax scrolling, rain, birds, and falling leaves",
+    ),
     ("crystallize", "DLA crystal growth from center seed"),
     ("hackerman", "Scrolling hex/binary hacker terminal"),
     ("visualizer", "Audio spectrum analyzer with bouncing bars"),
     ("cells", "Cell division and mitosis animation"),
     ("atom", "Electrons orbiting a nucleus in 3D"),
+    (
+        "automata",
+        "Cellular automata cycling through multiple rulesets",
+    ),
     ("globe", "Rotating wireframe Earth with continents"),
     ("dragon", "Dragon curve fractal with color cycling"),
     ("sierpinski", "Animated Sierpinski triangle with zoom"),
     ("mandelbrot", "Mandelbrot set with zoom and color cycling"),
+    (
+        "maze",
+        "Animated maze generation with recursive backtracking and BFS solving",
+    ),
+    (
+        "metaballs",
+        "Organic metaballs merging and splitting with smooth distance fields",
+    ),
+    (
+        "nbody",
+        "N-body gravitational simulation with colorful orbiting masses and merging",
+    ),
     ("langton", "Langton's Ant cellular automaton"),
     ("sort", "Sorting algorithm visualizer"),
+    ("tetris", "Self-playing Tetris with AI piece placement"),
     ("snake", "Self-playing Snake game AI"),
     ("invaders", "Space Invaders attract mode demo"),
     ("pong", "Self-playing Pong with AI paddles"),
+    ("flappy_bird", "Self-playing Flappy Bird with AI"),
+    (
+        "reaction_diffusion",
+        "Gray-Scott reaction-diffusion coral/brain patterns",
+    ),
+    (
+        "voronoi",
+        "Animated Voronoi diagram with drifting colored cells and edge detection",
+    ),
 ];
 
 /// List of all available animation names.
@@ -134,6 +175,7 @@ pub const ANIMATION_NAMES: &[&str] = &[
     "wave",
     "life",
     "particles",
+    "pendulum",
     "rain",
     "fountain",
     "flow",
@@ -157,20 +199,29 @@ pub const ANIMATION_NAMES: &[&str] = &[
     "eclipse",
     "blackhole",
     "radar",
+    "rainforest",
     "crystallize",
     "hackerman",
     "visualizer",
     "cells",
     "atom",
+    "automata",
     "globe",
     "dragon",
     "sierpinski",
     "mandelbrot",
+    "maze",
+    "metaballs",
+    "nbody",
     "langton",
     "sort",
+    "tetris",
     "snake",
     "invaders",
     "pong",
+    "flappy_bird",
+    "reaction_diffusion",
+    "voronoi",
 ];
 
 /// Create an animation by name with scale factor for particle/element counts.
@@ -183,6 +234,7 @@ pub fn create(name: &str, width: usize, height: usize, scale: f64) -> Option<Box
         "wave" => Box::new(wave::Wave::new()),
         "life" => Box::new(life::GameOfLife::new(width, height)),
         "particles" => Box::new(particles::Particles::new(width, height, scale)),
+        "pendulum" => Box::new(pendulum::Pendulum::new()),
         "rain" => Box::new(rain::Rain::new(width, height, scale)),
         "fountain" => Box::new(fountain::Fountain::new(width, height, scale)),
         "flow" => Box::new(flow_field::FlowField::new(width, height, scale)),
@@ -206,20 +258,31 @@ pub fn create(name: &str, width: usize, height: usize, scale: f64) -> Option<Box
         "eclipse" => Box::new(eclipse::Eclipse::new()),
         "blackhole" => Box::new(blackhole::Blackhole::new()),
         "radar" => Box::new(radar::Radar::new()),
+        "rainforest" => Box::new(rainforest::Rainforest::new(width, height, scale)),
         "crystallize" => Box::new(crystallize::Crystallize::new(width, height, scale)),
         "hackerman" => Box::new(hackerman::Hackerman::new(width, height, scale)),
         "visualizer" => Box::new(visualizer::Visualizer::new(width, height, scale)),
         "cells" => Box::new(cells::Cells::new(width, height, scale)),
         "atom" => Box::new(atom::Atom::new()),
+        "automata" => Box::new(automata::Automata::new(width, height, scale)),
         "globe" => Box::new(globe::Globe::new()),
         "dragon" => Box::new(dragon::Dragon::new()),
         "sierpinski" => Box::new(sierpinski::Sierpinski::new()),
         "mandelbrot" => Box::new(mandelbrot::Mandelbrot::new()),
+        "maze" => Box::new(maze::Maze::new(width, height, scale)),
+        "metaballs" => Box::new(metaballs::Metaballs::new(width, height, scale)),
+        "nbody" => Box::new(nbody::NBody::new(width, height, scale)),
         "langton" => Box::new(langton::Langton::new(width, height, scale)),
         "sort" => Box::new(sort::Sort::new(width, height, scale)),
+        "tetris" => Box::new(tetris::Tetris::new(width, height, scale)),
         "snake" => Box::new(snake::Snake::new(width, height, scale)),
         "invaders" => Box::new(invaders::Invaders::new(width, height, scale)),
         "pong" => Box::new(pong::Pong::new(width, height, scale)),
+        "voronoi" => Box::new(voronoi::Voronoi::new(width, height, scale)),
+        "flappy_bird" => Box::new(flappy_bird::FlappyBird::new(width, height, scale)),
+        "reaction_diffusion" => Box::new(reaction_diffusion::ReactionDiffusion::new(
+            width, height, scale,
+        )),
         _ => return None,
     })
 }

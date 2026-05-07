@@ -9,7 +9,10 @@ use animations::Animation;
 use clap::Parser;
 use crossterm::{
     cursor,
-    event::{self, DisableFocusChange, EnableFocusChange, Event, KeyCode, KeyEvent, KeyEventKind},
+    event::{
+        self, DisableFocusChange, EnableFocusChange, Event, KeyCode, KeyEvent, KeyEventKind,
+        KeyModifiers,
+    },
     execute, terminal,
 };
 use external::{CurrentState, ExternalParams, ParamsSource, spawn_reader};
@@ -155,6 +158,28 @@ fn main() -> io::Result<()> {
         }
         std::process::exit(1);
     }
+
+    // Set up panic hook to restore terminal before printing panic info.
+    // Without this, a panic inside raw mode leaves the terminal unusable.
+    let default_hook = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |info| {
+        let _ = terminal::disable_raw_mode();
+        #[cfg(unix)]
+        {
+            use std::os::unix::io::AsRawFd;
+            let fd = io::stdout().as_raw_fd();
+            let restore = b"\x1b[?2026l\x1b[?25h\x1b[?1049l";
+            unsafe {
+                libc::write(fd, restore.as_ptr() as *const libc::c_void, restore.len());
+            }
+        }
+        #[cfg(not(unix))]
+        {
+            let mut stdout = io::stdout();
+            let _ = execute!(stdout, cursor::Show, terminal::LeaveAlternateScreen);
+        }
+        default_hook(info);
+    }));
 
     terminal::enable_raw_mode()?;
     let mut stdout = io::stdout();
@@ -348,8 +373,13 @@ fn run_loop(
                     Event::Key(KeyEvent {
                         code,
                         kind: KeyEventKind::Press,
+                        modifiers,
                         ..
                     }) => {
+                        // Ctrl+C always quits
+                        if code == KeyCode::Char('c') && modifiers.contains(KeyModifiers::CONTROL) {
+                            return Ok(());
+                        }
                         if screensaver {
                             return Ok(());
                         }
@@ -425,10 +455,8 @@ fn run_loop(
                             _ => {}
                         }
                     }
-                    Event::FocusGained => {
-                        if screensaver {
-                            return Ok(());
-                        }
+                    Event::FocusGained if screensaver => {
+                        return Ok(());
                     }
                     _ => {}
                 }
@@ -652,9 +680,12 @@ fn run_loop(
                     && let Event::Key(KeyEvent {
                         code,
                         kind: KeyEventKind::Press,
+                        modifiers,
                         ..
                     }) = event::read()?
-                    && matches!(code, KeyCode::Char('q') | KeyCode::Esc)
+                    && (matches!(code, KeyCode::Char('q') | KeyCode::Esc)
+                        || (code == KeyCode::Char('c')
+                            && modifiers.contains(KeyModifiers::CONTROL)))
                 {
                     return Ok(());
                 }
@@ -674,9 +705,12 @@ fn run_loop(
                         && let Event::Key(KeyEvent {
                             code,
                             kind: KeyEventKind::Press,
+                            modifiers,
                             ..
                         }) = event::read()?
-                        && matches!(code, KeyCode::Char('q') | KeyCode::Esc)
+                        && (matches!(code, KeyCode::Char('q') | KeyCode::Esc)
+                            || (code == KeyCode::Char('c')
+                                && modifiers.contains(KeyModifiers::CONTROL)))
                     {
                         return Ok(());
                     }
