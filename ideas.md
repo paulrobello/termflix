@@ -19,9 +19,6 @@ Accept MIDI or OSC messages to drive animation parameters in real time. Knobs co
 ### [control] Audio-Reactive Visualizer (large)
 Replace the fake spectrum in `visualizer` with actual audio input (e.g., via CPAL or PulseAudio). Real FFT analysis driving bar heights, color shifts, and animation intensity. Could also modulate other animations' parameters based on beat detection.
 
-### ~~[control] Per-Animation Exposed Parameters~~ (done)
-Exposed params on boids (cohesion/separation), particles (gravity/drag), wave (amplitude/frequency), sort (speed), snake (speed), pong (speed). Now 8 animations support external params.
-
 ---
 
 ## Rendering & Visual Quality
@@ -72,7 +69,7 @@ Show a timestamp and frame counter overlay during playback for debugging/demo pu
 ## Performance & Architecture
 
 ### [arch] Macro-Based Animation Registration (small)
-Replace the manual 3-step registration (module declaration + `ANIMATIONS` list + `create()` match) with a `declare_animation!()` macro that handles all three in one line. Reduces boilerplate and eliminates the risk of adding an animation but forgetting to register it (like the current `vortex` dead code).
+Replace the manual 3-step registration (module declaration + `ANIMATIONS` list + `create()` match) with a `declare_animation!()` macro that handles all three in one line. Reduces boilerplate and eliminates the risk of adding an animation but forgetting to register it.
 
 ### [arch] Threaded Canvas Rendering (large)
 Move rendering off the main thread. The main loop currently computes the animation update and renders synchronously. With a double-buffered canvas, update could run on one thread while the previous frame renders on another, potentially doubling throughput.
@@ -93,14 +90,8 @@ Add a `--preview` flag that renders a single representative frame of each animat
 ### [ux] Search / Filter Animation List (small)
 Enhance `--list` output with optional filtering: `termflix --list fire` shows only animations matching "fire". Useful when the list grows beyond what fits on screen.
 
-### ~~[ux] Transition Effects Between Animations~~ (done)
-8-frame fade-out/fade-in transition when switching animations via hotkey, auto-cycle, or external control.
-
 ### [ux] Information Overlay (small)
 Add a hotkey (e.g., `i`) that temporarily shows an overlay with the current animation's name, description, and tunable parameters. Disappears after a few seconds or on next keypress.
-
-### ~~[ux] Configurable Keybindings~~ (done)
-Remappable hotkeys via `[keybindings]` section in config.toml. Supports single chars, special keys, and modifier combos.
 
 ### [ux] Progress Bar for Auto-Cycle (small)
 When auto-cycle is active, show a thin progress bar at the bottom indicating how long until the next animation switch. Gives visual rhythm to the cycle.
@@ -126,24 +117,14 @@ Document or provide helper scripts for integrating `--screensaver` mode with com
 
 ---
 
-## Dead Code Cleanup
-
-### ~~[cleanup] Register or Remove `vortex` Animation~~ (done)
-Removed `vortex.rs` — was dead code never compiled.
-
----
-
 ## Priority Quick Picks
 
 **Quick wins (< 1 hour):**
-- ~~Register/remove `vortex` animation~~ (done)
 - `--list` filtering (`termflix --list fire`)
-- ~~Expose params on 3-5 more animations~~ (done)
 
 **Medium effort (1-4 hours):**
 - Macro-based animation registration
 - Custom color palettes in config
-- ~~Transition effects between animations~~ (done)
 
 **Large effort (full day+):**
 - Audio-reactive visualizer

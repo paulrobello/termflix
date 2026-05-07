@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added
+- **Per-animation exposed parameters** — 6 more animations now respond to external control (`set_params`/`supported_params`): `boids` (intensity→cohesion, color_shift→separation), `particles` (intensity→gravity, color_shift→drag), `wave` (intensity→amplitude, color_shift→frequency), `sort` (speed→ops/frame), `snake` (speed→tick rate), `pong` (speed→ball speed). Total: 8 animations with external params (up from 2).
+- **Transition effects** — 8-frame fade-out/fade-in when switching animations via hotkey, auto-cycle, or external control, replacing the previous instant cut.
+- **Configurable keybindings** — `[keybindings]` section in `config.toml` to remap hotkeys (`next`, `prev`, `quit`, `render`, `color`, `status`). Supports single characters, special keys (`Right`, `Left`, `Esc`, `Space`, `Tab`), and modifier combos (`Ctrl+c`, `Alt+q`).
+
+### Removed
+- **Dead `vortex` animation** — Removed `vortex.rs` which was never compiled or registered (no `pub mod vortex;` declaration).
+
+### Added
 - **10 new animations** (55 total, up from 44):
   - **Maze** (`maze`) — Animated maze generation using recursive backtracking with step-by-step wall carving, BFS flood-fill solving showing explored cells, and highlighted solution path. Resets and generates a new maze after display. Ascii render mode.
   - **Tetris** (`tetris`) — Self-playing Tetris with all 7 tetrominoes, AI piece placement using weighted heuristic scoring (line clears, height, holes, bumpiness), ghost piece preview, line-clear flash animation, next-piece preview HUD, and speed progression. HalfBlock render mode.
