@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added
+- **Post-processing effects** — Bloom/glow, vignette (edge darkening), and CRT scanline effects configurable via `--bloom`, `--vignette`, `--scanlines` CLI flags or `[postproc]` section in config.
+- **GIF export** — `--export-gif output.gif` (requires `--play`) converts `.asciianim` recordings to animated GIF with hand-written GIF89a encoder (no new dependencies).
+- **Macro-based animation registration** — `declare_animations!` macro replaces manual 3-list registration pattern. Adding a new animation now requires one macro entry instead of editing 4 places.
+
+### Changed
+- **Unified particle system** — Extended shared `Particle` struct with per-particle RGB color. Added `emit_colored()` and `draw_colored()` methods. Migrated `particles` animation from standalone to shared system.
+- **Animation constructor standardization** — All animation `new()` methods now accept `(width, height, scale)` for consistency with the macro registration system.
+
+### Added
 - **Per-animation exposed parameters** — 6 more animations now respond to external control (`set_params`/`supported_params`): `boids` (intensity→cohesion, color_shift→separation), `particles` (intensity→gravity, color_shift→drag), `wave` (intensity→amplitude, color_shift→frequency), `sort` (speed→ops/frame), `snake` (speed→tick rate), `pong` (speed→ball speed). Total: 8 animations with external params (up from 2).
 - **Transition effects** — 8-frame fade-out/fade-in when switching animations via hotkey, auto-cycle, or external control, replacing the previous instant cut.
 - **Configurable keybindings** — `[keybindings]` section in `config.toml` to remap hotkeys (`next`, `prev`, `quit`, `render`, `color`, `status`). Supports single characters, special keys (`Right`, `Left`, `Esc`, `Space`, `Tab`), and modifier combos (`Ctrl+c`, `Alt+q`).

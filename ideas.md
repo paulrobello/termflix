@@ -32,8 +32,8 @@ Allow users to define named color palettes in config (e.g., `cyberpunk = ["#0d02
 ### [render] Sixel / Kitty Image Protocol Support (large)
 Output actual pixel graphics via Sixel or Kitty image protocols on supported terminals. Would enable smooth gradients and true anti-aliasing beyond what Braille/half-block can achieve. Fall back to current modes on unsupported terminals.
 
-### [render] Post-Processing Effects (small)
-Add optional post-processing passes to the canvas: bloom/glow (brighten neighbors of bright pixels), vignette (darken edges), scanlines (CRT effect). Configurable via config or CLI flags. The existing `apply_effects()` is a good hook point.
+### [render] Post-Processing Effects (small) ✅ DONE
+~~Add optional post-processing passes to the canvas: bloom/glow (brighten neighbors of bright pixels), vignette (darken edges), scanlines (CRT effect). Configurable via config or CLI flags. The existing `apply_effects()` is a good hook point.~~
 
 ### [render] Smooth Brightness Transitions (small)
 Track previous-frame pixel values and blend toward target brightness over N frames. Eliminates the "flickering pixel" artifact in animations like `fire` and `plasma` where noise causes rapid on/off toggling at the threshold boundary.
@@ -58,8 +58,8 @@ Serve a simple HTTP/WebSocket interface (e.g., on localhost:8080) that provides 
 ### [record] Portable Recording Format (medium)
 Current `.asciianim` stores raw ANSI escape sequences tied to a specific terminal size. A pixel-data format (canvas width/height + per-pixel brightness/RGB arrays) would be portable across render modes and terminal sizes. Could replay the same recording in Braille, half-block, or ASCII.
 
-### [record] GIF/APNG Export (medium)
-Convert recordings to GIF or APNG for sharing. The canvas pixel data is already available per frame — render each frame to an image and compile into an animated image format. Would make it easy to share animations in READMEs, chats, and documentation.
+### [record] GIF/APNG Export (medium) ✅ DONE (GIF only)
+~~Convert recordings to GIF or APNG for sharing. The canvas pixel data is already available per frame — render each frame to an image and compile into an animated image format. Would make it easy to share animations in READMEs, chats, and documentation.~~
 
 ### [record] Recording Timestamp Overlay (small)
 Show a timestamp and frame counter overlay during playback for debugging/demo purposes. Optional via `--play --debug` flag.
@@ -68,8 +68,8 @@ Show a timestamp and frame counter overlay during playback for debugging/demo pu
 
 ## Performance & Architecture
 
-### [arch] Macro-Based Animation Registration (small)
-Replace the manual 3-step registration (module declaration + `ANIMATIONS` list + `create()` match) with a `declare_animation!()` macro that handles all three in one line. Reduces boilerplate and eliminates the risk of adding an animation but forgetting to register it.
+### [arch] Macro-Based Animation Registration (small) ✅ DONE
+~~Replace the manual 3-step registration (module declaration + `ANIMATIONS` list + `create()` match) with a `declare_animation!()` macro that handles all three in one line. Reduces boilerplate and eliminates the risk of adding an animation but forgetting to register it.~~
 
 ### [arch] Threaded Canvas Rendering (large)
 Move rendering off the main thread. The main loop currently computes the animation update and renders synchronously. With a double-buffered canvas, update could run on one thread while the previous frame renders on another, potentially doubling throughput.
@@ -77,8 +77,8 @@ Move rendering off the main thread. The main loop currently computes the animati
 ### [arch] Profile-Guided Animation Tuning (small)
 Add a `--profile` mode that measures per-frame update and render times and outputs a summary on exit. Helps identify which animations need optimization and validates that changes improve performance.
 
-### [arch] Unified Particle System (medium)
-Merge the standalone particle code in `particles.rs` with the reusable `ParticleSystem` generator. The standalone version has per-particle RGB colors that the shared system lacks. Adding color customization to the shared system would allow all particle-heavy animations to use one engine.
+### [arch] Unified Particle System (medium) ✅ DONE
+~~Merge the standalone particle code in `particles.rs` with the reusable `ParticleSystem` generator. The standalone version has per-particle RGB colors that the shared system lacks. Adding color customization to the shared system would allow all particle-heavy animations to use one engine.~~
 
 ---
 
@@ -123,12 +123,10 @@ Document or provide helper scripts for integrating `--screensaver` mode with com
 - `--list` filtering (`termflix --list fire`)
 
 **Medium effort (1-4 hours):**
-- Macro-based animation registration
 - Custom color palettes in config
 
 **Large effort (full day+):**
 - Audio-reactive visualizer
 - Sixel/Kitty image protocol
 - Web remote control
-- GIF/APNG export
 - Mouse interaction

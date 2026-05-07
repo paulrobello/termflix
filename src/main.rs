@@ -1,8 +1,8 @@
 mod animations;
 mod config;
 mod external;
-mod gif;
 pub mod generators;
+mod gif;
 mod record;
 mod render;
 
@@ -148,11 +148,7 @@ fn main() -> io::Result<()> {
             let mut writer = std::io::BufWriter::new(file);
             match gif::export_gif(&mut writer, player.frames(), cols, rows) {
                 Ok(()) => {
-                    println!(
-                        "Exported {} frames to {}",
-                        player.frames().len(),
-                        gif_path
-                    );
+                    println!("Exported {} frames to {}", player.frames().len(), gif_path);
                 }
                 Err(e) => {
                     eprintln!("GIF export failed: {}", e);

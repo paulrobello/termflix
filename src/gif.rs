@@ -154,9 +154,7 @@ impl VirtualTerminal {
                     *g = 0;
                     *b = 0;
                 }
-                38
-                    if i + 1 < nums.len() =>
-                {
+                38 if i + 1 < nums.len() => {
                     if nums[i + 1] == 2 && i + 4 < nums.len() {
                         // Truecolor: 38;2;r;g;b
                         *r = nums[i + 2] as u8;
@@ -220,7 +218,11 @@ fn ansi256_to_rgb(idx: u8) -> (u8, u8, u8) {
             let g_val = (n / 6) % 6;
             let r_val = n / 36;
             const LEVEL: [u8; 6] = [0, 95, 135, 175, 215, 255];
-            (LEVEL[r_val as usize], LEVEL[g_val as usize], LEVEL[b_val as usize])
+            (
+                LEVEL[r_val as usize],
+                LEVEL[g_val as usize],
+                LEVEL[b_val as usize],
+            )
         }
         _ => {
             // Grayscale ramp 232-255
@@ -392,10 +394,12 @@ impl LzwEncoder {
         self.table.fill(None);
 
         // Emit clear code
-        self.packer.write_bits(self.clear_code as u32, self.code_width);
+        self.packer
+            .write_bits(self.clear_code as u32, self.code_width);
 
         if indices.is_empty() {
-            self.packer.write_bits(self.eoi_code as u32, self.code_width);
+            self.packer
+                .write_bits(self.eoi_code as u32, self.code_width);
             self.packer.flush();
             return self.packer.buf.clone();
         }
@@ -449,7 +453,8 @@ impl LzwEncoder {
         // Emit final code
         self.packer.write_bits(current as u32, self.code_width);
         // Emit EOI
-        self.packer.write_bits(self.eoi_code as u32, self.code_width);
+        self.packer
+            .write_bits(self.eoi_code as u32, self.code_width);
         self.packer.flush();
 
         self.packer.buf.clone()
@@ -504,10 +509,10 @@ pub fn export_gif<W: Write>(
     ])?;
     writer.write_all(b"NETSCAPE2.0")?;
     writer.write_all(&[
-        3,    // Sub-block size
-        1,    // Sub-block ID for looping
+        3, // Sub-block size
+        1, // Sub-block ID for looping
         0, 0, // Loop count (0 = infinite)
-        0,    // Block terminator
+        0, // Block terminator
     ])?;
 
     // --- Encode frames ---
@@ -539,7 +544,9 @@ pub fn export_gif<W: Write>(
         if indices == prev_indices {
             // Compute what the delay for this frame would be
             let delay_cs = if fi + 1 < frames.len() {
-                let delta_ms = frames[fi + 1].timestamp_ms.saturating_sub(frame.timestamp_ms);
+                let delta_ms = frames[fi + 1]
+                    .timestamp_ms
+                    .saturating_sub(frame.timestamp_ms);
                 (delta_ms / 10).clamp(2, 65535) as u16
             } else {
                 2 // Minimum 2 centiseconds for last frame
@@ -555,7 +562,9 @@ pub fn export_gif<W: Write>(
         // Calculate delay: time from this frame to the next unique frame (or end)
         let delay_cs = if fi + 1 < frames.len() {
             // Find next frame that will actually be written (or just use next timestamp)
-            let delta_ms = frames[fi + 1].timestamp_ms.saturating_sub(frame.timestamp_ms);
+            let delta_ms = frames[fi + 1]
+                .timestamp_ms
+                .saturating_sub(frame.timestamp_ms);
             (delta_ms / 10).clamp(2, 65535) as u16
         } else {
             2
