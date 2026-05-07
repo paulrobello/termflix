@@ -16,7 +16,7 @@ use crossterm::{
     execute, terminal,
 };
 use external::{CurrentState, ExternalParams, ParamsSource, spawn_reader};
-use render::{Canvas, ColorMode, RenderMode};
+use render::{Canvas, ColorMode, PostProcessConfig, RenderMode};
 use std::io;
 use std::io::IsTerminal;
 use std::sync::mpsc;
@@ -82,6 +82,18 @@ struct Cli {
     /// Watch a file for external control params (ndjson — one JSON object per line)
     #[arg(long, value_name = "PATH")]
     data_file: Option<String>,
+
+    /// Bloom/glow post-processing effect intensity (0.0-1.0)
+    #[arg(long)]
+    bloom: Option<f64>,
+
+    /// Vignette edge-darkening intensity (0.0-1.0)
+    #[arg(long)]
+    vignette: Option<f64>,
+
+    /// Enable CRT scanline effect
+    #[arg(long)]
+    scanlines: bool,
 }
 
 fn main() -> io::Result<()> {
@@ -200,6 +212,20 @@ fn main() -> io::Result<()> {
     let color_quant = cfg.color_quant.unwrap_or(0);
     let render_override = cli.render.or(cfg.render.map(RenderMode::from));
 
+    let postproc = PostProcessConfig {
+        bloom: cli
+            .bloom
+            .or(cfg.postproc.and_then(|p| p.bloom))
+            .unwrap_or(0.0)
+            .clamp(0.0, 1.0),
+        vignette: cli
+            .vignette
+            .or(cfg.postproc.and_then(|p| p.vignette))
+            .unwrap_or(0.0)
+            .clamp(0.0, 1.0),
+        scanlines: cli.scanlines || cfg.postproc.and_then(|p| p.scanlines).unwrap_or(false),
+    };
+
     let result = run_loop(
         &anim_name,
         render_override,
@@ -213,6 +239,7 @@ fn main() -> io::Result<()> {
         cli.screensaver,
         cli.record.as_deref(),
         data_file,
+        postproc,
         &keybindings,
     );
 
@@ -322,6 +349,7 @@ fn run_loop(
     screensaver: bool,
     record_path: Option<&str>,
     data_file: Option<String>,
+    postproc: PostProcessConfig,
     keybindings: &KeyBindings,
 ) -> io::Result<()> {
     let (mut cols, mut rows) = terminal::size()?;
@@ -632,6 +660,7 @@ fn run_loop(
         let intensity = ext_state.intensity().clamp(0.0, 2.0) * transition_factor;
         let hue = ext_state.color_shift().clamp(0.0, 1.0);
         canvas.apply_effects(intensity, hue);
+        canvas.post_process(&postproc);
 
         // Render to string
         let frame = canvas.render();

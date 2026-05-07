@@ -30,6 +30,8 @@ pub struct Config {
     pub data_file: Option<String>,
     /// Custom keybindings (action -> key name)
     pub keybindings: Option<HashMap<String, String>>,
+    /// Post-processing effects configuration
+    pub postproc: Option<PostProcConfig>,
 }
 
 /// Render mode names for config file (kebab-case friendly)
@@ -70,6 +72,14 @@ impl From<ColorModeConfig> for ColorMode {
             ColorModeConfig::TrueColor => ColorMode::TrueColor,
         }
     }
+}
+
+#[derive(Debug, Default, Clone, Copy, Deserialize)]
+#[serde(default)]
+pub struct PostProcConfig {
+    pub bloom: Option<f64>,
+    pub vignette: Option<f64>,
+    pub scanlines: Option<bool>,
 }
 
 /// Get the config file path: ~/.config/termflix/config.toml
@@ -139,6 +149,12 @@ pub fn default_config_string() -> String {
 # render = "r"
 # color = "c"
 # status = "h"
+
+# Post-processing effects
+# [postproc]
+# bloom = 0.3         # Glow effect (0.0-1.0)
+# vignette = 0.4      # Edge darkening (0.0-1.0)
+# scanlines = false   # CRT scanline effect
 "#
     .to_string()
 }

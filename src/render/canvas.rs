@@ -24,6 +24,13 @@ pub enum ColorMode {
     TrueColor,
 }
 
+#[derive(Debug, Clone, Copy, Default)]
+pub struct PostProcessConfig {
+    pub bloom: f64,
+    pub vignette: f64,
+    pub scanlines: bool,
+}
+
 /// A pixel-level canvas that gets rendered to terminal characters.
 /// Coordinates are in "sub-cell" pixel space.
 pub struct Canvas {
@@ -178,6 +185,77 @@ impl Canvas {
         if hue_shift.abs() > 1e-10 {
             for c in &mut self.colors {
                 *c = rotate_hue(*c, hue_shift);
+            }
+        }
+    }
+
+    /// Apply post-processing effects to the canvas.
+    pub fn post_process(&mut self, config: &PostProcessConfig) {
+        if config.bloom > 0.0 {
+            self.apply_bloom(config.bloom);
+        }
+        if config.scanlines {
+            self.apply_scanlines();
+        }
+        if config.vignette > 0.0 {
+            self.apply_vignette(config.vignette);
+        }
+    }
+
+    fn apply_bloom(&mut self, strength: f64) {
+        let w = self.width;
+        let h = self.height;
+        let mut brightened = vec![0.0f64; w * h];
+        for y in 0..h {
+            for x in 0..w {
+                let idx = y * w + x;
+                if self.pixels[idx] > 0.6 {
+                    let boost = strength * 0.15 * self.pixels[idx];
+                    for dy in -1i32..=1 {
+                        for dx in -1i32..=1 {
+                            if dx == 0 && dy == 0 {
+                                continue;
+                            }
+                            let nx = x as i32 + dx;
+                            let ny = y as i32 + dy;
+                            if nx >= 0 && nx < w as i32 && ny >= 0 && ny < h as i32 {
+                                let nidx = ny as usize * w + nx as usize;
+                                brightened[nidx] += boost;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        for (pixel, boost) in self.pixels.iter_mut().zip(brightened.iter()) {
+            *pixel = (*pixel + *boost).clamp(0.0, 1.0);
+        }
+    }
+
+    fn apply_vignette(&mut self, strength: f64) {
+        let cx = self.width as f64 / 2.0;
+        let cy = self.height as f64 / 2.0;
+        let max_dist = (cx * cx + cy * cy).sqrt();
+        if max_dist < 1e-10 {
+            return;
+        }
+        for y in 0..self.height {
+            for x in 0..self.width {
+                let dx = x as f64 - cx;
+                let dy = y as f64 - cy;
+                let dist = (dx * dx + dy * dy).sqrt() / max_dist;
+                let factor = 1.0 - (dist * dist * strength);
+                let idx = y * self.width + x;
+                self.pixels[idx] = (self.pixels[idx] * factor).clamp(0.0, 1.0);
+            }
+        }
+    }
+
+    fn apply_scanlines(&mut self) {
+        for y in (0..self.height).step_by(2) {
+            for x in 0..self.width {
+                let idx = y * self.width + x;
+                self.pixels[idx] *= 0.7;
             }
         }
     }
@@ -345,5 +423,75 @@ mod tests {
         let idx = 3 * 10 + 3;
         assert_eq!(c.colors[idx], (255, 128, 0));
         assert!((c.pixels[idx] - 0.5).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn test_bloom_brightens_neighbors_of_bright_pixel() {
+        let mut c = test_canvas();
+        let cx = 5;
+        let cy = 5;
+        c.pixels[cy * c.width + cx] = 0.9;
+        let cfg = PostProcessConfig {
+            bloom: 0.5,
+            vignette: 0.0,
+            scanlines: false,
+        };
+        c.post_process(&cfg);
+        for dy in -1i32..=1 {
+            for dx in -1i32..=1 {
+                if dx == 0 && dy == 0 {
+                    continue;
+                }
+                let nx = (cx as i32 + dx) as usize;
+                let ny = (cy as i32 + dy) as usize;
+                if nx < c.width && ny < c.height {
+                    assert!(c.pixels[ny * c.width + nx] > 0.0);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn test_vignette_darkens_edges() {
+        let mut c = Canvas::new(10, 10, RenderMode::HalfBlock, ColorMode::TrueColor);
+        for p in &mut c.pixels {
+            *p = 1.0;
+        }
+        let cfg = PostProcessConfig {
+            bloom: 0.0,
+            vignette: 0.8,
+            scanlines: false,
+        };
+        c.post_process(&cfg);
+        let center = c.pixels[5 * c.width + 5];
+        let corner = c.pixels[0];
+        assert!(corner < center);
+    }
+
+    #[test]
+    fn test_scanlines_darkens_even_rows() {
+        let mut c = test_canvas();
+        for p in &mut c.pixels {
+            *p = 1.0;
+        }
+        let cfg = PostProcessConfig {
+            bloom: 0.0,
+            vignette: 0.0,
+            scanlines: true,
+        };
+        c.post_process(&cfg);
+        let even_val = c.pixels[0];
+        let odd_val = c.pixels[c.width];
+        assert!(even_val < odd_val);
+        assert!((odd_val - 1.0).abs() < 1e-10);
+    }
+
+    #[test]
+    fn test_post_process_noop_when_all_disabled() {
+        let mut c = test_canvas();
+        c.pixels[5 * c.width + 5] = 0.75;
+        let before = c.pixels[5 * c.width + 5];
+        c.post_process(&PostProcessConfig::default());
+        assert!((c.pixels[5 * c.width + 5] - before).abs() < 1e-10);
     }
 }
