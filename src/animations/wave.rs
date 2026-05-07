@@ -2,17 +2,36 @@ use super::Animation;
 use crate::render::Canvas;
 
 /// Sine wave interference pattern
-pub struct Wave;
+pub struct Wave {
+    amplitude: f64,
+    frequency: f64,
+}
 
 impl Wave {
     pub fn new() -> Self {
-        Wave
+        Wave {
+            amplitude: 0.5,
+            frequency: 0.3,
+        }
     }
 }
 
 impl Animation for Wave {
     fn name(&self) -> &str {
         "wave"
+    }
+
+    fn set_params(&mut self, params: &crate::external::ExternalParams) {
+        if let Some(intensity) = params.intensity {
+            self.amplitude = intensity.clamp(0.1, 1.0);
+        }
+        if let Some(cs) = params.color_shift {
+            self.frequency = cs.clamp(0.05, 0.8);
+        }
+    }
+
+    fn supported_params(&self) -> &'static [(&'static str, f64, f64)] {
+        &[("intensity", 0.1, 1.0), ("color_shift", 0.05, 0.8)]
     }
 
     fn update(&mut self, canvas: &mut Canvas, _dt: f64, time: f64) {
@@ -34,9 +53,9 @@ impl Animation for Wave {
                 let d1 = ((fx - s1x).powi(2) + (fy - s1y).powi(2)).sqrt();
                 let d2 = ((fx - s2x).powi(2) + (fy - s2y).powi(2)).sqrt();
 
-                let wave1 = (d1 * 0.3 - t * 4.0).sin();
-                let wave2 = (d2 * 0.3 - t * 3.5).sin();
-                let combined = (wave1 + wave2) * 0.5;
+                let wave1 = (d1 * self.frequency - t * 4.0).sin();
+                let wave2 = (d2 * self.frequency - t * 3.5).sin();
+                let combined = (wave1 + wave2) * self.amplitude;
 
                 let v = (combined + 1.0) * 0.5; // normalize to 0..1
 
