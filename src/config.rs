@@ -1,5 +1,6 @@
 use crate::render::{ColorMode, RenderMode};
 use serde::Deserialize;
+use std::collections::HashMap;
 use std::path::PathBuf;
 
 /// User configuration loaded from config file.
@@ -27,6 +28,8 @@ pub struct Config {
     pub unlimited_fps: Option<bool>,
     /// Path to a file to watch for external control params (ndjson)
     pub data_file: Option<String>,
+    /// Custom keybindings (action -> key name)
+    pub keybindings: Option<HashMap<String, String>>,
 }
 
 /// Render mode names for config file (kebab-case friendly)
@@ -127,6 +130,15 @@ pub fn default_config_string() -> String {
 
 # Watch a file for external control params (ndjson — one JSON object per line)
 # data_file = "/tmp/termflix.json"
+
+# Custom keybindings (key names: q, n, Right, Left, Esc, Space, Tab, etc.)
+# [keybindings]
+# next = "Right"
+# prev = "Left"
+# quit = "q"
+# render = "r"
+# color = "c"
+# status = "h"
 "#
     .to_string()
 }
@@ -163,5 +175,18 @@ mod tests {
         // We just verify the type is correct and no panic
         let cfg = Config::default();
         assert!(cfg.fps.is_none()); // All fields are None by default
+    }
+
+    #[test]
+    fn test_config_parses_keybindings() {
+        let toml = r#"
+            [keybindings]
+            next = "Right"
+            quit = "Esc"
+        "#;
+        let cfg: Config = toml::from_str(toml).unwrap();
+        let kb = cfg.keybindings.unwrap();
+        assert_eq!(kb.get("next").unwrap(), "Right");
+        assert_eq!(kb.get("quit").unwrap(), "Esc");
     }
 }
