@@ -6,8 +6,6 @@ Ideas for enhancing existing functionality or adding new features, organized by 
 
 ## New Animations
 
-(All animation ideas from the original list have been implemented — maze, tetris, metaballs, flappy_bird, automata, pendulum, voronoi, nbody, rainforest, reaction_diffusion, and matrix depth enhancement.)
-
 ---
 
 ## External Control & Integration
