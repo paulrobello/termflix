@@ -73,6 +73,7 @@ impl Recorder {
     }
 
     /// Access the recorded frames.
+    #[allow(dead_code)]
     pub fn frames(&self) -> &[Frame] {
         &self.frames
     }

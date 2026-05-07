@@ -642,6 +642,147 @@ pub fn export_gif<W: Write>(
 }
 
 // ---------------------------------------------------------------------------
+// Pixel-based GIF export — bypasses VirtualTerminal entirely
+// ---------------------------------------------------------------------------
+
+/// One frame of RGB pixel data plus its capture timestamp.
+///
+/// `pixels` is row-major, length must equal `width * height` of the
+/// dimensions passed to [`export_gif_pixels`].
+pub struct PixelFrame {
+    pub timestamp_ms: u64,
+    pub pixels: Vec<(u8, u8, u8)>,
+}
+
+/// Export RGB pixel frames as an animated GIF.
+///
+/// `width` / `height` are the native pixel dimensions of each frame.
+/// `scale` upscales each pixel to a `scale x scale` block via nearest-neighbor,
+/// so the resulting GIF is `width * scale` by `height * scale`.
+pub fn export_gif_pixels<W: Write>(
+    writer: &mut W,
+    frames: &[PixelFrame],
+    width: usize,
+    height: usize,
+    scale: usize,
+) -> std::io::Result<()> {
+    assert!(scale >= 1, "scale must be >= 1");
+    let palette = Palette::new();
+    let out_w = (width * scale) as u16;
+    let out_h = (height * scale) as u16;
+    let native_count = width * height;
+    let scaled_count = width * scale * height * scale;
+
+    let mut pal_bytes = [0u8; 768];
+    for (i, &(r, g, b)) in palette.entries.iter().enumerate() {
+        pal_bytes[i * 3] = r;
+        pal_bytes[i * 3 + 1] = g;
+        pal_bytes[i * 3 + 2] = b;
+    }
+
+    writer.write_all(b"GIF89a")?;
+    let packed = 0x80 | 0x07;
+    writer.write_all(&out_w.to_le_bytes())?;
+    writer.write_all(&out_h.to_le_bytes())?;
+    writer.write_all(&[packed, 0, 0])?;
+    writer.write_all(&pal_bytes)?;
+
+    writer.write_all(&[0x21, 0xFF, 11])?;
+    writer.write_all(b"NETSCAPE2.0")?;
+    writer.write_all(&[3, 1, 0, 0, 0])?;
+
+    let mut encoder = LzwEncoder::new(8);
+    let mut prev_native: Vec<u8> = Vec::new();
+    let mut pending_delay_cs: u16 = 0;
+
+    for (fi, frame) in frames.iter().enumerate() {
+        if frame.pixels.len() != native_count {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                format!(
+                    "frame {} has {} pixels, expected {}",
+                    fi,
+                    frame.pixels.len(),
+                    native_count
+                ),
+            ));
+        }
+
+        // Compute palette indices at native resolution (cheap dedup key).
+        let mut native = vec![0u8; native_count];
+        for (i, &(r, g, b)) in frame.pixels.iter().enumerate() {
+            native[i] = palette.find_nearest(r, g, b);
+        }
+
+        let delay_cs = if fi + 1 < frames.len() {
+            let delta_ms = frames[fi + 1]
+                .timestamp_ms
+                .saturating_sub(frame.timestamp_ms);
+            (delta_ms / 10).clamp(2, 65535) as u16
+        } else {
+            2
+        };
+
+        if native == prev_native {
+            pending_delay_cs = pending_delay_cs.saturating_add(delay_cs);
+            continue;
+        }
+
+        let total_delay = pending_delay_cs.saturating_add(delay_cs);
+        pending_delay_cs = 0;
+
+        // Nearest-neighbor upscale to scaled_count.
+        let scaled = if scale == 1 {
+            native.clone()
+        } else {
+            let mut out = vec![0u8; scaled_count];
+            let stride = width * scale;
+            for ny in 0..height {
+                for nx in 0..width {
+                    let idx = native[ny * width + nx];
+                    let base_y = ny * scale;
+                    let base_x = nx * scale;
+                    for dy in 0..scale {
+                        let row_start = (base_y + dy) * stride + base_x;
+                        for dx in 0..scale {
+                            out[row_start + dx] = idx;
+                        }
+                    }
+                }
+            }
+            out
+        };
+
+        writer.write_all(&[0x21, 0xF9, 4, 0x00])?;
+        writer.write_all(&total_delay.to_le_bytes())?;
+        writer.write_all(&[0, 0])?;
+
+        writer.write_all(&[0x2C])?;
+        writer.write_all(&0u16.to_le_bytes())?;
+        writer.write_all(&0u16.to_le_bytes())?;
+        writer.write_all(&out_w.to_le_bytes())?;
+        writer.write_all(&out_h.to_le_bytes())?;
+        writer.write_all(&[0x00])?;
+
+        let compressed = encoder.encode(&scaled);
+        let mut pos = 0;
+        while pos < compressed.len() {
+            let chunk_len = (compressed.len() - pos).min(255);
+            writer.write_all(&[chunk_len as u8])?;
+            writer.write_all(&compressed[pos..pos + chunk_len])?;
+            pos += chunk_len;
+        }
+        writer.write_all(&[0])?;
+
+        prev_native = native;
+    }
+
+    writer.write_all(&[0x3B])?;
+    writer.flush()?;
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
 

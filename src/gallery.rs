@@ -1,11 +1,13 @@
 use crate::animations;
 use crate::gif;
 use crate::png;
-use crate::record::Recorder;
 use crate::render::{Canvas, ColorMode, PostProcessConfig, RenderMode};
 use std::fs;
 use std::io::BufWriter;
 use std::path::PathBuf;
+
+const PNG_SCALE: usize = 8;
+const GIF_SCALE: usize = 4;
 
 pub struct GalleryConfig {
     pub dir: PathBuf,
@@ -98,14 +100,10 @@ fn capture_animation(name: &str, config: &GalleryConfig) -> std::io::Result<()> 
         scanlines: false,
     };
 
-    struct CanvasSnapshot {
-        pixels: Vec<f64>,
-        colors: Vec<(u8, u8, u8)>,
-    }
-
-    let mut recorder = Recorder::new();
-    let mut png_snapshot: Option<CanvasSnapshot> = None;
+    let mut gif_frames: Vec<gif::PixelFrame> = Vec::with_capacity(total_frames);
+    let mut png_frame_pixels: Option<Vec<(u8, u8, u8)>> = None;
     let mut time = 0.0f64;
+    let dt_ms = (dt * 1000.0) as u64;
 
     for frame_i in 0..total_frames {
         canvas.clear();
@@ -113,45 +111,49 @@ fn capture_animation(name: &str, config: &GalleryConfig) -> std::io::Result<()> 
         canvas.apply_effects(1.0, 0.0);
         canvas.post_process(&postproc);
 
-        if frame_i == png_frame {
-            png_snapshot = Some(CanvasSnapshot {
-                pixels: canvas.pixels.clone(),
-                colors: canvas.colors.clone(),
-            });
+        // Convert canvas (brightness * RGB) to flat RGB for this frame.
+        let mut frame_pixels: Vec<(u8, u8, u8)> = Vec::with_capacity(canvas.width * canvas.height);
+        for idx in 0..canvas.pixels.len() {
+            let v = canvas.pixels[idx].clamp(0.0, 1.0);
+            let (r, g, b) = canvas.colors[idx];
+            frame_pixels.push((
+                (r as f64 * v) as u8,
+                (g as f64 * v) as u8,
+                (b as f64 * v) as u8,
+            ));
         }
 
-        let rendered = canvas.render();
-        recorder.capture(&rendered);
+        if frame_i == png_frame {
+            png_frame_pixels = Some(frame_pixels.clone());
+        }
+
+        gif_frames.push(gif::PixelFrame {
+            timestamp_ms: frame_i as u64 * dt_ms,
+            pixels: frame_pixels,
+        });
 
         time += dt;
     }
 
-    // Write PNG — render directly from canvas pixel data (brightness + RGB).
-    // This avoids the VirtualTerminal which can't handle multi-byte UTF-8
-    // half-block characters (▀ ▄ █).
-    if let Some(ref snap) = png_snapshot {
-        let scale = 8usize;
-        let img_w = canvas.width * scale;
-        let img_h = canvas.height * scale;
+    // Write PNG — render the chosen still frame at PNG_SCALE.
+    if let Some(snap) = png_frame_pixels {
+        let img_w = canvas.width * PNG_SCALE;
+        let img_h = canvas.height * PNG_SCALE;
+        let stride = img_w * 4;
         let mut pixels = vec![0u8; img_w * img_h * 4];
 
         for cy in 0..canvas.height {
             for cx in 0..canvas.width {
-                let idx = cy * canvas.width + cx;
-                let brightness = snap.pixels[idx].clamp(0.0, 1.0);
-                let (r, g, b) = snap.colors[idx];
-                let br = (r as f64 * brightness) as u8;
-                let bg = (g as f64 * brightness) as u8;
-                let bb = (b as f64 * brightness) as u8;
-
-                for dy in 0..scale {
-                    for dx in 0..scale {
-                        let px = cx * scale + dx;
-                        let py = cy * scale + dy;
-                        let pidx = (py * img_w + px) * 4;
-                        pixels[pidx] = br;
-                        pixels[pidx + 1] = bg;
-                        pixels[pidx + 2] = bb;
+                let (r, g, b) = snap[cy * canvas.width + cx];
+                let base_y = cy * PNG_SCALE;
+                let base_x = cx * PNG_SCALE;
+                for dy in 0..PNG_SCALE {
+                    let row_start = (base_y + dy) * stride + base_x * 4;
+                    for dx in 0..PNG_SCALE {
+                        let pidx = row_start + dx * 4;
+                        pixels[pidx] = r;
+                        pixels[pidx + 1] = g;
+                        pixels[pidx + 2] = b;
                         pixels[pidx + 3] = 255;
                     }
                 }
@@ -164,11 +166,18 @@ fn capture_animation(name: &str, config: &GalleryConfig) -> std::io::Result<()> 
         png::export_png(&mut writer, &pixels, img_w as u32, img_h as u32)?;
     }
 
-    // Write GIF
+    // Write GIF — pixel-based path; bypasses VirtualTerminal so BG/half-block
+    // colors aren't lost and the output is at canvas resolution × GIF_SCALE.
     let gif_path = config.dir.join(format!("{}.gif", name));
     let file = fs::File::create(&gif_path)?;
     let mut writer = BufWriter::new(file);
-    gif::export_gif(&mut writer, recorder.frames(), cols, rows)?;
+    gif::export_gif_pixels(
+        &mut writer,
+        &gif_frames,
+        canvas.width,
+        canvas.height,
+        GIF_SCALE,
+    )?;
 
     Ok(())
 }

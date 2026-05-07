@@ -58,32 +58,28 @@ fn write_chunk<W: Write>(writer: &mut W, chunk_type: &[u8; 4], data: &[u8]) -> s
     writer.write_all(chunk_type)?;
     writer.write_all(data)?;
 
-    let mut crc_data = [0u8; 4];
-    crc_data.copy_from_slice(chunk_type);
-    let mut crc = crc32(&crc_data);
-    crc = crc32_combine(crc, data);
+    // PNG CRC32 covers chunk_type + data, in a single pass with one finalize.
+    let mut crc = 0xFFFFFFFFu32;
+    for &byte in chunk_type.iter().chain(data.iter()) {
+        crc = CRC_TABLE[((crc ^ byte as u32) & 0xFF) as usize] ^ (crc >> 8);
+    }
+    let crc = !crc;
     writer.write_all(&crc.to_be_bytes())?;
     Ok(())
 }
 
 /// Minimal CRC32 (ISO 3309 / ITU-T V.42) for PNG chunk checksums.
+/// Retained for tests; production CRC is computed inline in `write_chunk`.
+#[cfg(test)]
 fn crc32(data: &[u8]) -> u32 {
-    const TABLE: [u32; 256] = generate_crc_table();
     let mut crc = 0xFFFFFFFFu32;
     for &byte in data {
-        crc = TABLE[((crc ^ byte as u32) & 0xFF) as usize] ^ (crc >> 8);
+        crc = CRC_TABLE[((crc ^ byte as u32) & 0xFF) as usize] ^ (crc >> 8);
     }
     !crc
 }
 
-fn crc32_combine(init: u32, data: &[u8]) -> u32 {
-    const TABLE: [u32; 256] = generate_crc_table();
-    let mut crc = init;
-    for &byte in data {
-        crc = TABLE[((crc ^ byte as u32) & 0xFF) as usize] ^ (crc >> 8);
-    }
-    crc
-}
+const CRC_TABLE: [u32; 256] = generate_crc_table();
 
 const fn generate_crc_table() -> [u32; 256] {
     let mut table = [0u32; 256];
@@ -185,6 +181,56 @@ mod tests {
     fn test_crc32_known() {
         assert_eq!(crc32(&[]), 0x00000000);
         assert_eq!(crc32(b"IEND"), 0xAE426082);
+    }
+
+    #[test]
+    fn test_chunk_crcs_validate() {
+        // Encode a 3x2 RGBA image and verify every chunk's stored CRC matches
+        // a fresh CRC32 over (chunk_type ++ data) — strict PNG decoders enforce
+        // this and reject the file otherwise.
+        let pixels: Vec<u8> = vec![
+            255, 0, 0, 255, 0, 255, 0, 255, 0, 0, 255, 255, // row 0
+            255, 255, 0, 255, 0, 255, 255, 255, 255, 0, 255, 255, // row 1
+        ];
+        let mut buf = Vec::new();
+        export_png(&mut buf, &pixels, 3, 2).unwrap();
+
+        let mut pos = 8; // skip PNG signature
+        let mut chunks_checked = 0;
+        while pos + 8 <= buf.len() {
+            let len = u32::from_be_bytes(buf[pos..pos + 4].try_into().unwrap()) as usize;
+            let chunk_start = pos + 4;
+            let data_start = chunk_start + 4;
+            let crc_start = data_start + len;
+            let crc_end = crc_start + 4;
+            assert!(crc_end <= buf.len(), "chunk extends past file end");
+
+            // Recompute CRC over chunk_type + data
+            let mut crc = 0xFFFFFFFFu32;
+            for &b in &buf[chunk_start..crc_start] {
+                crc = CRC_TABLE[((crc ^ b as u32) & 0xFF) as usize] ^ (crc >> 8);
+            }
+            let expected = !crc;
+            let stored = u32::from_be_bytes(buf[crc_start..crc_end].try_into().unwrap());
+            let chunk_type = std::str::from_utf8(&buf[chunk_start..data_start]).unwrap();
+            assert_eq!(
+                stored, expected,
+                "CRC mismatch for chunk {}: stored {:08x}, expected {:08x}",
+                chunk_type, stored, expected
+            );
+
+            chunks_checked += 1;
+            pos = crc_end;
+            if chunk_type == "IEND" {
+                break;
+            }
+        }
+        // IHDR + IDAT + IEND minimum
+        assert!(
+            chunks_checked >= 3,
+            "expected at least 3 chunks, got {}",
+            chunks_checked
+        );
     }
 
     #[test]

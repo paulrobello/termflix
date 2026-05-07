@@ -1,4 +1,4 @@
-.PHONY: build release run test lint fmt typecheck checkall clean deploy ci
+.PHONY: build release run test lint fmt typecheck checkall clean deploy ci gallery
 
 build:
 	cargo build
@@ -28,6 +28,14 @@ checkall: fmt lint typecheck test build
 
 install:
 	cargo install --path .
+
+# Capture all animations to ./gallery as PNG+GIF with index.html.
+# Filter or override via ARGS, e.g.:
+#   make gallery
+#   make gallery ARGS="fire,plasma"
+#   make gallery ARGS="fire --gallery-dir /tmp/g"
+gallery:
+	cargo run --release -- --gallery $(ARGS)
 
 clean:
 	cargo clean
