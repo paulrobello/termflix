@@ -7,7 +7,7 @@ use std::io::BufWriter;
 use std::path::PathBuf;
 
 const PNG_SCALE: usize = 8;
-const GIF_SCALE: usize = 4;
+const GIF_SCALE: usize = 8;
 
 pub struct GalleryConfig {
     pub dir: PathBuf,
