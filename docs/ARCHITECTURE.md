@@ -212,7 +212,7 @@ The following sequence diagram shows the per-frame render pipeline from canvas p
 ```mermaid
 sequenceDiagram
     participant AL as Animation Loop
-    participant AN as Animation (Box&lt;dyn&gt;)
+    participant AN as Animation
     participant CV as Canvas
     participant RN as Renderer
     participant ST as stdout
@@ -397,10 +397,10 @@ Terminals that support this feature buffer all output between the markers and fl
 ```mermaid
 stateDiagram-v2
     [*] --> Rendering: Normal operation
-    Rendering --> Cooldown: Event::Resize received\nneeds_rebuild = true\ncooldown timer reset
-    Cooldown --> Cooldown: < 100ms elapsed\nskip frame
+    Rendering --> Cooldown: Resize event — set needs_rebuild, reset cooldown timer
+    Cooldown --> Cooldown: under 100ms elapsed — skip frame
     Cooldown --> Rebuilding: 100ms cooldown elapsed
-    Rebuilding --> Rendering: Re-query actual size\nRebuild Canvas\nRecreate animation\ncontinue (skip frame)
+    Rebuilding --> Rendering: Re-query size, rebuild Canvas, recreate animation, skip frame
 
     note right of Cooldown
         Terminal emulators emit
@@ -481,7 +481,7 @@ sequenceDiagram
 
     EXT->>SRC: write ndjson line to file or stdin
     SRC->>BG: file watcher event / stdin line
-    BG->>BG: serde_json::from_str&lt;ExternalParams&gt;
+    BG->>BG: parse JSON line as ExternalParams
     BG->>CH: tx.send(params)
     ML->>CH: rx.try_recv() — non-blocking, once per frame
     CH->>ML: ExternalParams
