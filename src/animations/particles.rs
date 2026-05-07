@@ -1,70 +1,54 @@
 use super::Animation;
+use crate::generators::{ColorGradient, ColorStop, EmitterConfig, ParticleSystem};
 use crate::render::Canvas;
 use rand::RngExt;
-
-struct Particle {
-    x: f64,
-    y: f64,
-    vx: f64,
-    vy: f64,
-    life: f64,
-    max_life: f64,
-    r: u8,
-    g: u8,
-    b: u8,
-}
 
 /// Fireworks / particle fountain
 pub struct Particles {
     width: usize,
     height: usize,
-    particles: Vec<Particle>,
+    system: ParticleSystem,
     spawn_timer: f64,
-    rng: rand::rngs::ThreadRng,
     gravity: f64,
     drag: f64,
 }
 
 impl Particles {
     pub fn new(width: usize, height: usize, scale: f64) -> Self {
+        let config = EmitterConfig {
+            x: 0.0,
+            y: 0.0,
+            spread: std::f64::consts::TAU,
+            angle: 0.0,
+            speed_min: 5.0,
+            speed_max: 40.0,
+            life_min: 0.8,
+            life_max: 2.5,
+            gravity: 15.0,
+            drag: 0.99,
+            wind: 0.0,
+            gradient: ColorGradient::new(vec![
+                ColorStop {
+                    t: 0.0,
+                    r: 255,
+                    g: 255,
+                    b: 255,
+                },
+                ColorStop {
+                    t: 1.0,
+                    r: 255,
+                    g: 255,
+                    b: 255,
+                },
+            ]),
+        };
         Particles {
             width,
             height,
-            particles: Vec::with_capacity((2000.0 * scale) as usize),
+            system: ParticleSystem::new(config, (2000.0 * scale) as usize),
             spawn_timer: 0.0,
-            rng: rand::rng(),
             gravity: 15.0,
             drag: 0.99,
-        }
-    }
-
-    fn spawn_firework(&mut self) {
-        let cx = self
-            .rng
-            .random_range(self.width as f64 * 0.2..self.width as f64 * 0.8);
-        let cy = self
-            .rng
-            .random_range(self.height as f64 * 0.2..self.height as f64 * 0.6);
-        let count = self.rng.random_range(30..80);
-        let r: u8 = self.rng.random_range(100..255);
-        let g: u8 = self.rng.random_range(100..255);
-        let b: u8 = self.rng.random_range(100..255);
-
-        for _ in 0..count {
-            let angle = self.rng.random_range(0.0..std::f64::consts::TAU);
-            let speed = self.rng.random_range(5.0..40.0);
-            let life = self.rng.random_range(0.8..2.5);
-            self.particles.push(Particle {
-                x: cx,
-                y: cy,
-                vx: angle.cos() * speed,
-                vy: angle.sin() * speed,
-                life,
-                max_life: life,
-                r,
-                g,
-                b,
-            });
         }
     }
 }
@@ -97,37 +81,27 @@ impl Animation for Particles {
     }
 
     fn update(&mut self, canvas: &mut Canvas, dt: f64, _time: f64) {
-        // Spawn
         self.spawn_timer += dt;
         if self.spawn_timer > 0.8 {
             self.spawn_timer = 0.0;
-            self.spawn_firework();
+            let mut rng = rand::rng();
+            let cx = rng.random_range(self.width as f64 * 0.2..self.width as f64 * 0.8);
+            let cy = rng.random_range(self.height as f64 * 0.2..self.height as f64 * 0.6);
+            let count = rng.random_range(30..80);
+            let r: u8 = rng.random_range(100..255);
+            let g: u8 = rng.random_range(100..255);
+            let b: u8 = rng.random_range(100..255);
+
+            self.system.config.x = cx;
+            self.system.config.y = cy;
+            self.system.emit_colored(count, (r, r), (g, g), (b, b));
         }
 
-        // Update
-        for p in &mut self.particles {
-            p.x += p.vx * dt;
-            p.y += p.vy * dt;
-            p.vy += self.gravity * dt; // gravity
-            p.vx *= self.drag; // drag
-            p.life -= dt;
-        }
+        self.system.config.gravity = self.gravity;
+        self.system.config.drag = self.drag;
+        self.system.update(dt);
 
-        // Remove dead
-        self.particles.retain(|p| p.life > 0.0);
-
-        // Draw
         canvas.clear();
-        for p in &self.particles {
-            let ix = p.x as usize;
-            let iy = p.y as usize;
-            if ix < canvas.width && iy < canvas.height {
-                let fade = (p.life / p.max_life).clamp(0.0, 1.0);
-                let r = (p.r as f64 * fade) as u8;
-                let g = (p.g as f64 * fade) as u8;
-                let b = (p.b as f64 * fade) as u8;
-                canvas.set_colored(ix, iy, fade, r, g, b);
-            }
-        }
+        self.system.draw_colored(canvas);
     }
 }

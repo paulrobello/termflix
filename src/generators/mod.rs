@@ -8,6 +8,9 @@ pub struct Particle {
     pub vy: f64,
     pub life: f64,
     pub max_life: f64,
+    pub r: u8,
+    pub g: u8,
+    pub b: u8,
 }
 
 impl Particle {
@@ -132,6 +135,9 @@ impl ParticleSystem {
                 vy: angle.sin() * speed,
                 life,
                 max_life: life,
+                r: 255,
+                g: 255,
+                b: 255,
             });
         }
     }
@@ -148,7 +154,59 @@ impl ParticleSystem {
             vy,
             life,
             max_life: life,
+            r: 255,
+            g: 255,
+            b: 255,
         });
+    }
+
+    /// Emit particles with per-particle random color in the given ranges.
+    pub fn emit_colored(
+        &mut self,
+        count: usize,
+        r_range: (u8, u8),
+        g_range: (u8, u8),
+        b_range: (u8, u8),
+    ) {
+        let mut rng = rand::rng();
+        for _ in 0..count {
+            if self.particles.len() >= self.capacity {
+                break;
+            }
+            let half_spread = self.config.spread * 0.5;
+            let angle = self.config.angle + rng.random_range(-half_spread..=half_spread);
+            let speed = rng.random_range(self.config.speed_min..=self.config.speed_max);
+            let life = rng.random_range(self.config.life_min..=self.config.life_max);
+            let r = rng.random_range(r_range.0..=r_range.1);
+            let g = rng.random_range(g_range.0..=g_range.1);
+            let b = rng.random_range(b_range.0..=b_range.1);
+            self.particles.push(Particle {
+                x: self.config.x,
+                y: self.config.y,
+                vx: angle.cos() * speed,
+                vy: angle.sin() * speed,
+                life,
+                max_life: life,
+                r,
+                g,
+                b,
+            });
+        }
+    }
+
+    /// Draw all particles using their per-particle color with life-based fade.
+    pub fn draw_colored(&self, canvas: &mut crate::render::Canvas) {
+        for p in &self.particles {
+            let ix = p.x as usize;
+            let iy = p.y as usize;
+            if ix < canvas.width && iy < canvas.height {
+                let fade = p.life_frac();
+                let r = (p.r as f64 * fade) as u8;
+                let g = (p.g as f64 * fade) as u8;
+                let b = (p.b as f64 * fade) as u8;
+                canvas.set_colored(ix, iy, fade, r, g, b);
+            }
+        }
     }
 
     /// Update all particles: apply physics, remove dead particles.
