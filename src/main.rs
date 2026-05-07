@@ -286,6 +286,26 @@ const COLOR_MODES: [ColorMode; 4] = [
     ColorMode::Mono,
 ];
 
+const TRANSITION_FRAMES: u8 = 8;
+
+enum TransitionState {
+    None,
+    FadingOut {
+        next_anim_index: usize,
+        remaining: u8,
+    },
+    FadingIn {
+        remaining: u8,
+    },
+}
+
+fn start_transition(transition: &mut TransitionState, next_anim_index: usize) {
+    *transition = TransitionState::FadingOut {
+        next_anim_index,
+        remaining: TRANSITION_FRAMES,
+    };
+}
+
 #[allow(clippy::too_many_arguments)]
 fn run_loop(
     initial_anim: &str,
@@ -356,6 +376,7 @@ fn run_loop(
         }
     };
     let mut ext_state = CurrentState::default();
+    let mut transition = TransitionState::None;
     let mut virtual_time: f64 = 0.0;
     loop {
         // Use event::poll as frame timer — properly yields to OS for signal handling
@@ -398,18 +419,7 @@ fn run_loop(
                             }
                             KeyCode::Right | KeyCode::Char('n') => {
                                 anim_index = (anim_index + 1) % animations::ANIMATION_NAMES.len();
-                                anim = animations::create(
-                                    animations::ANIMATION_NAMES[anim_index],
-                                    canvas.width,
-                                    canvas.height,
-                                    scale,
-                                )
-                                .expect("animation name validated before calling create");
-                                anim.on_resize(canvas.width, canvas.height);
-                                if explicit_render.is_none() {
-                                    render_mode = anim.preferred_render();
-                                    needs_rebuild = true;
-                                }
+                                start_transition(&mut transition, anim_index);
                                 cycle_start = Instant::now();
                             }
                             KeyCode::Left | KeyCode::Char('p') => {
@@ -418,18 +428,7 @@ fn run_loop(
                                 } else {
                                     anim_index - 1
                                 };
-                                anim = animations::create(
-                                    animations::ANIMATION_NAMES[anim_index],
-                                    canvas.width,
-                                    canvas.height,
-                                    scale,
-                                )
-                                .expect("animation name validated before calling create");
-                                anim.on_resize(canvas.width, canvas.height);
-                                if explicit_render.is_none() {
-                                    render_mode = anim.preferred_render();
-                                    needs_rebuild = true;
-                                }
+                                start_transition(&mut transition, anim_index);
                                 cycle_start = Instant::now();
                             }
                             KeyCode::Char('r') => {
@@ -507,18 +506,7 @@ fn run_loop(
         // Auto-cycle
         if cycle > 0 && cycle_start.elapsed() >= Duration::from_secs(cycle as u64) {
             anim_index = (anim_index + 1) % animations::ANIMATION_NAMES.len();
-            anim = animations::create(
-                animations::ANIMATION_NAMES[anim_index],
-                canvas.width,
-                canvas.height,
-                scale,
-            )
-            .expect("animation name validated before calling create");
-            anim.on_resize(canvas.width, canvas.height);
-            if explicit_render.is_none() {
-                render_mode = anim.preferred_render();
-                needs_rebuild = true;
-            }
+            start_transition(&mut transition, anim_index);
             cycle_start = Instant::now();
         }
 
@@ -542,20 +530,8 @@ fn run_loop(
                 .iter()
                 .position(|&n| n == name.as_str())
                 .unwrap_or(anim_index);
-            anim = animations::create(
-                animations::ANIMATION_NAMES[anim_index],
-                canvas.width,
-                canvas.height,
-                scale,
-            )
-            .expect("animation name validated before calling create");
-            anim.on_resize(canvas.width, canvas.height);
-            if explicit_render.is_none() {
-                render_mode = anim.preferred_render();
-                needs_rebuild = true;
-            }
+            start_transition(&mut transition, anim_index);
             cycle_start = Instant::now();
-            // Unknown animation names are silently ignored
         }
 
         // Handle scale change from external params
@@ -603,8 +579,54 @@ fn run_loop(
         // Update animation
         anim.update(&mut canvas, effective_dt, virtual_time);
 
+        // Transition fade processing
+        let transition_factor = match &mut transition {
+            TransitionState::None => 1.0,
+            TransitionState::FadingOut {
+                next_anim_index,
+                remaining,
+            } => {
+                let factor = *remaining as f64 / TRANSITION_FRAMES as f64;
+                if *remaining == 0 {
+                    anim = animations::create(
+                        animations::ANIMATION_NAMES[*next_anim_index],
+                        canvas.width,
+                        canvas.height,
+                        scale,
+                    )
+                    .expect("animation name validated before calling create");
+                    anim.on_resize(canvas.width, canvas.height);
+                    if explicit_render.is_none() {
+                        render_mode = anim.preferred_render();
+                        needs_rebuild = true;
+                    }
+                    transition = TransitionState::FadingIn {
+                        remaining: TRANSITION_FRAMES,
+                    };
+                    0.0
+                } else {
+                    *remaining -= 1;
+                    factor
+                }
+            }
+            TransitionState::FadingIn { remaining } => {
+                let factor = 1.0 - *remaining as f64 / TRANSITION_FRAMES as f64;
+                if *remaining == 0 {
+                    transition = TransitionState::None;
+                    1.0
+                } else {
+                    *remaining -= 1;
+                    factor
+                }
+            }
+        };
+
+        if needs_rebuild {
+            continue;
+        }
+
         // Post-process canvas with intensity and hue shift
-        let intensity = ext_state.intensity().clamp(0.0, 2.0);
+        let intensity = ext_state.intensity().clamp(0.0, 2.0) * transition_factor;
         let hue = ext_state.color_shift().clamp(0.0, 1.0);
         canvas.apply_effects(intensity, hue);
 
