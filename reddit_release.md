@@ -4,7 +4,7 @@
 **Live gallery:** https://paulrobello.github.io/termflix/
 **crates.io:** https://crates.io/crates/termflix
 
-termflix is a terminal animation player I've been writing for fun: procedurally generated animations rendered with Unicode sub-cell characters (braille, half-block, ASCII), 24-bit color, low CPU, plays nice in tmux. Pure synchronous Rust, no async, no GPU, no web.
+termflix is a terminal animation player vibe coded for fun: procedurally generated animations rendered with Unicode sub-cell characters (braille, half-block, ASCII), 24-bit color, low CPU, plays nice in tmux. Pure synchronous Rust, no async, no GPU, no web.
 
 The 0.5 series adds **10 new animations (54 total)**, a CRT-style **post-processing pipeline**, smooth **crossfade transitions**, expanded **scriptable parameter control**, and a handful of CLI quality-of-life flags. Live gallery has a still + animated GIF for every one of them.
 
