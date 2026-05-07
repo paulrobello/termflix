@@ -451,8 +451,12 @@ impl LzwEncoder {
                     });
                     self.next_code += 1;
 
-                    // Check if we need to increase code width
-                    if self.next_code > self.max_code && self.code_width < 12 {
+                    // Bump width when next_code would no longer fit. Standard
+                    // GIF LZW (giflib/Pillow) bumps at `next_code > 1<<width`,
+                    // i.e., one step LATER than `> max_code`. The decoder's
+                    // add lags the encoder's by one read, so bumping at
+                    // `> max_code` corrupts everything past the first bump.
+                    if self.next_code > (1u16 << self.code_width as u16) && self.code_width < 12 {
                         self.code_width += 1;
                         self.max_code = (1u16 << self.code_width as u16) - 1;
                     }
@@ -615,6 +619,10 @@ pub fn export_gif<W: Write>(
         writer.write_all(&height.to_le_bytes())?; // Height
         writer.write_all(&[0x00])?; // Packed: no local color table
 
+        // LZW Minimum Code Size — required between Image Descriptor and the
+        // sub-block stream. For an 8-bit palette this is 8.
+        writer.write_all(&[8])?;
+
         // LZW-compressed image data
         let compressed = encoder.encode(&indices);
 
@@ -764,6 +772,10 @@ pub fn export_gif_pixels<W: Write>(
         writer.write_all(&out_h.to_le_bytes())?;
         writer.write_all(&[0x00])?;
 
+        // LZW Minimum Code Size — required between Image Descriptor and the
+        // sub-block stream. For an 8-bit palette this is 8.
+        writer.write_all(&[8])?;
+
         let compressed = encoder.encode(&scaled);
         let mut pos = 0;
         while pos < compressed.len() {
@@ -894,6 +906,151 @@ mod tests {
         let mut encoder = LzwEncoder::new(8);
         let compressed = encoder.encode(&[]);
         assert!(!compressed.is_empty()); // Should still have clear + EOI codes
+    }
+
+    /// Reference GIF-LZW decoder used to verify the encoder round-trips.
+    /// Returns the decoded bytes.
+    fn lzw_decode(data: &[u8], min_code_size: u8) -> Vec<u8> {
+        let clear_code = 1u16 << min_code_size;
+        let eoi_code = clear_code + 1;
+        let init_width = min_code_size + 1;
+
+        let mut bit_pos = 0usize;
+        let read_code = |bit_pos: &mut usize, width: u8| -> Option<u16> {
+            let total_bits = data.len() * 8;
+            if *bit_pos + width as usize > total_bits {
+                return None;
+            }
+            let mut code = 0u32;
+            for i in 0..width as usize {
+                let p = *bit_pos + i;
+                let bit = (data[p / 8] >> (p % 8)) & 1;
+                code |= (bit as u32) << i;
+            }
+            *bit_pos += width as usize;
+            Some(code as u16)
+        };
+
+        let mut dict: Vec<Vec<u8>> = (0..256).map(|i| vec![i as u8]).collect();
+        dict.push(Vec::new()); // clear
+        dict.push(Vec::new()); // eoi
+
+        let mut next_code = (eoi_code + 1) as usize;
+        let mut code_width = init_width;
+        let mut max_code = (1u16 << code_width) - 1;
+
+        let mut output = Vec::new();
+        let mut prev: Option<u16> = None;
+
+        while let Some(code) = read_code(&mut bit_pos, code_width) {
+            if code == clear_code {
+                dict.truncate(258);
+                next_code = (eoi_code + 1) as usize;
+                code_width = init_width;
+                max_code = (1u16 << code_width) - 1;
+                prev = None;
+                continue;
+            }
+            if code == eoi_code {
+                break;
+            }
+
+            let entry: Vec<u8> = if (code as usize) < dict.len() {
+                dict[code as usize].clone()
+            } else if let Some(p) = prev {
+                if (p as usize) >= dict.len() {
+                    panic!(
+                        "decoder diverged: code={}, prev={}, dict.len={}, next_code={}, code_width={}",
+                        code,
+                        p,
+                        dict.len(),
+                        next_code,
+                        code_width
+                    );
+                }
+                if code as usize != next_code {
+                    panic!(
+                        "code {} > dict.len()={} but != next_code={}: bit-stream out of sync",
+                        code,
+                        dict.len(),
+                        next_code
+                    );
+                }
+                let mut e = dict[p as usize].clone();
+                e.push(dict[p as usize][0]);
+                e
+            } else {
+                panic!("first code was outside dict and no prev: {}", code);
+            };
+
+            output.extend_from_slice(&entry);
+
+            if let Some(p) = prev
+                && next_code < 4096
+            {
+                let mut new_entry = dict[p as usize].clone();
+                new_entry.push(entry[0]);
+                if next_code < dict.len() {
+                    dict[next_code] = new_entry;
+                } else {
+                    dict.push(new_entry);
+                }
+                next_code += 1;
+                // Decoder bumps one step earlier than encoder because its
+                // add lags by one read: encoder uses `> 1<<width`, decoder
+                // uses `>= 1<<width`.
+                if next_code as u16 >= (1u16 << code_width) && code_width < 12 {
+                    code_width += 1;
+                    max_code = (1u16 << code_width) - 1;
+                }
+            }
+
+            prev = Some(code);
+        }
+
+        output
+    }
+
+    #[test]
+    fn test_lzw_roundtrip_short() {
+        let mut encoder = LzwEncoder::new(8);
+        let indices: Vec<u8> = (0..100).map(|i| (i % 7) as u8).collect();
+        let compressed = encoder.encode(&indices);
+        let decoded = lzw_decode(&compressed, 8);
+        assert_eq!(decoded, indices);
+    }
+
+    #[test]
+    fn test_lzw_roundtrip_pseudo_random() {
+        // Forces width-bumps without dict-fill; this is the common case
+        // for upscaled GIF frames and the symptom the user reported.
+        let mut state = 1u32;
+        let indices: Vec<u8> = (0..20000)
+            .map(|_| {
+                state = state.wrapping_mul(1103515245).wrapping_add(12345);
+                ((state >> 16) & 0xFF) as u8
+            })
+            .collect();
+        let mut encoder = LzwEncoder::new(8);
+        let compressed = encoder.encode(&indices);
+        let decoded = lzw_decode(&compressed, 8);
+        assert_eq!(decoded.len(), indices.len(), "decoded length mismatch");
+        assert_eq!(decoded, indices, "decoded bytes mismatch");
+    }
+
+    #[test]
+    fn test_lzw_roundtrip_repeats_until_dict_full() {
+        // Highly compressible — exercises the dict-fill / reset path.
+        let mut indices: Vec<u8> = Vec::new();
+        for chunk in 0..200 {
+            for i in 0..100u8 {
+                indices.push(((chunk + i as usize) % 256) as u8);
+            }
+        }
+        let mut encoder = LzwEncoder::new(8);
+        let compressed = encoder.encode(&indices);
+        let decoded = lzw_decode(&compressed, 8);
+        assert_eq!(decoded, indices);
     }
 
     #[test]
