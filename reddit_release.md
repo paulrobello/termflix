@@ -1,53 +1,62 @@
-# termflix v0.5.1 — terminal animation player, now with a live gallery
+# termflix v0.5.1 — 54 terminal animations, now with post-processing and 10 new visuals
 
 **Repo:** https://github.com/paulrobello/termflix
 **Live gallery:** https://paulrobello.github.io/termflix/
 **crates.io:** https://crates.io/crates/termflix
 
-termflix is a terminal animation player I write for fun: 54 procedurally generated animations (fire, matrix rain, plasma, ocean waves, automata, n-body, voronoi, self-playing tetris/snake/flappy-bird, and a bunch more), three render modes (braille / half-block / ASCII), 24-bit color, low CPU, plays nice in tmux. Pure synchronous Rust, no async, no GPU, no web.
+termflix is a terminal animation player I've been writing for fun: procedurally generated animations rendered with Unicode sub-cell characters (braille, half-block, ASCII), 24-bit color, low CPU, plays nice in tmux. Pure synchronous Rust, no async, no GPU, no web.
 
-This is a small follow-up to **0.5.0** that ships the thing I always wanted but kept putting off — **a browsable gallery** so you can actually see what every animation looks like before installing — plus three real bugs in the export pipeline.
+The 0.5 series adds **10 new animations (54 total)**, a CRT-style **post-processing pipeline**, smooth **crossfade transitions**, expanded **scriptable parameter control**, and a handful of CLI quality-of-life flags. Live gallery has a still + animated GIF for every one of them.
 
-## What's new
+## 10 new animations
 
-**`--gallery` capture mode**
+- **maze** — recursive-backtracking maze generation with step-by-step wall carving, then BFS flood-fill solving with the path highlighted, then resets and does it again
+- **tetris** — self-playing Tetris, all seven tetrominoes, AI placement using a weighted heuristic (line clears, height, holes, bumpiness), ghost-piece preview, line-clear flash, next-piece HUD
+- **flappy_bird** — self-playing Flappy Bird, gravity physics, scrolling pipes with adaptive gap sizing, collision detection, score, game-over reset
+- **automata** — cellular automata cycling through six rulesets (Conway's Life, Highlife, Day & Night, Seeds, Diamoeba, Replicator), with cell-age coloring and dead-grid early reset
+- **metaballs** — organic blobs merging and splitting via thresholded distance fields, HSV-blended colors, smooth edge fade, bright core glow
+- **voronoi** — animated Voronoi diagram with 8–15 drifting seed points, distance-based brightness dimming, white edge detection at cell boundaries, periodic Lloyd relaxation
+- **nbody** — gravitational n-body simulation with 5–8 orbiting masses, sub-stepped Euler integration, fading color trails, mass-weighted merging on collision, respawn when bodies deplete
+- **pendulum** — pendulum wave with 20 pendulums at slightly different periods producing mesmerizing phase patterns, rainbow bobs, ghost trails, pivot dots — pure math, no stored state
+- **rainforest** — layered scene with parallax across three depth layers (mountains / trees / canopy), falling leaves with horizontal sway, periodic rain bursts, tropical birds
+- **reaction_diffusion** — Gray–Scott reaction-diffusion producing organic coral / brain patterns, downsampled grid for performance, 9-point Laplacian, auto-reseed every 30 s
 
-```
-termflix --gallery                      # capture all 54 animations
-termflix --gallery fire,plasma,matrix   # subset
-make gallery                            # repo convenience target
-```
+The classic **matrix** rain animation also got a depth-layer rework — three layers (far/dim/slow, mid, near/bright/fast) running with different drop counts, speeds, and trail lengths for parallax.
 
-Captures every animation as a 640×400 PNG still and a 640×400 animated GIF at native canvas resolution, then writes a dark-themed `index.html` lightbox gallery. Fully offscreen — no real terminal needed — so it runs cleanly on a stock GitHub Actions Linux runner.
+## Post-processing effects
 
-**Auto-deployed to GitHub Pages**
+Configurable via CLI flags or the `[postproc]` section of `~/.config/termflix/config.toml`. Applied to the canvas pixel buffer after `update()` and before `render()`, fully decoupled from animation logic.
 
-A new `Gallery` workflow runs `make gallery` on push to `main` (when source / build files change) and on manual dispatch, then publishes to Pages. The live site at https://paulrobello.github.io/termflix/ now stays in sync with the code automatically — every push refreshes the stills and GIFs.
+- `--bloom-intensity` + `--bloom-threshold` — pixels above the brightness threshold spread a soft glow into their 8 neighbors. On by default at 0.4 / 0.6. Toggle live with the `b` key.
+- `--vignette` — quadratic-falloff edge darkening based on distance from canvas center.
+- `--scanlines` — CRT-style alternating-row darkening.
 
-## Bugs squashed (this is most of the work)
+Stacks with whatever animation you're running. Looks especially good on `fire`, `aurora`, `plasma`, `nbody`, `lightning`.
 
-I'd been carrying a hand-written PNG encoder and a hand-written GIF89a encoder (no external image crates — that's part of the fun), and the gallery feature found three sharp edges in them:
+## Transitions and external control
 
-- **PNG chunk CRC32 was wrong** for IHDR / IDAT — the code finalized the CRC over the chunk type, then continued accumulating data without un-finalizing or re-finalizing. `file(1)` accepted the result (loose parser), but every strict decoder rejected the PNGs as corrupted. Fixed by computing the CRC over `chunk_type ++ data` in a single pass with one finalize. Added a roundtrip test that walks every chunk in a generated PNG and re-validates its CRC.
+- **Crossfade transitions** — switching animations (via key, `--auto-cycle`, or external control) now does an 8-frame fade-out / fade-in instead of an abrupt cut.
+- **Scriptable parameter control expanded** — six more animations gained semantic external-param support: `boids` (intensity → cohesion, color_shift → separation), `particles` (gravity, drag), `wave` (amplitude, frequency), `sort` (ops/frame), `snake` (tick rate), `pong` (ball speed). Total: 8 animations responding to live ndjson parameter feeds (the `set_params` mechanism documented in [docs/EXTERNAL_ANIMATION.md](https://github.com/paulrobello/termflix/blob/main/docs/EXTERNAL_ANIMATION.md)).
 
-- **LZW width-bump was off by one** — the encoder bumped code width when post-add `next_code > max_code` (= `> (1<<width) - 1`), one step too early. Symptom: the top ~25 rows of every GIF decoded fine and the rest went black, because the decoder was reading at width N while the encoder had already moved to width N+1. Standard giflib/Pillow rule is post-add `next_code > 1<<width`; the decoder uses `>= 1<<width` because its add lags the encoder's by one read — both produce the same logical bump point. Added LZW roundtrip tests (pseudo-random, long compressible runs, dictionary-fill / clear-and-reset path) since the previous test only checked output was non-empty.
+## CLI niceties
 
-- **GIF colors were lost** in the gallery path because the encoder went through a tiny `VirtualTerminal` that re-decoded ANSI to extract pixel data, but it didn't parse `48;…` background SGR (so half-block bottom pixels were dropped), and its SGR parser misread BG-RGB component zeros as the SGR-`0` reset code, clobbering the foreground to black. Fixed by adding a `gif::export_gif_pixels` that takes per-frame RGB pixel data straight from the canvas, computes palette indices at native resolution for cheap dedup, and upscales by nearest-neighbor when emitting LZW. Result: 640×400 with full color fidelity; before the fix gallery GIFs were 80×25 and grey.
-
-## Changelog
-
-[CHANGELOG.md → 0.5.1](https://github.com/paulrobello/termflix/blob/main/CHANGELOG.md)
+- `[keybindings]` section in `config.toml` — remap `next`, `prev`, `quit`, `render`, `color`, `status` to whatever you like; supports modifier combos (`Ctrl+c`, `Alt+q`) and special keys (`Space`, `Esc`, `Tab`, arrows).
+- `termflix --list <substr>` — filter the animation list by name or description (case-insensitive). Bare `--list` still shows all.
+- `termflix --profile <anim>` — runs the animation and prints a timing summary on exit: avg/min/max/p95 for update time, render time, and total frame time, plus average FPS.
+- `termflix --play recording.asciianim --export-gif out.gif` — converts a recorded session to an animated GIF using a hand-written GIF89a encoder (no external image crates).
 
 ## Try it
 
 ```
 cargo install termflix
-termflix              # default: fire animation
-termflix --list       # see all 54
+termflix                        # default: fire animation
+termflix --list                 # all 54
 termflix matrix
 termflix --auto-cycle 10
+termflix --vignette 0.4 --scanlines
+termflix nbody --bloom-intensity 0.8
 ```
 
-Or just open the gallery: https://paulrobello.github.io/termflix/
+Or just look at the live gallery: https://paulrobello.github.io/termflix/
 
 Feedback, bug reports, and animation ideas welcome.
