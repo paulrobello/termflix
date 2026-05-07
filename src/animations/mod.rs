@@ -349,4 +349,54 @@ mod tests {
         let params = anim.supported_params();
         assert!(params.is_empty(), "matrix should have no declared params");
     }
+
+    #[test]
+    fn test_boids_supported_params() {
+        let anim = create("boids", 80, 24, 1.0).unwrap();
+        let params = anim.supported_params();
+        assert!(!params.is_empty());
+        assert!(params.iter().any(|&(name, _, _)| name == "intensity"));
+        assert!(params.iter().any(|&(name, _, _)| name == "color_shift"));
+    }
+
+    #[test]
+    fn test_particles_supported_params() {
+        let anim = create("particles", 80, 24, 1.0).unwrap();
+        let params = anim.supported_params();
+        assert!(!params.is_empty());
+        assert!(params.iter().any(|&(name, _, _)| name == "intensity"));
+    }
+
+    #[test]
+    fn test_wave_supported_params() {
+        let anim = create("wave", 80, 24, 1.0).unwrap();
+        let params = anim.supported_params();
+        assert!(!params.is_empty());
+        assert!(params.iter().any(|&(name, _, _)| name == "intensity"));
+        assert!(params.iter().any(|&(name, _, _)| name == "color_shift"));
+    }
+
+    #[test]
+    fn test_sort_supported_params() {
+        let anim = create("sort", 80, 24, 1.0).unwrap();
+        let params = anim.supported_params();
+        assert!(!params.is_empty());
+        assert!(params.iter().any(|&(name, _, _)| name == "speed"));
+    }
+
+    #[test]
+    fn test_snake_supported_params() {
+        let anim = create("snake", 80, 24, 1.0).unwrap();
+        let params = anim.supported_params();
+        assert!(!params.is_empty());
+        assert!(params.iter().any(|&(name, _, _)| name == "speed"));
+    }
+
+    #[test]
+    fn test_pong_supported_params() {
+        let anim = create("pong", 80, 24, 1.0).unwrap();
+        let params = anim.supported_params();
+        assert!(!params.is_empty());
+        assert!(params.iter().any(|&(name, _, _)| name == "speed"));
+    }
 }
