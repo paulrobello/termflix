@@ -5,7 +5,9 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added
-- **Post-processing effects** — Bloom/glow, vignette (edge darkening), and CRT scanline effects configurable via `--bloom`, `--vignette`, `--scanlines` CLI flags or `[postproc]` section in config.
+- **Post-processing effects** — Bloom/glow, vignette (edge darkening), and CRT scanline effects configurable via `--bloom-intensity`, `--bloom-threshold`, `--vignette`, `--scanlines` CLI flags or `[postproc]` section in config. Press `b` to toggle bloom at runtime.
+- **Maze gap fix** — Walls and passages now render as solid colored pixels instead of ASCII characters, eliminating visible gaps in half-block mode.
+- **Rainforest improvements** — Default render mode changed to half-block. Vegetation density increased (~2x foreground trees, ~1.7x mid-ground trees, ~2x ferns).
 - **GIF export** — `--export-gif output.gif` (requires `--play`) converts `.asciianim` recordings to animated GIF with hand-written GIF89a encoder (no new dependencies).
 - **Macro-based animation registration** — `declare_animations!` macro replaces manual 3-list registration pattern. Adding a new animation now requires one macro entry instead of editing 4 places.
 

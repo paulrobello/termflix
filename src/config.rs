@@ -78,6 +78,7 @@ impl From<ColorModeConfig> for ColorMode {
 #[serde(default)]
 pub struct PostProcConfig {
     pub bloom: Option<f64>,
+    pub bloom_threshold: Option<f64>,
     pub vignette: Option<f64>,
     pub scanlines: Option<bool>,
 }
@@ -152,9 +153,10 @@ pub fn default_config_string() -> String {
 
 # Post-processing effects
 # [postproc]
-# bloom = 0.3         # Glow effect (0.0-1.0)
-# vignette = 0.4      # Edge darkening (0.0-1.0)
-# scanlines = false   # CRT scanline effect
+# bloom = 0.3               # Glow effect intensity (0.0-1.0)
+# bloom_threshold = 0.6     # Brightness threshold to trigger bloom (0.0-1.0)
+# vignette = 0.4            # Edge darkening (0.0-1.0)
+# scanlines = false         # CRT scanline effect
 "#
     .to_string()
 }

@@ -336,28 +336,31 @@ impl Maze {
 
                 // Draw cell center
                 if base_x + 1 < cw && base_y + 1 < ch {
-                    canvas.set_char(
-                        base_x + 1,
-                        base_y + 1,
-                        center_ch,
-                        center_r,
-                        center_g,
-                        center_b,
-                    );
+                    if center_ch != ' ' {
+                        canvas.set_char(
+                            base_x + 1,
+                            base_y + 1,
+                            center_ch,
+                            center_r,
+                            center_g,
+                            center_b,
+                        );
+                    } else {
+                        canvas.set_colored(base_x + 1, base_y + 1, 1.0, center_r, center_g, center_b);
+                    }
                 }
 
                 // Top-left corner — always a wall pillar
                 if base_x < cw && base_y < ch {
-                    canvas.set_char(base_x, base_y, '#', wall_r, wall_g, wall_b);
+                    canvas.set_colored(base_x, base_y, 1.0, wall_r, wall_g, wall_b);
                 }
 
                 // Top wall (between this cell and the one above)
                 if cell.walls[0] {
                     if base_x + 1 < cw && base_y < ch {
-                        canvas.set_char(base_x + 1, base_y, '-', wall_r, wall_g, wall_b);
+                        canvas.set_colored(base_x + 1, base_y, 1.0, wall_r, wall_g, wall_b);
                     }
                 } else {
-                    // Passage open — draw passage char with neighbor's color
                     let (pr, pg, pb) = if gy > 0 {
                         let above = &self.grid[self.idx(gx, gy - 1)];
                         match above.state {
@@ -369,19 +372,18 @@ impl Maze {
                     } else {
                         (path_r, path_g, path_b)
                     };
-                    // Blend with current cell
                     let br = ((pr as u16 + cr as u16) / 2) as u8;
                     let bg = ((pg as u16 + cg as u16) / 2) as u8;
                     let bb = ((pb as u16 + cb as u16) / 2) as u8;
                     if base_x + 1 < cw && base_y < ch {
-                        canvas.set_char(base_x + 1, base_y, ' ', br, bg, bb);
+                        canvas.set_colored(base_x + 1, base_y, 1.0, br, bg, bb);
                     }
                 }
 
                 // Left wall (between this cell and the one to the left)
                 if cell.walls[3] {
                     if base_x < cw && base_y + 1 < ch {
-                        canvas.set_char(base_x, base_y + 1, '|', wall_r, wall_g, wall_b);
+                        canvas.set_colored(base_x, base_y + 1, 1.0, wall_r, wall_g, wall_b);
                     }
                 } else {
                     let (pr, pg, pb) = if gx > 0 {
@@ -399,7 +401,7 @@ impl Maze {
                     let bg = ((pg as u16 + cg as u16) / 2) as u8;
                     let bb = ((pb as u16 + cb as u16) / 2) as u8;
                     if base_x < cw && base_y + 1 < ch {
-                        canvas.set_char(base_x, base_y + 1, ' ', br, bg, bb);
+                        canvas.set_colored(base_x, base_y + 1, 1.0, br, bg, bb);
                     }
                 }
             }
@@ -413,12 +415,12 @@ impl Maze {
                 let bx = gx * 3;
                 // Corner
                 if bx < cw {
-                    canvas.set_char(bx, bottom_y, '#', wall_r, wall_g, wall_b);
+                    canvas.set_colored(bx, bottom_y, 1.0, wall_r, wall_g, wall_b);
                 }
                 // Bottom wall of last row — only draw if wall is still there
                 if cell.walls[2] {
                     if bx + 1 < cw {
-                        canvas.set_char(bx + 1, bottom_y, '-', wall_r, wall_g, wall_b);
+                        canvas.set_colored(bx + 1, bottom_y, 1.0, wall_r, wall_g, wall_b);
                     }
                 } else {
                     let (pr, pg, pb) = match cell.state {
@@ -428,7 +430,7 @@ impl Maze {
                         CellState::Unvisited => (wall_r, wall_g, wall_b),
                     };
                     if bx + 1 < cw {
-                        canvas.set_char(bx + 1, bottom_y, ' ', pr, pg, pb);
+                        canvas.set_colored(bx + 1, bottom_y, 1.0, pr, pg, pb);
                     }
                 }
             }
@@ -442,12 +444,12 @@ impl Maze {
                 let by = gy * 3;
                 // Corner
                 if by < ch {
-                    canvas.set_char(right_x, by, '#', wall_r, wall_g, wall_b);
+                    canvas.set_colored(right_x, by, 1.0, wall_r, wall_g, wall_b);
                 }
                 // Right wall of last column
                 if cell.walls[1] {
                     if by + 1 < ch {
-                        canvas.set_char(right_x, by + 1, '|', wall_r, wall_g, wall_b);
+                        canvas.set_colored(right_x, by + 1, 1.0, wall_r, wall_g, wall_b);
                     }
                 } else {
                     let (pr, pg, pb) = match cell.state {
@@ -457,13 +459,13 @@ impl Maze {
                         CellState::Unvisited => (wall_r, wall_g, wall_b),
                     };
                     if by + 1 < ch {
-                        canvas.set_char(right_x, by + 1, ' ', pr, pg, pb);
+                        canvas.set_colored(right_x, by + 1, 1.0, pr, pg, pb);
                     }
                 }
             }
             // Bottom-right corner
             if bottom_y < ch {
-                canvas.set_char(right_x, bottom_y, '#', wall_r, wall_g, wall_b);
+                canvas.set_colored(right_x, bottom_y, 1.0, wall_r, wall_g, wall_b);
             }
         }
     }

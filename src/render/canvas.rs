@@ -27,6 +27,7 @@ pub enum ColorMode {
 #[derive(Debug, Clone, Copy, Default)]
 pub struct PostProcessConfig {
     pub bloom: f64,
+    pub bloom_threshold: f64,
     pub vignette: f64,
     pub scanlines: bool,
 }
@@ -192,7 +193,7 @@ impl Canvas {
     /// Apply post-processing effects to the canvas.
     pub fn post_process(&mut self, config: &PostProcessConfig) {
         if config.bloom > 0.0 {
-            self.apply_bloom(config.bloom);
+            self.apply_bloom(config.bloom, config.bloom_threshold);
         }
         if config.scanlines {
             self.apply_scanlines();
@@ -202,14 +203,14 @@ impl Canvas {
         }
     }
 
-    fn apply_bloom(&mut self, strength: f64) {
+    fn apply_bloom(&mut self, strength: f64, threshold: f64) {
         let w = self.width;
         let h = self.height;
         let mut brightened = vec![0.0f64; w * h];
         for y in 0..h {
             for x in 0..w {
                 let idx = y * w + x;
-                if self.pixels[idx] > 0.6 {
+                if self.pixels[idx] > threshold {
                     let boost = strength * 0.15 * self.pixels[idx];
                     for dy in -1i32..=1 {
                         for dx in -1i32..=1 {
@@ -433,6 +434,7 @@ mod tests {
         c.pixels[cy * c.width + cx] = 0.9;
         let cfg = PostProcessConfig {
             bloom: 0.5,
+            bloom_threshold: 0.6,
             vignette: 0.0,
             scanlines: false,
         };
@@ -459,6 +461,7 @@ mod tests {
         }
         let cfg = PostProcessConfig {
             bloom: 0.0,
+            bloom_threshold: 0.6,
             vignette: 0.8,
             scanlines: false,
         };
@@ -476,6 +479,7 @@ mod tests {
         }
         let cfg = PostProcessConfig {
             bloom: 0.0,
+            bloom_threshold: 0.6,
             vignette: 0.0,
             scanlines: true,
         };

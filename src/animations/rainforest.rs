@@ -159,7 +159,7 @@ impl Rainforest {
             .collect();
 
         // Mid-ground trees: spaced across 3x screen width
-        let num_mid = ((w / 12.0) * self.scale).clamp(5.0, 30.0) as usize;
+        let num_mid = ((w / 7.0) * self.scale).clamp(8.0, 50.0) as usize;
         self.mid_trees = (0..num_mid)
             .map(|_| MidTree {
                 x: rng.random_range(0.0..world_w),
@@ -170,7 +170,7 @@ impl Rainforest {
             .collect();
 
         // Foreground trees: fewer, larger, across 3x screen width
-        let num_fg = ((w / 20.0) * self.scale).clamp(2.0, 10.0) as usize;
+        let num_fg = ((w / 10.0) * self.scale).clamp(3.0, 20.0) as usize;
         self.fg_trees = (0..num_fg)
             .map(|_| FgTree {
                 x: rng.random_range(0.0..world_w),
@@ -182,7 +182,7 @@ impl Rainforest {
             .collect();
 
         // Ferns along the ground
-        let num_ferns = ((w / 8.0) * self.scale).clamp(3.0, 15.0) as usize;
+        let num_ferns = ((w / 4.0) * self.scale).clamp(5.0, 30.0) as usize;
         self.ferns = (0..num_ferns)
             .map(|_| Fern {
                 x: rng.random_range(0.0..world_w),
@@ -221,7 +221,7 @@ impl Animation for Rainforest {
     }
 
     fn preferred_render(&self) -> RenderMode {
-        RenderMode::Ascii
+        RenderMode::HalfBlock
     }
 
     fn on_resize(&mut self, width: usize, height: usize) {

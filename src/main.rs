@@ -90,7 +90,11 @@ struct Cli {
 
     /// Bloom/glow post-processing effect intensity (0.0-1.0)
     #[arg(long)]
-    bloom: Option<f64>,
+    bloom_intensity: Option<f64>,
+
+    /// Brightness threshold to trigger bloom (0.0-1.0, default 0.6)
+    #[arg(long)]
+    bloom_threshold: Option<f64>,
 
     /// Vignette edge-darkening intensity (0.0-1.0)
     #[arg(long)]
@@ -237,11 +241,21 @@ fn main() -> io::Result<()> {
     let color_quant = cfg.color_quant.unwrap_or(0);
     let render_override = cli.render.or(cfg.render.map(RenderMode::from));
 
+    let default_bloom = cli
+        .bloom_intensity
+        .or(cfg.postproc.and_then(|p| p.bloom))
+        .unwrap_or(0.4)
+        .clamp(0.0, 1.0);
     let postproc = PostProcessConfig {
-        bloom: cli
-            .bloom
-            .or(cfg.postproc.and_then(|p| p.bloom))
-            .unwrap_or(0.0)
+        bloom: if cli.bloom_intensity.is_some() || cfg.postproc.and_then(|p| p.bloom).is_some() {
+            default_bloom
+        } else {
+            0.0
+        },
+        bloom_threshold: cli
+            .bloom_threshold
+            .or(cfg.postproc.and_then(|p| p.bloom_threshold))
+            .unwrap_or(0.6)
             .clamp(0.0, 1.0),
         vignette: cli
             .vignette
@@ -265,6 +279,7 @@ fn main() -> io::Result<()> {
         cli.record.as_deref(),
         data_file,
         postproc,
+        default_bloom,
         &keybindings,
     );
 
@@ -374,7 +389,8 @@ fn run_loop(
     screensaver: bool,
     record_path: Option<&str>,
     data_file: Option<String>,
-    postproc: PostProcessConfig,
+    mut postproc: PostProcessConfig,
+    default_bloom: f64,
     keybindings: &KeyBindings,
 ) -> io::Result<()> {
     let (mut cols, mut rows) = terminal::size()?;
@@ -506,6 +522,9 @@ fn run_loop(
                             kc if keybindings.status.contains(&kc) => {
                                 hide_status = !hide_status;
                                 needs_rebuild = true;
+                            }
+                            KeyCode::Char('b') => {
+                                postproc.bloom = if postproc.bloom > 0.0 { 0.0 } else { default_bloom };
                             }
                             _ => {}
                         }
@@ -717,13 +736,15 @@ fn run_loop(
             } else {
                 format!("{:.0} fps", actual_fps)
             };
+            let bloom_str = if postproc.bloom > 0.0 { "ON" } else { "off" };
             let status = format!(
-                " {} | {:?} | {:?} | {}{} | [←/→] anim  [r] render  [c] color  [h] hide  [q] quit ",
+                " {} | {:?} | {:?} | {}{} | bloom:{} | [←/→] anim  [b] bloom  [r] render  [c] color  [h] hide  [q] quit ",
                 anim.name(),
                 render_mode,
                 color_mode,
                 fps_str,
                 rec_indicator,
+                bloom_str,
             );
             let w = cols as usize;
             let truncated: String = status.chars().take(w).collect();
