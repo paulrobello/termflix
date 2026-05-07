@@ -198,7 +198,9 @@ fn generate_index_html(
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body { background: #0d1117; color: #e6edf3; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; padding: 24px; }
-  h1 { text-align: center; font-size: 28px; margin-bottom: 4px; color: #58a6ff; }
+  h1 { text-align: center; font-size: 28px; margin-bottom: 4px; }
+  h1 a { color: #58a6ff; text-decoration: none; }
+  h1 a:hover { text-decoration: underline; }
   .subtitle { text-align: center; color: #8b949e; margin-bottom: 24px; font-size: 14px; }
   .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 16px; max-width: 1200px; margin: 0 auto; }
   .card { background: #161b22; border: 1px solid #30363d; border-radius: 8px; overflow: hidden; cursor: pointer; transition: border-color 0.2s; }
@@ -218,7 +220,7 @@ fn generate_index_html(
 </style>
 </head>
 <body>
-<h1>termflix gallery</h1>
+<h1><a href="https://github.com/paulrobello/termflix">termflix</a> gallery</h1>
 <p class="subtitle">"#,
     );
     html.push_str(&format!(
