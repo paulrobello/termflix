@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.5.1] - 2026-05-07
+
+### Added
+- **`--gallery` flag** — Captures every animation (or a comma-separated subset) to a directory as a 640×400 PNG still and a 640×400 animated GIF, plus an `index.html` lightbox gallery. Configurable via `--gallery-dir`, `--gallery-cols`, `--gallery-rows`, `--gallery-wait` (PNG capture frame), and `--gallery-duration` (GIF length).
+- **`make gallery` target** — Convenience wrapper around `cargo run --release -- --gallery`. Forwards `ARGS`, e.g. `make gallery ARGS="fire,plasma"`.
+- **GitHub Pages gallery deploy** — New `Gallery` workflow (`.github/workflows/gallery.yml`) runs `make gallery` on push to `main` (when `src/`, `Cargo.{toml,lock}`, or `Makefile` change) and on manual dispatch, then publishes the output to GitHub Pages. Live site: <https://paulrobello.github.io/termflix/>.
+
+### Fixed
+- **PNG chunk CRC32 was wrong** for chunks with data (IHDR / IDAT). The previous code finalized the CRC over the chunk type and then continued accumulating data without un-/re-finalizing, producing a checksum that strict PNG decoders reject as corrupted. `write_chunk` now computes the CRC over `chunk_type ++ data` in a single pass with one finalize. Added a roundtrip test that walks every chunk in a generated PNG and verifies its CRC.
+- **GIF LZW width-bump off-by-one** — The encoder bumped code width one step before the decoder did (`next_code > max_code` instead of `next_code > 1<<width`), which corrupted every frame past the first width transition: the top ~25 rows decoded correctly and the rest went black. Now uses the standard giflib/Pillow rule, with matching roundtrip tests covering pseudo-random data, long compressible runs, and the dictionary-fill / reset path.
+- **Gallery GIF colors / resolution** — The gallery's GIF path went through `VirtualTerminal`, which dropped half-block background colors (`48;…`) and could clobber the foreground to black when SGR `0` digits appeared inside combined fg+bg sequences. The path now bypasses `VirtualTerminal` entirely via a new `gif::export_gif_pixels` that takes per-frame RGB pixel data, computes palette indices at native resolution for cheap dedup, and upscales by nearest-neighbor when emitting LZW. Output is now 640×400 with full color fidelity (was 80×25 grey).
+
 ## [0.5.0] - 2026-05-07
 
 ### Added

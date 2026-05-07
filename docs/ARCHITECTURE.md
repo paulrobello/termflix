@@ -20,6 +20,9 @@ Comprehensive technical architecture reference for termflix — a single-binary 
 - [External Control Subsystem](#external-control-subsystem)
 - [Recording Subsystem](#recording-subsystem)
 - [GIF Export](#gif-export)
+  - [Pixel-Based GIF Path (Gallery)](#pixel-based-gif-path-gallery)
+  - [LZW Width-Bump Rule](#lzw-width-bump-rule)
+- [Gallery and Pages Deploy](#gallery-and-pages-deploy)
 - [Generators (Shared Utilities)](#generators-shared-utilities)
 - [Animation Catalog](#animation-catalog)
 - [Terminal Exit Sequence](#terminal-exit-sequence)
@@ -606,6 +609,54 @@ flowchart LR
 5. **Frame deduplication** — Consecutive identical frames are merged, accumulating the delay. This significantly reduces GIF file size for animations with static periods.
 
 6. **GIF89a output** — Writes the complete GIF89a binary: header, Logical Screen Descriptor, 256-entry Global Color Table, NETSCAPE2.0 looping extension, per-frame Graphic Control Extension + Image Descriptor + LZW data, and GIF trailer.
+
+### Pixel-Based GIF Path (Gallery)
+
+The `--gallery` capture pipeline does **not** go through `VirtualTerminal`. Instead, `gif::export_gif_pixels(writer, frames, width, height, scale)` accepts per-frame RGB pixel arrays directly from the canvas. This sidesteps two ANSI-decoder limitations that caused gallery GIFs to lose color:
+
+- `VirtualTerminal` did not parse `48;…` background SGR, so the bottom pixel of every half-block cell was dropped.
+- The SGR parser misread BG-RGB component zeros as the SGR-`0` reset code, clobbering the foreground to black.
+
+For each frame, the pixel-based path computes palette indices at canvas-native resolution (used as the dedup key against the previous frame), then nearest-neighbor upscales the index buffer to `width*scale × height*scale` before LZW. Native-resolution dedup keeps cross-frame comparisons cheap, and upscaling at the index level (not the RGB level) avoids re-running palette lookup per output pixel.
+
+### LZW Width-Bump Rule
+
+The encoder uses the standard giflib/Pillow condition: bump width when post-add `next_code > 1 << code_width`. The reference decoder used in tests uses `>= 1 << code_width` because its add lags the encoder's by one read; both produce the same bump point in the data stream. Using `> max_code` (i.e., `> (1<<width) - 1`) on the encoder side bumps one step too early and corrupts everything past the first width transition. Roundtrip tests in `gif::tests` exercise pseudo-random data, long compressible runs, and the dictionary-fill / reset path.
+
+---
+
+## Gallery and Pages Deploy
+
+The `--gallery` flag (`src/gallery.rs`) renders every animation (or a comma-separated subset) at `Canvas` resolution and writes per-animation `<name>.png` (still frame at `--gallery-wait`) and `<name>.gif` (full `--gallery-duration` clip), plus an `index.html` lightbox gallery, into `--gallery-dir` (default `./gallery`).
+
+```mermaid
+flowchart LR
+    subgraph "Gallery Capture (per animation)"
+        ANIM["Animation::update"]
+        CANV["Canvas pixels\n(brightness + RGB)"]
+        FRM["Per-frame RGB snapshot\n(width × height)"]
+        PNG["png::export_png\n@ PNG_SCALE=8"]
+        GIF["gif::export_gif_pixels\n@ GIF_SCALE=8"]
+        HTML["generate_index_html"]
+    end
+
+    ANIM --> CANV --> FRM
+    FRM -->|wait_secs frame| PNG
+    FRM -->|all frames| GIF
+    PNG --> HTML
+    GIF --> HTML
+
+    style ANIM fill:#0d47a1,stroke:#2196f3,stroke-width:2px,color:#ffffff
+    style CANV fill:#37474f,stroke:#78909c,stroke-width:2px,color:#ffffff
+    style FRM fill:#1b5e20,stroke:#4caf50,stroke-width:2px,color:#ffffff
+    style PNG fill:#4a148c,stroke:#9c27b0,stroke-width:2px,color:#ffffff
+    style GIF fill:#880e4f,stroke:#c2185b,stroke-width:2px,color:#ffffff
+    style HTML fill:#e65100,stroke:#ff9800,stroke-width:2px,color:#ffffff
+```
+
+The pipeline is fully offscreen — no real terminal needed — so it runs cleanly on a stock `ubuntu-latest` GitHub Actions runner. The `Gallery` workflow (`.github/workflows/gallery.yml`) runs `make gallery` on every push to `main` that touches source / build files, and on manual dispatch, then publishes the output via `actions/deploy-pages`. The repo's **Settings → Pages → Build and deployment → Source** must be set to **GitHub Actions** for the deploy step to succeed.
+
+The local `gallery/` directory is gitignored — the canonical copy lives on GitHub Pages.
 
 ---
 
