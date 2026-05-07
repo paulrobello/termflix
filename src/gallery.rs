@@ -98,8 +98,13 @@ fn capture_animation(name: &str, config: &GalleryConfig) -> std::io::Result<()> 
         scanlines: false,
     };
 
+    struct CanvasSnapshot {
+        pixels: Vec<f64>,
+        colors: Vec<(u8, u8, u8)>,
+    }
+
     let mut recorder = Recorder::new();
-    let mut png_ansi: Option<String> = None;
+    let mut png_snapshot: Option<CanvasSnapshot> = None;
     let mut time = 0.0f64;
 
     for frame_i in 0..total_frames {
@@ -108,46 +113,46 @@ fn capture_animation(name: &str, config: &GalleryConfig) -> std::io::Result<()> 
         canvas.apply_effects(1.0, 0.0);
         canvas.post_process(&postproc);
 
-        let rendered = canvas.render();
-
         if frame_i == png_frame {
-            png_ansi = Some(rendered.clone());
+            png_snapshot = Some(CanvasSnapshot {
+                pixels: canvas.pixels.clone(),
+                colors: canvas.colors.clone(),
+            });
         }
 
+        let rendered = canvas.render();
         recorder.capture(&rendered);
 
         time += dt;
     }
 
-    // Write PNG — decode ANSI through VirtualTerminal, scale cells to 8x16 pixels
-    if let Some(ansi_frame) = png_ansi {
-        let mut vt = gif::VirtualTerminal::new(cols, rows);
-        vt.process(&ansi_frame);
-
-        let cell_w = 8usize;
-        let cell_h = 16usize;
-        let img_w = cols * cell_w;
-        let img_h = rows * cell_h;
+    // Write PNG — render directly from canvas pixel data (brightness + RGB).
+    // This avoids the VirtualTerminal which can't handle multi-byte UTF-8
+    // half-block characters (▀ ▄ █).
+    if let Some(ref snap) = png_snapshot {
+        let scale = 8usize;
+        let img_w = canvas.width * scale;
+        let img_h = canvas.height * scale;
         let mut pixels = vec![0u8; img_w * img_h * 4];
 
-        for row in 0..rows {
-            for col in 0..cols {
-                let cell = vt.cell(row, col);
-                let (r, g, b) = if cell.ch != b' ' {
-                    (cell.r, cell.g, cell.b)
-                } else {
-                    (0, 0, 0)
-                };
+        for cy in 0..canvas.height {
+            for cx in 0..canvas.width {
+                let idx = cy * canvas.width + cx;
+                let brightness = snap.pixels[idx].clamp(0.0, 1.0);
+                let (r, g, b) = snap.colors[idx];
+                let br = (r as f64 * brightness) as u8;
+                let bg = (g as f64 * brightness) as u8;
+                let bb = (b as f64 * brightness) as u8;
 
-                for dy in 0..cell_h {
-                    for dx in 0..cell_w {
-                        let px = col * cell_w + dx;
-                        let py = row * cell_h + dy;
-                        let idx = (py * img_w + px) * 4;
-                        pixels[idx] = r;
-                        pixels[idx + 1] = g;
-                        pixels[idx + 2] = b;
-                        pixels[idx + 3] = 255;
+                for dy in 0..scale {
+                    for dx in 0..scale {
+                        let px = cx * scale + dx;
+                        let py = cy * scale + dy;
+                        let pidx = (py * img_w + px) * 4;
+                        pixels[pidx] = br;
+                        pixels[pidx + 1] = bg;
+                        pixels[pidx + 2] = bb;
+                        pixels[pidx + 3] = 255;
                     }
                 }
             }
