@@ -6,9 +6,9 @@ use std::time::{Duration, Instant};
 use crossterm::{cursor, execute, terminal};
 
 /// A single recorded frame with its timestamp.
-struct Frame {
-    timestamp_ms: u64,
-    content: String,
+pub struct Frame {
+    pub timestamp_ms: u64,
+    pub content: String,
 }
 
 /// Captures rendered frames with timestamps for later playback.
@@ -143,6 +143,11 @@ impl Player {
         }
 
         Ok(Player { frames })
+    }
+
+    /// Access the recorded frames.
+    pub fn frames(&self) -> &[Frame] {
+        &self.frames
     }
 
     /// Play back the recording to the terminal.

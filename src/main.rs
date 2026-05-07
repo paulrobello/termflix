@@ -1,6 +1,7 @@
 mod animations;
 mod config;
 mod external;
+mod gif;
 pub mod generators;
 mod record;
 mod render;
@@ -55,6 +56,10 @@ struct Cli {
     /// Play back a recorded .asciianim file
     #[arg(long)]
     play: Option<String>,
+
+    /// Export recording to GIF (requires --play)
+    #[arg(long, value_name = "PATH")]
+    export_gif: Option<String>,
 
     /// Scale factor for particle/element counts (0.5-2.0)
     #[arg(short, long)]
@@ -131,8 +136,32 @@ fn main() -> io::Result<()> {
         return Ok(());
     }
 
-    if let Some(ref path) = cli.play {
-        let player = record::Player::load(path)?;
+    if let Some(ref play_path) = cli.play {
+        if let Some(ref gif_path) = cli.export_gif {
+            let player = record::Player::load(play_path)?;
+            if player.frames().is_empty() {
+                eprintln!("No frames to export.");
+                std::process::exit(1);
+            }
+            let (cols, rows) = detect_recording_size(player.frames());
+            let file = std::fs::File::create(gif_path)?;
+            let mut writer = std::io::BufWriter::new(file);
+            match gif::export_gif(&mut writer, player.frames(), cols, rows) {
+                Ok(()) => {
+                    println!(
+                        "Exported {} frames to {}",
+                        player.frames().len(),
+                        gif_path
+                    );
+                }
+                Err(e) => {
+                    eprintln!("GIF export failed: {}", e);
+                    std::process::exit(1);
+                }
+            }
+            return Ok(());
+        }
+        let player = record::Player::load(play_path)?;
         return player.play();
     }
 
@@ -802,6 +831,39 @@ fn run_loop(
             adaptive_frame_dur = target.min(Duration::from_millis(200)); // cap at 5fps minimum
         }
     }
+}
+
+fn detect_recording_size(frames: &[record::Frame]) -> (usize, usize) {
+    let mut max_row = 24usize;
+    let mut max_col = 80usize;
+    if let Some(frame) = frames.first() {
+        let bytes = frame.content.as_bytes();
+        let mut i = 0;
+        while i < bytes.len() {
+            if bytes[i] == 0x1b && i + 1 < bytes.len() && bytes[i + 1] == b'[' {
+                i += 2;
+                let start = i;
+                while i < bytes.len() && (bytes[i].is_ascii_digit() || bytes[i] == b';') {
+                    i += 1;
+                }
+                if i < bytes.len() && bytes[i] == b'H' {
+                    let params = &frame.content.as_bytes()[start..i];
+                    let s = std::str::from_utf8(params).unwrap_or("1;1");
+                    let parts: Vec<&str> = s.split(';').collect();
+                    if parts.len() >= 2 {
+                        if let Ok(r) = parts[0].parse::<usize>() {
+                            max_row = max_row.max(r);
+                        }
+                        if let Ok(c) = parts[1].parse::<usize>() {
+                            max_col = max_col.max(c);
+                        }
+                    }
+                }
+            }
+            i += 1;
+        }
+    }
+    (max_col, max_row)
 }
 
 fn parse_render_mode(s: &str) -> Option<RenderMode> {
