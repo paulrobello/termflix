@@ -120,13 +120,31 @@ impl VirtualTerminal {
                     _ => {}
                 }
             } else {
-                // Printable character
+                // Printable character — handle both ASCII and multi-byte UTF-8
                 let ch = bytes[i];
-                if ch.is_ascii() && !ch.is_ascii_control() {
+                let (is_printable, advance) = if ch.is_ascii() {
+                    (!ch.is_ascii_control(), 1)
+                } else {
+                    // Decode UTF-8 lead byte to find sequence length
+                    let seq_len = if ch & 0xE0 == 0xC0 {
+                        2
+                    } else if ch & 0xF0 == 0xE0 {
+                        3
+                    } else if ch & 0xF8 == 0xF0 {
+                        4
+                    } else {
+                        1 // invalid lead byte, skip
+                    };
+                    (seq_len > 1, seq_len)
+                };
+
+                if is_printable {
+                    // Store ASCII chars directly; use sentinel b'#' for non-ASCII
+                    let stored_ch = if ch.is_ascii() { ch } else { b'#' };
                     if self.cursor_row < self.rows && self.cursor_col < self.cols {
                         let idx = self.cursor_row * self.cols + self.cursor_col;
                         self.cells[idx] = Cell {
-                            ch,
+                            ch: stored_ch,
                             r: self.fg_r,
                             g: self.fg_g,
                             b: self.fg_b,
@@ -140,7 +158,7 @@ impl VirtualTerminal {
                         }
                     }
                 }
-                i += 1;
+                i += advance;
             }
         }
     }
