@@ -20,7 +20,8 @@ pub struct GameOfLife {
 }
 
 impl GameOfLife {
-    pub fn new(width: usize, height: usize) -> Self {
+    #[allow(unused_variables)]
+    pub fn new(width: usize, height: usize, _scale: f64) -> Self {
         let mut rng = rand::rng();
         let size = width * height;
         let density = rng.random_range(0.2..0.5); // vary initial density
@@ -76,7 +77,7 @@ impl GameOfLife {
 
         // Full reset if stagnant (population unchanged for 60 steps, or oscillator, or dead)
         if self.stable_count > 60 || self.hash_stable_count > 10 || pop == 0 {
-            *self = GameOfLife::new(self.width, self.height);
+            *self = GameOfLife::new(self.width, self.height, 1.0);
         }
         // Inject chaos periodically to keep things interesting
         else if self.generation.is_multiple_of(300) {
@@ -130,7 +131,7 @@ impl Animation for GameOfLife {
     }
 
     fn on_resize(&mut self, width: usize, height: usize) {
-        *self = GameOfLife::new(width, height);
+        *self = GameOfLife::new(width, height, 1.0);
     }
 
     fn update(&mut self, canvas: &mut Canvas, dt: f64, _time: f64) {

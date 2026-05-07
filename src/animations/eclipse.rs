@@ -7,7 +7,8 @@ pub struct Eclipse {
 }
 
 impl Eclipse {
-    pub fn new() -> Self {
+    #[allow(unused_variables)]
+    pub fn new(_width: usize, _height: usize, _scale: f64) -> Self {
         Eclipse { phase: 0.0 }
     }
 }

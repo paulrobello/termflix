@@ -16,7 +16,8 @@ pub struct Atom {
 }
 
 impl Atom {
-    pub fn new() -> Self {
+    #[allow(unused_variables)]
+    pub fn new(_width: usize, _height: usize, _scale: f64) -> Self {
         let orbits = vec![
             Electron {
                 orbit_radius_x: 0.35,

@@ -8,7 +8,8 @@ pub struct Aurora {
 }
 
 impl Aurora {
-    pub fn new() -> Self {
+    #[allow(unused_variables)]
+    pub fn new(_width: usize, _height: usize, _scale: f64) -> Self {
         Aurora {
             noise: Perlin::new(42),
         }

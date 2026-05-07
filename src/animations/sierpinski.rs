@@ -7,7 +7,8 @@ pub struct Sierpinski {
 }
 
 impl Sierpinski {
-    pub fn new() -> Self {
+    #[allow(unused_variables)]
+    pub fn new(_width: usize, _height: usize, _scale: f64) -> Self {
         Sierpinski { zoom: 1.0 }
     }
 }

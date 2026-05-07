@@ -5,7 +5,8 @@ use crate::render::Canvas;
 pub struct Spiral;
 
 impl Spiral {
-    pub fn new() -> Self {
+    #[allow(unused_variables)]
+    pub fn new(_width: usize, _height: usize, _scale: f64) -> Self {
         Spiral
     }
 }

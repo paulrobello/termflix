@@ -6,7 +6,8 @@ use crate::render::Canvas;
 pub struct Pendulum;
 
 impl Pendulum {
-    pub fn new() -> Self {
+    #[allow(unused_variables)]
+    pub fn new(_width: usize, _height: usize, _scale: f64) -> Self {
         Pendulum
     }
 }

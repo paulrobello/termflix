@@ -13,7 +13,8 @@ pub struct Fire {
 }
 
 impl Fire {
-    pub fn new(width: usize, height: usize) -> Self {
+    #[allow(unused_variables)]
+    pub fn new(width: usize, height: usize, _scale: f64) -> Self {
         let mut buffer = vec![0.0; width * height];
         // Seed bottom rows
         for x in 0..width {

@@ -11,7 +11,8 @@ pub struct Dragon {
 }
 
 impl Dragon {
-    pub fn new() -> Self {
+    #[allow(unused_variables)]
+    pub fn new(_width: usize, _height: usize, _scale: f64) -> Self {
         Dragon {
             points: Vec::new(),
             iteration: 0,

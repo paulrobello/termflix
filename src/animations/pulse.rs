@@ -15,7 +15,8 @@ struct PulseRing {
 }
 
 impl Pulse {
-    pub fn new(_width: usize, _height: usize) -> Self {
+    #[allow(unused_variables)]
+    pub fn new(_width: usize, _height: usize, _scale: f64) -> Self {
         Pulse {
             rings: Vec::new(),
             spawn_timer: 0.0,

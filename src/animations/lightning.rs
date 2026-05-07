@@ -19,7 +19,8 @@ pub struct Lightning {
 }
 
 impl Lightning {
-    pub fn new(width: usize, height: usize) -> Self {
+    #[allow(unused_variables)]
+    pub fn new(width: usize, height: usize, _scale: f64) -> Self {
         Lightning {
             width,
             height,

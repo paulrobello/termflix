@@ -8,7 +8,8 @@ pub struct Wave {
 }
 
 impl Wave {
-    pub fn new() -> Self {
+    #[allow(unused_variables)]
+    pub fn new(_width: usize, _height: usize, _scale: f64) -> Self {
         Wave {
             amplitude: 0.5,
             frequency: 0.3,

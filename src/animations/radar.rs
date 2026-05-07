@@ -17,7 +17,8 @@ pub struct Radar {
 }
 
 impl Radar {
-    pub fn new() -> Self {
+    #[allow(unused_variables)]
+    pub fn new(_width: usize, _height: usize, _scale: f64) -> Self {
         Radar {
             blips: Vec::new(),
             sweep_angle: 0.0,

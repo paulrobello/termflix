@@ -9,7 +9,8 @@ pub struct Mandelbrot {
 }
 
 impl Mandelbrot {
-    pub fn new() -> Self {
+    #[allow(unused_variables)]
+    pub fn new(_width: usize, _height: usize, _scale: f64) -> Self {
         Mandelbrot {
             zoom: 1.0,
             // Zoom target: a visually interesting point near the boundary
