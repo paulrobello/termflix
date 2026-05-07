@@ -215,6 +215,16 @@ impl Animation for Sort {
         "sort"
     }
 
+    fn set_params(&mut self, params: &crate::external::ExternalParams) {
+        if let Some(speed) = params.speed {
+            self.ops_per_frame = speed.clamp(1.0, 20.0) as usize;
+        }
+    }
+
+    fn supported_params(&self) -> &'static [(&'static str, f64, f64)] {
+        &[("speed", 1.0, 20.0)]
+    }
+
     fn update(&mut self, canvas: &mut Canvas, dt: f64, _time: f64) {
         let w = canvas.width;
         let h = canvas.height;
