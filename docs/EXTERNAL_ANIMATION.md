@@ -253,11 +253,11 @@ Every animation implements the `Animation` trait defined in `src/animations/mod.
 fn set_params(&mut self, _params: &crate::external::ExternalParams) {}
 ```
 
-All 44 animations inherit this default. Most animations do not need to inspect external params because `speed`, `intensity`, and `color_shift` are handled globally by the main loop and canvas post-processing. Only animations that want to respond to a parameter **semantically** — wiring it to an internal simulation variable — need to override `set_params`.
+All 54 animations inherit this default. Most animations do not need to inspect external params because `speed`, `intensity`, and `color_shift` are handled globally by the main loop and canvas post-processing. Only animations that want to respond to a parameter **semantically** — wiring it to an internal simulation variable — need to override `set_params`.
 
 ### Semantic Overrides
 
-Two animations implement semantic overrides that give a field additional, animation-specific meaning beyond its global effect.
+Eight animations implement semantic overrides that give a field additional, animation-specific meaning beyond its global effect.
 
 ```mermaid
 graph TD
@@ -275,14 +275,47 @@ graph TD
         PCS["color_shift → hue_bias\nRotates plasma palette independently\nof the global hue shift"]
     end
 
+    subgraph "boids (src/animations/boids.rs)"
+        BI["intensity → cohes_factor\nFlock cohesion strength\n(0.001–0.05)"]
+        BCS["color_shift → sep_factor\nSeparation force\n(0.5–5.0)"]
+    end
+
+    subgraph "particles (src/animations/particles.rs)"
+        PI["intensity → gravity\nParticle gravity pull\n(0.0–40.0)"]
+        PCS2["color_shift → drag\nAir resistance\n(0.9–1.0)"]
+    end
+
+    subgraph "wave (src/animations/wave.rs)"
+        WI["intensity → amplitude\nWave height\n(0.1–1.0)"]
+        WCS["color_shift → frequency\nWave frequency\n(0.05–0.8)"]
+    end
+
+    subgraph "sort, snake, pong (speed override)"
+        SSI["speed → ops_per_frame / move_interval / speed_mult\nControls simulation pace"]
+    end
+
     GI -.->|"also drives"| FI
+    GI -.->|"also drives"| BI
+    GI -.->|"also drives"| PI
+    GI -.->|"also drives"| WI
     GCS -.->|"also drives"| PCS
+    GCS -.->|"also drives"| BCS
+    GCS -.->|"also drives"| PCS2
+    GCS -.->|"also drives"| WCS
+    GS -.->|"also drives"| SSI
 
     style GI fill:#37474f,stroke:#78909c,stroke-width:2px,color:#ffffff
     style GCS fill:#37474f,stroke:#78909c,stroke-width:2px,color:#ffffff
     style GS fill:#37474f,stroke:#78909c,stroke-width:2px,color:#ffffff
     style FI fill:#e65100,stroke:#ff9800,stroke-width:3px,color:#ffffff
     style PCS fill:#880e4f,stroke:#c2185b,stroke-width:2px,color:#ffffff
+    style BI fill:#1b5e20,stroke:#4caf50,stroke-width:2px,color:#ffffff
+    style BCS fill:#1b5e20,stroke:#4caf50,stroke-width:2px,color:#ffffff
+    style PI fill:#0d47a1,stroke:#2196f3,stroke-width:2px,color:#ffffff
+    style PCS2 fill:#0d47a1,stroke:#2196f3,stroke-width:2px,color:#ffffff
+    style WI fill:#1a237e,stroke:#3f51b5,stroke-width:2px,color:#ffffff
+    style WCS fill:#1a237e,stroke:#3f51b5,stroke-width:2px,color:#ffffff
+    style SSI fill:#ff6f00,stroke:#ffa726,stroke-width:2px,color:#ffffff
 ```
 
 **fire — `intensity` maps to `heat_rate`**
@@ -308,6 +341,25 @@ fn set_params(&mut self, params: &crate::external::ExternalParams) {
     }
 }
 ```
+
+**boids — `intensity` maps to `cohes_factor`, `color_shift` maps to `sep_factor`**
+
+The boids flocking simulation wires `intensity` to the cohesion factor (how strongly boids pull toward the flock center, range 0.001–0.05) and `color_shift` to the separation factor (how strongly boids repel from nearby neighbors, range 0.5–5.0). Higher cohesion creates tighter flocks; higher separation creates more spaced-out formations.
+
+**particles — `intensity` maps to `gravity`, `color_shift` maps to `drag`**
+
+The fireworks particle system wires `intensity` to gravity (range 0.0–40.0, where 0 is weightless and 40 pulls particles down fast) and `color_shift` to the drag coefficient (range 0.9–1.0, where 1.0 is no drag and 0.9 applies strong air resistance).
+
+**wave — `intensity` maps to `amplitude`, `color_shift` maps to `frequency`**
+
+The sine wave interference pattern wires `intensity` to wave amplitude (range 0.1–1.0) and `color_shift` to wave frequency (range 0.05–0.8). This gives direct control over the wave shape in addition to the global brightness and hue effects.
+
+**sort, snake, pong — `speed` maps to simulation pace**
+
+Three game/simulation animations override `speed` with animation-specific meaning:
+- **sort**: `speed` controls `ops_per_frame` (range 1–20), the number of sorting operations performed per frame.
+- **snake**: `speed` controls `move_interval` (range 0.02–0.2 seconds), the delay between snake moves.
+- **pong**: `speed` controls `speed_mult` (range 0.2–3.0), a multiplier on ball and paddle velocity.
 
 > **✅ Tip:** To add semantic behavior to a new animation, override `set_params` in its `impl Animation` block. The method receives the full `ExternalParams` struct, so you can respond to any combination of fields.
 
@@ -445,6 +497,7 @@ Keyboard shortcuts remain fully active during external control. The keyboard and
 | `→` or `n` | Next animation |
 | `r` | Cycle render mode |
 | `c` | Cycle color mode |
+| `b` | Toggle bloom post-processing |
 | `h` | Toggle status bar |
 
 > **📝 Note:** When using stdin mode, the keyboard still works because keyboard events are read by crossterm through the terminal device (`/dev/tty`), not through stdin. Stdin is consumed separately by the background reader thread.
@@ -505,6 +558,12 @@ stateDiagram-v2
 | `src/animations/mod.rs` | `Animation` trait with default no-op `set_params` |
 | `src/animations/fire.rs` | Semantic `set_params` override — `intensity` → `heat_rate` |
 | `src/animations/plasma.rs` | Semantic `set_params` override — `color_shift` → `hue_bias` |
+| `src/animations/boids.rs` | Semantic `set_params` override — `intensity` → `cohes_factor`, `color_shift` → `sep_factor` |
+| `src/animations/particles.rs` | Semantic `set_params` override — `intensity` → `gravity`, `color_shift` → `drag` |
+| `src/animations/wave.rs` | Semantic `set_params` override — `intensity` → `amplitude`, `color_shift` → `frequency` |
+| `src/animations/sort.rs` | Semantic `set_params` override — `speed` → `ops_per_frame` |
+| `src/animations/snake.rs` | Semantic `set_params` override — `speed` → `move_interval` |
+| `src/animations/pong.rs` | Semantic `set_params` override — `speed` → `speed_mult` |
 | `src/render/canvas.rs` | `apply_effects` — intensity scaling and RGB→HSV hue rotation |
 | `src/config.rs` | `data_file` config field and `Config` struct |
 | `src/main.rs` | `--data-file` CLI flag, channel setup, per-frame integration |

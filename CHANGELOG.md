@@ -2,33 +2,10 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased]
+## [0.5.0] - 2026-05-07
 
 ### Added
-- **`--list` filtering** — `termflix --list fire` shows only animations matching the substring in name or description (case-insensitive). Bare `--list` still shows all.
-- **`--profile` mode** — `termflix --profile <anim>` runs the animation and prints a timing summary on exit: avg/min/max/p95 for update time, render time, and total frame time, plus avg FPS.
-
-### Added
-- **Post-processing effects** — Bloom/glow, vignette (edge darkening), and CRT scanline effects configurable via `--bloom-intensity`, `--bloom-threshold`, `--vignette`, `--scanlines` CLI flags or `[postproc]` section in config. Press `b` to toggle bloom at runtime.
-- **Maze gap fix** — Walls and passages now render as solid colored pixels instead of ASCII characters, eliminating visible gaps in half-block mode.
-- **Rainforest improvements** — Default render mode changed to half-block. Vegetation density increased (~2x foreground trees, ~1.7x mid-ground trees, ~2x ferns).
-- **GIF export** — `--export-gif output.gif` (requires `--play`) converts `.asciianim` recordings to animated GIF with hand-written GIF89a encoder (no new dependencies).
-- **Macro-based animation registration** — `declare_animations!` macro replaces manual 3-list registration pattern. Adding a new animation now requires one macro entry instead of editing 4 places.
-
-### Changed
-- **Unified particle system** — Extended shared `Particle` struct with per-particle RGB color. Added `emit_colored()` and `draw_colored()` methods. Migrated `particles` animation from standalone to shared system.
-- **Animation constructor standardization** — All animation `new()` methods now accept `(width, height, scale)` for consistency with the macro registration system.
-
-### Added
-- **Per-animation exposed parameters** — 6 more animations now respond to external control (`set_params`/`supported_params`): `boids` (intensity→cohesion, color_shift→separation), `particles` (intensity→gravity, color_shift→drag), `wave` (intensity→amplitude, color_shift→frequency), `sort` (speed→ops/frame), `snake` (speed→tick rate), `pong` (speed→ball speed). Total: 8 animations with external params (up from 2).
-- **Transition effects** — 8-frame fade-out/fade-in when switching animations via hotkey, auto-cycle, or external control, replacing the previous instant cut.
-- **Configurable keybindings** — `[keybindings]` section in `config.toml` to remap hotkeys (`next`, `prev`, `quit`, `render`, `color`, `status`). Supports single characters, special keys (`Right`, `Left`, `Esc`, `Space`, `Tab`), and modifier combos (`Ctrl+c`, `Alt+q`).
-
-### Removed
-- **Dead `vortex` animation** — Removed `vortex.rs` which was never compiled or registered (no `pub mod vortex;` declaration).
-
-### Added
-- **10 new animations** (55 total, up from 44):
+- **10 new animations** (54 total, up from 44):
   - **Maze** (`maze`) — Animated maze generation using recursive backtracking with step-by-step wall carving, BFS flood-fill solving showing explored cells, and highlighted solution path. Resets and generates a new maze after display. Ascii render mode.
   - **Tetris** (`tetris`) — Self-playing Tetris with all 7 tetrominoes, AI piece placement using weighted heuristic scoring (line clears, height, holes, bumpiness), ghost piece preview, line-clear flash animation, next-piece preview HUD, and speed progression. HalfBlock render mode.
   - **Metaballs** (`metaballs`) — Organic blobs merging and splitting using thresholded distance fields. 4–6 bouncing balls with HSV-blended colors, smooth edge fade near threshold, and bright core glow. HalfBlock render mode.
@@ -40,6 +17,21 @@ All notable changes to this project will be documented in this file.
   - **Rainforest** (`rainforest`) — Layered rainforest scene with parallax scrolling across 3 depth layers (background mountains, mid-ground trees, foreground canopy), falling leaves with horizontal sway, periodic rain bursts, and tropical birds. Ascii render mode.
   - **Reaction Diffusion** (`reaction_diffusion`) — Gray-Scott reaction-diffusion system producing organic coral/brain patterns. Downsampled simulation grid (1/4 canvas) for performance, 9-point Laplacian stencil, auto-reseed every 30 seconds. HalfBlock render mode.
 - **Matrix rain depth enhancement** — `matrix` animation now renders 3 depth layers (far/dim/slow, mid/medium, near/bright/fast) with different drop counts, speeds, trail lengths, and head colors, creating parallax depth.
+- **Post-processing effects** — Bloom/glow, vignette (edge darkening), and CRT scanline effects configurable via `--bloom-intensity`, `--bloom-threshold`, `--vignette`, `--scanlines` CLI flags or `[postproc]` section in config. Press `b` to toggle bloom at runtime.
+- **GIF export** — `--export-gif output.gif` (requires `--play`) converts `.asciianim` recordings to animated GIF with hand-written GIF89a encoder (no new dependencies).
+- **Per-animation exposed parameters** — 6 more animations now respond to external control (`set_params`/`supported_params`): `boids` (intensity→cohesion, color_shift→separation), `particles` (intensity→gravity, color_shift→drag), `wave` (intensity→amplitude, color_shift→frequency), `sort` (speed→ops/frame), `snake` (speed→tick rate), `pong` (speed→ball speed). Total: 8 animations with external params (up from 2).
+- **Transition effects** — 8-frame fade-out/fade-in when switching animations via hotkey, auto-cycle, or external control, replacing the previous instant cut.
+- **Configurable keybindings** — `[keybindings]` section in `config.toml` to remap hotkeys (`next`, `prev`, `quit`, `render`, `color`, `status`). Supports single characters, special keys (`Right`, `Left`, `Esc`, `Space`, `Tab`), and modifier combos (`Ctrl+c`, `Alt+q`).
+- **`--list` filtering** — `termflix --list fire` shows only animations matching the substring in name or description (case-insensitive). Bare `--list` still shows all.
+- **`--profile` mode** — `termflix --profile <anim>` runs the animation and prints a timing summary on exit: avg/min/max/p95 for update time, render time, and total frame time, plus avg FPS.
+
+### Changed
+- **Unified particle system** — Extended shared `Particle` struct with per-particle RGB color. Added `emit_colored()` and `draw_colored()` methods. Migrated `particles` animation from standalone to shared system.
+- **Animation constructor standardization** — All animation `new()` methods now accept `(width, height, scale)` for consistency with the macro registration system.
+- **Macro-based animation registration** — `declare_animations!` macro replaces manual 3-list registration pattern. Adding a new animation now requires one macro entry instead of editing 4 places.
+
+### Removed
+- **Dead `vortex` animation** — Removed `vortex.rs` which was never compiled or registered (no `pub mod vortex;` declaration).
 
 ### Dependencies
 - Updated `clap` 4.5 → 4.6
@@ -48,7 +40,13 @@ All notable changes to this project will be documented in this file.
 - Loosened pin on `serde`, `serde_json`, `libc`, `rand`, `dirs` to semver-compatible ranges
 
 ### Fixed
+- **Maze black gaps** — Walls and passages now render as solid colored pixels using cell pitch of 2, eliminating visible gaps in half-block mode.
+- **Rainforest density** — Default render mode changed to half-block. Vegetation density increased (~2x foreground trees, ~1.7x mid-ground trees, ~2x ferns).
+- **Terminal restore on exit** — Properly restores terminal state after animation exit, preventing leftover raw mode or alt screen issues.
 - Collapsible `match` arm for `Event::FocusGained` in screensaver mode (clippy `collapsible_match`)
+
+### CI
+- Updated GitHub Actions to latest major versions
 
 ## [0.4.2] - 2026-02-26
 
