@@ -86,6 +86,10 @@ struct Cli {
     #[arg(long)]
     screensaver: bool,
 
+    /// Keep keybindings active in screensaver mode (only quit/Ctrl+C dismiss)
+    #[arg(long, requires = "screensaver")]
+    screensaver_keys: bool,
+
     /// Watch a file for external control params (ndjson — one JSON object per line)
     #[arg(long, value_name = "PATH")]
     data_file: Option<String>,
@@ -340,6 +344,7 @@ fn main() -> io::Result<()> {
         cycle,
         clean,
         cli.screensaver,
+        cli.screensaver_keys,
         cli.record.as_deref(),
         data_file,
         postproc,
@@ -524,6 +529,7 @@ fn run_loop(
     cycle: u32,
     clean: bool,
     screensaver: bool,
+    screensaver_keys: bool,
     record_path: Option<&str>,
     data_file: Option<String>,
     mut postproc: PostProcessConfig,
@@ -612,7 +618,7 @@ fn run_loop(
                         if code == KeyCode::Char('c') && modifiers.contains(KeyModifiers::CONTROL) {
                             break 'outer Ok(());
                         }
-                        if screensaver {
+                        if screensaver && !screensaver_keys {
                             break 'outer Ok(());
                         }
                         match code {
@@ -672,7 +678,7 @@ fn run_loop(
                             _ => {}
                         }
                     }
-                    Event::FocusGained if screensaver => {
+                    Event::FocusGained if screensaver && !screensaver_keys => {
                         break 'outer Ok(());
                     }
                     _ => {}

@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.6.0] - 2026-06-15
+
+### Added
+- **`--screensaver-keys` flag** — When combined with `--screensaver`, keeps all keybindings active instead of exiting on any keypress. The screensaver stays fully interactive: `next`/`prev` cycle animations, and the `render`/`color`/`status`/bloom hotkeys all work; only the `quit` keybind (or `Ctrl+C`) dismisses it. `FocusGained` no longer auto-exits in this mode either. Requires `--screensaver` (enforced by clap).
+
 ## [0.5.1] - 2026-05-07
 
 ### Added
