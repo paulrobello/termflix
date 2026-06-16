@@ -614,6 +614,10 @@ fn run_loop(
     } else {
         None
     };
+    // Threaded rendering is unix-only; consume the flag on other platforms so it
+    // isn't flagged as an unused parameter.
+    #[cfg(not(unix))]
+    let _ = single_threaded;
     let result: io::Result<()> = 'outer: loop {
         // Use event::poll as frame timer — properly yields to OS for signal handling
         let time_to_next = adaptive_frame_dur.saturating_sub(last_frame.elapsed());
@@ -1005,13 +1009,9 @@ fn run_loop(
         // write_time_ema*1.1 — no hard cap, but no terminal flood either.
         if is_tmux || unlimited {
             #[cfg(unix)]
-            let write_secs = if renderer.is_some() {
-                renderer
-                    .as_ref()
-                    .map(|r| r.write_time_secs())
-                    .unwrap_or(0.0)
-            } else {
-                write_start.elapsed().as_secs_f64()
+            let write_secs = match renderer.as_ref() {
+                Some(r) => r.write_time_secs(),
+                None => write_start.elapsed().as_secs_f64(),
             };
             #[cfg(not(unix))]
             let write_secs = write_start.elapsed().as_secs_f64();
