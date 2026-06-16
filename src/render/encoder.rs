@@ -274,4 +274,59 @@ mod tests {
         );
         assert!(out.contains("XY"));
     }
+
+    /// Prints full-frame vs diff-frame bytes and dirty ratio per animation.
+    /// Run: cargo test bench_dirty -- --ignored --nocapture
+    #[test]
+    #[ignore = "benchmark; run with --ignored --nocapture"]
+    fn bench_dirty() {
+        use crate::animations;
+        use crate::render::{Canvas, ColorMode, RenderMode};
+        let (cols, rows) = (120usize, 40usize);
+        let n = 60u32;
+        let names = ["fire", "plasma", "boids", "matrix", "nbody", "starfield"];
+        println!(
+            "{:<12} {:>9} {:>9} {:>8} {:>8}",
+            "anim", "full_B", "diff_B", "ratio", "dirty%"
+        );
+        for &name in &names {
+            let mut canvas = Canvas::new(cols, rows, RenderMode::HalfBlock, ColorMode::TrueColor);
+            let mut anim =
+                animations::create(name, canvas.width, canvas.height, 1.0).expect("anim");
+            anim.on_resize(canvas.width, canvas.height);
+            let mut prev: Option<CellGrid> = None;
+            let (mut fb, mut db, mut ds, mut dn) = (0u64, 0u64, 0f64, 0u64);
+            for i in 0..n {
+                anim.update(&mut canvas, 1.0 / 24.0, i as f64 / 24.0);
+                canvas.apply_effects(1.0, 0.0);
+                let grid = canvas.render_cells();
+                let full = encode_full(&grid, false);
+                fb += full.len() as u64;
+                match &prev {
+                    Some(p) if p.cols == grid.cols && p.rows == grid.rows => {
+                        let r = dirty_ratio(p, &grid);
+                        ds += r;
+                        dn += 1;
+                        db += (if r > FULL_REDRAW_THRESHOLD {
+                            full.len()
+                        } else {
+                            encode_diff(p, &grid).len()
+                        }) as u64;
+                    }
+                    _ => db += full.len() as u64,
+                }
+                prev = Some(grid);
+            }
+            let af = fb / n as u64;
+            let ad = db / n as u64;
+            println!(
+                "{:<12} {:>9} {:>9} {:>7.2}x {:>7.1}%",
+                name,
+                af,
+                ad,
+                ad as f64 / af.max(1) as f64,
+                100.0 * ds / dn.max(1) as f64
+            );
+        }
+    }
 }
