@@ -11,14 +11,10 @@ Ideas for enhancing existing functionality or adding new features, organized by 
 
 ## New Animations
 
-- [x] **[anim] Physarum Slime Mold (medium)** — Slime-mold (Physarum) agent simulation: many agents depositing and following a pheromone trail. Produces mesmerizing self-organizing network/maze patterns. A signature look for generative-art terminals.
 - [ ] **[anim] 3D Mandelbulb / Raymarched Fractal (large)** — Raymarch a 3D fractal (Mandelbulb/Mandelbox) using the existing sub-cell canvas for depth shading. Pairs with the Braille render mode for fine detail and extends the 2D `mandelbrot`/`dragon` family into volumetric territory.
 - [ ] **[anim] Lenia — Continuous Conway (medium)** — Generalize Conway's Game of Life to continuous space and time for smooth, gliding, life-like "creatures." Reuses the cellular-automaton scaffolding from `life`/`langton`/`automata`/`reaction_diffusion`.
 - [ ] **[anim] Raycaster Terrain Flyover (medium)** — A Wolfenstein-style raycaster rendering a scrolling heightmap into the terminal for an ASCII/Braille "flight" over rolling terrain, showcasing perspective via brightness falloff.
 - [ ] **[anim] Strange Attractor (Lorenz / Aizawa) (small)** — Integrate the Lorenz (or Aizawa/de Jong) attractor and plot the trajectory with fading trails. Cheap to compute, visually iconic, and a natural fit next to the existing `pendulum` and `nbody`.
-- [x] **[anim] Solar System (medium)** — Orbital mechanics with the Sun + planets at scaled distances/periods, moons for gas giants, and an asteroid belt. Builds on the existing `atom` and `nbody` code.
-- [x] **[anim] Galton Board / Bean Machine (small)** — Balls falling through a peg grid and accumulating into a normal distribution. A satisfying physics demo using the existing `ParticleSystem`.
-- [x] **[anim] Newton's Cradle (small)** — Classic desk-toy pendulum animation with an energy-conserving phase handoff on impact. Small scope, high charm.
 - [ ] **[anim] Ink in Water (medium)** — Diffusion-based ink dispersing through a turbulent medium: flow-field advection of a density field. Striking color gradients; reuses the `flow_field` noise.
 
 ---
