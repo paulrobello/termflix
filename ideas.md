@@ -54,7 +54,7 @@ Ideas for enhancing existing functionality or adding new features, organized by 
 
 ## Performance & Architecture
 
-- [ ] **[arch] Threaded Canvas Rendering (large)** — Move rendering off the main thread. The main loop currently computes the animation update and renders synchronously. With a double-buffered canvas, update could run on one thread while the previous frame renders on another, potentially doubling throughput.
+- [x] **[arch] Threaded Canvas Rendering (large)** — Move rendering off the main thread. The main loop currently computes the animation update and renders synchronously. With a double-buffered canvas, update could run on one thread while the previous frame renders on another, potentially doubling throughput.
 - [ ] **[arch] Differential / Dirty-Cell Rendering (large)** — Track which terminal cells changed since the last frame and write only those, repositioning the cursor between regions. Could substantially cut `libc::write()` volume — the biggest win for tmux/SSH throughput. Needs careful handling of the existing chunked-write + quit-check path in `run_loop`.
 - [ ] **[arch] Adaptive Frame Skip on Slow Terminals (medium)** — If measured FPS drops below target for N consecutive frames, skip animation `update` ticks (not just render) to stay responsive. Complements the existing adaptive frame pacing so heavy animations don't backlog slow terminals.
 
