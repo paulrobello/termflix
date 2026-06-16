@@ -130,52 +130,10 @@ impl Canvas {
         match self.render_mode {
             RenderMode::Braille => super::braille::render(self),
             RenderMode::HalfBlock => super::halfblock::render(self),
-            RenderMode::Ascii => self.render_ascii(),
+            RenderMode::Ascii => super::encoder::encode_full(&self.ascii_build_grid(), true),
         }
     }
 
-    fn render_ascii(&self) -> String {
-        const CHARS: &[u8] = b" .:-=+*#%@";
-        let (cols, rows) = self.term_size();
-        let mut out = String::with_capacity(cols * rows * 10);
-        let use_color = self.color_mode != ColorMode::Mono;
-        let mut last_fg = String::new();
-
-        for row in 0..rows {
-            for col in 0..cols {
-                let idx = row * self.width + col;
-                let v = self.pixels[idx].clamp(0.0, 1.0);
-                let co = self.char_override[idx];
-                let ch = if co != '\0' {
-                    co
-                } else {
-                    let ci = (v * (CHARS.len() - 1) as f64) as usize;
-                    CHARS[ci] as char
-                };
-
-                if use_color {
-                    let (r, g, b) = self.colors[idx];
-                    let color = self.map_color(r, g, b);
-                    let fg = color_to_fg(color);
-                    if fg != last_fg {
-                        out.push_str("\x1b[");
-                        out.push_str(&fg);
-                        out.push('m');
-                        last_fg = fg;
-                    }
-                }
-                out.push(ch);
-            }
-            out.push_str("\x1b[0m\x1b[");
-            let next_row = row + 2;
-            out.push_str(&next_row.to_string());
-            out.push_str(";1H");
-            last_fg.clear();
-        }
-        out
-    }
-
-    #[allow(dead_code)] // wired in Task 3
     pub fn ascii_build_grid(&self) -> CellGrid {
         const CHARS: &[u8] = b" .:-=+*#%@";
         let cols = self.width;

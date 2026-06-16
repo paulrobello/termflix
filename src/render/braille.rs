@@ -1,4 +1,4 @@
-use super::canvas::{Canvas, ColorMode, color_to_fg};
+use super::canvas::{Canvas, ColorMode};
 use super::cell::{Cell, CellGrid};
 
 /// Braille dot positions within a 2x4 cell:
@@ -24,80 +24,9 @@ const DOT_MAP: [(usize, usize, u32); 8] = [
 const BRIGHTNESS_THRESHOLD: f64 = 0.3;
 
 pub fn render(canvas: &Canvas) -> String {
-    let term_cols = canvas.width / 2;
-    let term_rows = canvas.height / 4;
-    let mut out = String::with_capacity(term_cols * term_rows * 10);
-    let use_color = canvas.color_mode != ColorMode::Mono;
-
-    let mut last_fg = String::new();
-
-    for row in 0..term_rows {
-        for col in 0..term_cols {
-            let px = col * 2;
-            let py = row * 4;
-
-            let mut bits: u32 = 0;
-            let mut total_r: u32 = 0;
-            let mut total_g: u32 = 0;
-            let mut total_b: u32 = 0;
-            let mut lit_count: u32 = 0;
-
-            for &(dx, dy, bit) in &DOT_MAP {
-                let x = px + dx;
-                let y = py + dy;
-                if x < canvas.width && y < canvas.height {
-                    let idx = y * canvas.width + x;
-                    if canvas.pixels[idx] > BRIGHTNESS_THRESHOLD {
-                        bits |= bit;
-                        let (r, g, b) = canvas.colors[idx];
-                        total_r += r as u32;
-                        total_g += g as u32;
-                        total_b += b as u32;
-                        lit_count += 1;
-                    }
-                }
-            }
-
-            // bits is a mask of 8 flags so its range is 0x00..=0xFF.
-            // BRAILLE_OFFSET (0x2800) + any value in 0x00..=0xFF is always a valid
-            // Unicode scalar in the Braille Patterns block (U+2800–U+28FF).
-            debug_assert!(bits <= 0xFF);
-            let ch = char::from_u32(BRAILLE_OFFSET + bits)
-                .expect("braille bits 0x00..=0xFF always produce valid Unicode");
-
-            if use_color && lit_count > 0 {
-                let r = (total_r / lit_count) as u8;
-                let g = (total_g / lit_count) as u8;
-                let b = (total_b / lit_count) as u8;
-                let color = canvas.map_color(r, g, b);
-                let fg = color_to_fg(color);
-                if fg != last_fg {
-                    out.push_str("\x1b[");
-                    out.push_str(&fg);
-                    out.push('m');
-                    last_fg = fg;
-                }
-                out.push(ch);
-            } else {
-                if !last_fg.is_empty() {
-                    out.push_str("\x1b[0m");
-                    last_fg.clear();
-                }
-                out.push(ch);
-            }
-        }
-        // Reset at end of row and move to next
-        out.push_str("\x1b[0m\x1b[");
-        // Row number (1-indexed, +1 for status bar offset)
-        let next_row = row + 2;
-        out.push_str(&next_row.to_string());
-        out.push_str(";1H");
-        last_fg.clear();
-    }
-    out
+    super::encoder::encode_full(&build_grid(canvas), true)
 }
 
-#[allow(dead_code)] // wired in Task 3
 pub fn build_grid(canvas: &Canvas) -> CellGrid {
     let cols = canvas.width / 2;
     let rows = canvas.height / 4;
