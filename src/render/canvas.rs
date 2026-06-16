@@ -171,6 +171,11 @@ impl Canvas {
         }
     }
 
+    /// Build the terminal-cell grid for dirty-cell diffing.
+    pub fn render_cells(&self) -> super::cell::CellGrid {
+        self.build_grid()
+    }
+
     /// Apply post-processing effects to the canvas.
     /// `intensity`: brightness multiplier (1.0 = no change, 0.0 = black, 2.0 = double bright)
     /// `hue_shift`: hue rotation fraction (0.0 = no change, 0.5 = rotate 180°, 1.0 = full cycle)

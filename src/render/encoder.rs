@@ -3,7 +3,6 @@ use crate::render::cell::{Cell, CellGrid};
 use crossterm::style::Color;
 
 /// Dirty ratio at or above which a full redraw is cheaper than a scattered diff.
-#[allow(dead_code)] // wired in Task 4 (render loop chooses full vs diff)
 pub const FULL_REDRAW_THRESHOLD: f64 = 0.6;
 
 fn color_to_bg(color: Color) -> String {
@@ -103,7 +102,6 @@ pub fn encode_full(grid: &CellGrid, always_reset_row_end: bool) -> String {
 }
 
 /// Fraction of cells that differ (0.0..=1.0). Assumes equal dimensions (caller guarantees).
-#[allow(dead_code)] // wired in Task 4 (render loop chooses full vs diff)
 pub fn dirty_ratio(prev: &CellGrid, grid: &CellGrid) -> f64 {
     let total = grid.cells.len();
     if total == 0 {
@@ -120,7 +118,6 @@ pub fn dirty_ratio(prev: &CellGrid, grid: &CellGrid) -> f64 {
 
 /// Encode only changed cells with cursor repositioning. Assumes the terminal starts at
 /// default color (every prior frame ends with a reset). Ends with `\x1b[0m` if a color was emitted.
-#[allow(dead_code)] // wired in Task 4 (render loop chooses full vs diff)
 pub fn encode_diff(prev: &CellGrid, grid: &CellGrid) -> String {
     let mut out = String::new();
     let mut last_fg: Option<Color> = None;

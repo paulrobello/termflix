@@ -122,6 +122,10 @@ struct Cli {
     #[arg(long)]
     single_threaded: bool,
 
+    /// Disable dirty-cell rendering; write a full frame every time (today's behavior).
+    #[arg(long)]
+    full_frames: bool,
+
     /// Capture animations as PNG+GIF gallery (optional: comma-separated animation names)
     #[arg(long)]
     gallery: Option<Option<String>>,
@@ -360,6 +364,7 @@ fn main() -> io::Result<()> {
         &keybindings,
         cli.profile,
         cli.single_threaded,
+        cli.full_frames,
     );
 
     // Restore terminal — disable raw mode first (doesn't write to stdout)
@@ -560,6 +565,7 @@ fn run_loop(
     keybindings: &KeyBindings,
     profile: bool,
     single_threaded: bool,
+    full_frames: bool,
 ) -> io::Result<()> {
     let (mut cols, mut rows) = terminal::size()?;
     let is_tmux = std::env::var("TMUX").is_ok();
@@ -632,6 +638,8 @@ fn run_loop(
     // isn't flagged as an unused parameter.
     #[cfg(not(unix))]
     let _ = single_threaded;
+    use render::cell::CellGrid;
+    let mut prev_grid: Option<CellGrid> = None;
     let result: io::Result<()> = 'outer: loop {
         // Use event::poll as frame timer — properly yields to OS for signal handling
         let time_to_next = adaptive_frame_dur.saturating_sub(last_frame.elapsed());
@@ -763,6 +771,7 @@ fn run_loop(
                 // Clearing here with a blocking flush can lock up in tmux
                 // when the output buffer is full from the previous frame.
             }
+            prev_grid = None;
             needs_rebuild = false;
             last_frame = Instant::now();
             continue; // Skip this frame, render fresh next iteration
@@ -810,6 +819,7 @@ fn run_loop(
             )
             .expect("animation name validated before calling create");
             anim.on_resize(canvas.width, canvas.height);
+            prev_grid = None;
         }
 
         // Handle render mode change from external params
@@ -867,6 +877,7 @@ fn run_loop(
                         render_mode = anim.preferred_render();
                         needs_rebuild = true;
                     }
+                    prev_grid = None;
                     transition = TransitionState::FadingIn {
                         remaining: TRANSITION_FRAMES,
                     };
@@ -900,7 +911,22 @@ fn run_loop(
 
         // Render to string
         let render_start = Instant::now();
-        let frame = canvas.render();
+        let always_reset_row_end = !matches!(render_mode, RenderMode::HalfBlock);
+        let grid = canvas.render_cells();
+        let frame = match &prev_grid {
+            Some(p)
+                if p.cols == grid.cols
+                    && p.rows == grid.rows
+                    && !full_frames
+                    && recorder.is_none()
+                    && render::encoder::dirty_ratio(p, &grid)
+                        <= render::encoder::FULL_REDRAW_THRESHOLD =>
+            {
+                render::encoder::encode_diff(p, &grid)
+            }
+            _ => render::encoder::encode_full(&grid, always_reset_row_end),
+        };
+        prev_grid = Some(grid);
         let render_dur = render_start.elapsed();
 
         // Record if active
