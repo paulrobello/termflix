@@ -275,6 +275,241 @@ mod tests {
         assert!(out.contains("XY"));
     }
 
+    // ---- Faithful fg+bg terminal simulator (for diff correctness) ----
+    use crossterm::style::Color as CColor;
+
+    fn color_rgb(c: Option<CColor>) -> Option<(u8, u8, u8)> {
+        match c? {
+            CColor::Rgb { r, g, b } => Some((r, g, b)),
+            _ => None,
+        }
+    }
+
+    #[derive(Clone, PartialEq, Debug)]
+    struct TCell {
+        ch: char,
+        fg: Option<(u8, u8, u8)>,
+        bg: Option<(u8, u8, u8)>,
+    }
+
+    struct Term {
+        cells: Vec<TCell>,
+        cols: usize,
+        rows: usize,
+        cr: usize,
+        cc: usize,
+        fg: Option<(u8, u8, u8)>,
+        bg: Option<(u8, u8, u8)>,
+    }
+    impl Term {
+        fn new(cols: usize, rows: usize) -> Self {
+            Self {
+                cells: vec![
+                    TCell {
+                        ch: ' ',
+                        fg: None,
+                        bg: None
+                    };
+                    cols * rows
+                ],
+                cols,
+                rows,
+                cr: 0,
+                cc: 0,
+                fg: None,
+                bg: None,
+            }
+        }
+        fn cell(&self, r: usize, c: usize) -> &TCell {
+            &self.cells[r * self.cols + c]
+        }
+        fn put(&mut self, ch: char) {
+            if self.cr < self.rows && self.cc < self.cols {
+                let idx = self.cr * self.cols + self.cc;
+                self.cells[idx] = TCell {
+                    ch,
+                    fg: self.fg,
+                    bg: self.bg,
+                };
+            }
+            self.cc += 1;
+        }
+        fn process(&mut self, data: &str) {
+            let b = data.as_bytes();
+            let n = b.len();
+            let mut i = 0;
+            while i < n {
+                if b[i] == 0x1b && i + 1 < n && b[i + 1] == b'[' {
+                    i += 2;
+                    let s = i;
+                    while i < n && (b[i].is_ascii_digit() || b[i] == b';' || b[i] == b'?') {
+                        i += 1;
+                    }
+                    if i >= n {
+                        break;
+                    }
+                    let params = std::str::from_utf8(&b[s..i]).unwrap_or("");
+                    let cmd = b[i];
+                    i += 1;
+                    match cmd {
+                        b'H' => {
+                            let p: Vec<&str> = params.split(';').collect();
+                            let r = p
+                                .first()
+                                .and_then(|x| x.parse::<usize>().ok())
+                                .unwrap_or(1)
+                                .saturating_sub(1);
+                            let c = p
+                                .get(1)
+                                .and_then(|x| x.parse::<usize>().ok())
+                                .unwrap_or(1)
+                                .saturating_sub(1);
+                            self.cr = r.min(self.rows.saturating_sub(1));
+                            self.cc = c.min(self.cols.saturating_sub(1));
+                        }
+                        b'm' => {
+                            if params.is_empty() || params == "0" {
+                                self.fg = None;
+                                self.bg = None;
+                            } else {
+                                let nums: Vec<u32> =
+                                    params.split(';').filter_map(|x| x.parse().ok()).collect();
+                                let mut k = 0;
+                                while k < nums.len() {
+                                    match nums[k] {
+                                        0 => {
+                                            self.fg = None;
+                                            self.bg = None;
+                                        }
+                                        38 if k + 4 < nums.len() && nums[k + 1] == 2 => {
+                                            self.fg = Some((
+                                                nums[k + 2] as u8,
+                                                nums[k + 3] as u8,
+                                                nums[k + 4] as u8,
+                                            ));
+                                            k += 4;
+                                        }
+                                        48 if k + 4 < nums.len() && nums[k + 1] == 2 => {
+                                            self.bg = Some((
+                                                nums[k + 2] as u8,
+                                                nums[k + 3] as u8,
+                                                nums[k + 4] as u8,
+                                            ));
+                                            k += 4;
+                                        }
+                                        _ => {}
+                                    }
+                                    k += 1;
+                                }
+                            }
+                        }
+                        _ => {}
+                    }
+                } else {
+                    let ch = b[i];
+                    let adv = if ch < 0x80 {
+                        1
+                    } else if ch & 0xE0 == 0xC0 {
+                        2
+                    } else if ch & 0xF0 == 0xE0 {
+                        3
+                    } else {
+                        4
+                    };
+                    if i + adv <= n {
+                        if let Ok(s) = std::str::from_utf8(&b[i..i + adv]) {
+                            if let Some(c) = s.chars().next() {
+                                self.put(c);
+                            }
+                        }
+                    }
+                    i += adv;
+                }
+            }
+        }
+    }
+
+    /// Reproduces run_loop's frame delivery: full then diffs, with a status bar whose text
+    /// changes periodically (mimicking the per-second FPS update). Verifies the simulated
+    /// terminal matches the target grid after every frame.
+    #[test]
+    fn diff_with_status_bar_matches_target() {
+        use crate::animations;
+        use crate::render::{Canvas, ColorMode, RenderMode};
+        let (cols, rows) = (50usize, 16usize);
+        let display_rows = rows - 1;
+        let mut canvas = Canvas::new(
+            cols,
+            display_rows,
+            RenderMode::HalfBlock,
+            ColorMode::TrueColor,
+        );
+        let mut anim =
+            animations::create("matrix", canvas.width, canvas.height, 1.0).expect("anim");
+        anim.on_resize(canvas.width, canvas.height);
+        let mut term = Term::new(cols, rows);
+        let mut prev: Option<CellGrid> = None;
+        for f in 0..80u32 {
+            anim.update(&mut canvas, 1.0 / 24.0, f as f64 / 24.0);
+            canvas.apply_effects(1.0, 0.0);
+            let grid = canvas.build_grid();
+            let frame = match &prev {
+                Some(p)
+                    if p.cols == grid.cols
+                        && p.rows == grid.rows
+                        && dirty_ratio(p, &grid) <= FULL_REDRAW_THRESHOLD =>
+                {
+                    encode_diff(p, &grid)
+                }
+                _ => encode_full(&grid, false),
+            };
+            // status bar text changes every 24 frames (~1 second at 24fps)
+            let fps = f / 24;
+            let status = format!(
+                " m | {:?} | {:?} | {} fps ",
+                RenderMode::HalfBlock,
+                ColorMode::TrueColor,
+                fps
+            );
+            let padded = format!(
+                "{:<width$}",
+                status.chars().take(cols).collect::<String>(),
+                width = cols
+            );
+            let mut buf = String::from("\x1b[?2026h\x1b[H");
+            buf.push_str(&frame);
+            buf.push_str(&format!("\x1b[{};1H\x1b[7m{}\x1b[0m", rows, padded));
+            buf.push_str("\x1b[?2026l");
+            term.process(&buf);
+            for r in 0..grid.rows {
+                for c in 0..grid.cols {
+                    let tc = term.cell(r, c);
+                    let gc = grid.get(r, c);
+                    assert_eq!(
+                        tc.ch, gc.ch,
+                        "frame {f} ({r},{c}) CHAR sim {:?} grid {:?}",
+                        tc.ch, gc.ch
+                    );
+                    assert_eq!(
+                        tc.fg,
+                        color_rgb(gc.fg),
+                        "frame {f} ({r},{c}) FG sim {:?} grid {:?}",
+                        tc.fg,
+                        color_rgb(gc.fg)
+                    );
+                    assert_eq!(
+                        tc.bg,
+                        color_rgb(gc.bg),
+                        "frame {f} ({r},{c}) BG sim {:?} grid {:?}",
+                        tc.bg,
+                        color_rgb(gc.bg)
+                    );
+                }
+            }
+            prev = Some(grid);
+        }
+    }
+
     /// Prints full-frame vs diff-frame bytes and dirty ratio per animation.
     /// Run: cargo test bench_dirty -- --ignored --nocapture
     #[test]
