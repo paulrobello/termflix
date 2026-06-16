@@ -22,7 +22,6 @@ pub mod ink_in_water;
 pub mod invaders;
 pub mod langton;
 pub mod lava;
-pub mod lenia;
 pub mod life;
 pub mod lightning;
 pub mod mandelbrot;
@@ -171,7 +170,6 @@ declare_animations! {
     ("newtons_cradle", newtons_cradle::NewtonsCradle, "Newton's cradle with energy-conserving swings"),
     ("strange_attractor", strange_attractor::StrangeAttractor, "Lorenz strange attractor with a rotating rainbow trail"),
     ("ink_in_water", ink_in_water::InkInWater, "Colored ink puffs dispersing through a turbulent flow field"),
-    ("lenia", lenia::Lenia, "Lenia continuous cellular automaton with gliding life-like patterns"),
 }
 
 #[cfg(test)]

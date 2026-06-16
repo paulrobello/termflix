@@ -11,12 +11,6 @@ Ideas for enhancing existing functionality or adding new features, organized by 
 
 ## New Animations
 
-- [ ] **[anim] 3D Mandelbulb / Raymarched Fractal (large)** — Raymarch a 3D fractal (Mandelbulb/Mandelbox) using the existing sub-cell canvas for depth shading. Pairs with the Braille render mode for fine detail and extends the 2D `mandelbrot`/`dragon` family into volumetric territory.
-- [x] **[anim] Lenia — Continuous Conway (medium)** — Generalize Conway's Game of Life to continuous space and time for smooth, gliding, life-like "creatures." Reuses the cellular-automaton scaffolding from `life`/`langton`/`automata`/`reaction_diffusion`.
-- [ ] **[anim] Raycaster Terrain Flyover (medium)** — A Wolfenstein-style raycaster rendering a scrolling heightmap into the terminal for an ASCII/Braille "flight" over rolling terrain, showcasing perspective via brightness falloff.
-- [x] **[anim] Strange Attractor (Lorenz / Aizawa) (small)** — Integrate the Lorenz (or Aizawa/de Jong) attractor and plot the trajectory with fading trails. Cheap to compute, visually iconic, and a natural fit next to the existing `pendulum` and `nbody`.
-- [x] **[anim] Ink in Water (medium)** — Diffusion-based ink dispersing through a turbulent medium: flow-field advection of a density field. Striking color gradients; reuses the `flow_field` noise.
-
 ---
 
 ## External Control & Integration
