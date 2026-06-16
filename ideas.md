@@ -118,5 +118,4 @@ Ideas for enhancing existing functionality or adding new features, organized by 
 - [ ] Sixel/Kitty image protocol
 - [ ] Web remote control
 - [ ] Mouse interaction
-- [ ] 3D Mandelbulb raymarched fractal
 - [ ] WASM / browser build
