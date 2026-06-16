@@ -439,6 +439,7 @@ const TRANSITION_FRAMES: u8 = 8;
 struct FrameProfile {
     update_us: Vec<f64>,
     render_us: Vec<f64>,
+    write_us: Vec<f64>,
     total_us: Vec<f64>,
     anim_name: String,
 }
@@ -448,14 +449,22 @@ impl FrameProfile {
         Self {
             update_us: Vec::new(),
             render_us: Vec::new(),
+            write_us: Vec::new(),
             total_us: Vec::new(),
             anim_name: anim_name.to_string(),
         }
     }
 
-    fn record(&mut self, update_dur: Duration, render_dur: Duration, total_dur: Duration) {
+    fn record(
+        &mut self,
+        update_dur: Duration,
+        render_dur: Duration,
+        write_dur: Duration,
+        total_dur: Duration,
+    ) {
         self.update_us.push(update_dur.as_secs_f64() * 1e6);
         self.render_us.push(render_dur.as_secs_f64() * 1e6);
+        self.write_us.push(write_dur.as_secs_f64() * 1e6);
         self.total_us.push(total_dur.as_secs_f64() * 1e6);
     }
 
@@ -491,6 +500,11 @@ impl FrameProfile {
         println!(
             "{:<12} {:>10.1} {:>10.1} {:>10.1} {:>10.1}",
             "render", avg, min, max, p95
+        );
+        let (avg, min, max, p95, _) = stats(&self.write_us);
+        println!(
+            "{:<12} {:>10.1} {:>10.1} {:>10.1} {:>10.1}",
+            "write", avg, min, max, p95
         );
         let (avg, min, max, p95, total_secs) = stats(&self.total_us);
         println!(
@@ -889,12 +903,6 @@ fn run_loop(
         let frame = canvas.render();
         let render_dur = render_start.elapsed();
 
-        // Profile this frame
-        if let Some(ref mut p) = frame_profile {
-            let total_dur = update_dur + render_dur;
-            p.record(update_dur, render_dur, total_dur);
-        }
-
         // Record if active
         if let Some(ref mut rec) = recorder {
             rec.capture(&frame);
@@ -998,6 +1006,20 @@ fn run_loop(
             let mut stdout = io::stdout().lock();
             stdout.write_all(&frame_buf)?;
             stdout.flush()?;
+        }
+
+        // Profile this frame (write time is only known after the write step).
+        if let Some(ref mut p) = frame_profile {
+            #[cfg(unix)]
+            let write_dur = if !single_threaded {
+                Duration::from_secs_f64(renderer.as_ref().map_or(0.0, |r| r.write_time_secs()))
+            } else {
+                write_start.elapsed()
+            };
+            #[cfg(not(unix))]
+            let write_dur = write_start.elapsed();
+            let total_dur = update_dur + render_dur + write_dur;
+            p.record(update_dur, render_dur, write_dur, total_dur);
         }
 
         // Adaptive frame pacing: adjust frame duration based on actual write throughput.
