@@ -14,6 +14,7 @@ pub mod fireflies;
 pub mod flappy_bird;
 pub mod flow_field;
 pub mod fountain;
+pub mod galton;
 pub mod garden;
 pub mod globe;
 pub mod hackerman;
@@ -27,10 +28,12 @@ pub mod matrix;
 pub mod maze;
 pub mod metaballs;
 pub mod nbody;
+pub mod newtons_cradle;
 pub mod ocean;
 pub mod particles;
 pub mod pendulum;
 pub mod petals;
+pub mod physarum;
 pub mod plasma;
 pub mod pong;
 pub mod pulse;
@@ -44,6 +47,7 @@ pub mod sierpinski;
 pub mod smoke;
 pub mod snake;
 pub mod snow;
+pub mod solar_system;
 pub mod sort;
 pub mod spiral;
 pub mod starfield;
@@ -158,6 +162,10 @@ declare_animations! {
     ("flappy_bird", flappy_bird::FlappyBird, "Self-playing Flappy Bird with AI"),
     ("reaction_diffusion", reaction_diffusion::ReactionDiffusion, "Gray-Scott reaction-diffusion coral/brain patterns"),
     ("voronoi", voronoi::Voronoi, "Animated Voronoi diagram with drifting colored cells and edge detection"),
+    ("galton", galton::Galton, "Galton board with balls cascading into a bell-curve histogram"),
+    ("solar_system", solar_system::SolarSystem, "Solar system with planets, moons, rings, and an asteroid belt"),
+    ("physarum", physarum::Physarum, "Physarum slime mold agents self-organizing into networks"),
+    ("newtons_cradle", newtons_cradle::NewtonsCradle, "Newton's cradle with energy-conserving swings"),
 }
 
 #[cfg(test)]
