@@ -26,7 +26,6 @@ pub mod lenia;
 pub mod life;
 pub mod lightning;
 pub mod mandelbrot;
-pub mod mandelbulb;
 pub mod matrix;
 pub mod maze;
 pub mod metaballs;
@@ -55,7 +54,6 @@ pub mod sort;
 pub mod spiral;
 pub mod starfield;
 pub mod strange_attractor;
-pub mod terrain;
 pub mod tetris;
 pub mod visualizer;
 pub mod voronoi;
@@ -174,8 +172,6 @@ declare_animations! {
     ("strange_attractor", strange_attractor::StrangeAttractor, "Lorenz strange attractor with a rotating rainbow trail"),
     ("ink_in_water", ink_in_water::InkInWater, "Colored ink puffs dispersing through a turbulent flow field"),
     ("lenia", lenia::Lenia, "Lenia continuous cellular automaton with gliding life-like patterns"),
-    ("terrain", terrain::Terrain, "Raycaster flyover over a scrolling voxel landscape with fog"),
-    ("mandelbulb", mandelbulb::Mandelbulb, "3D Mandelbulb fractal with shaded raymarching and color cycling"),
 }
 
 #[cfg(test)]

@@ -2,7 +2,9 @@ use super::Animation;
 use crate::render::Canvas;
 use rand::RngExt;
 
-const MU: f64 = 0.18;
+const MU_BASE: f64 = 0.15;
+const MU_AMP: f64 = 0.06;
+const MU_FREQ: f64 = 0.35;
 const SIGMA_L: f64 = 0.05;
 const DT: f64 = 0.08;
 const STEP_INTERVAL: f64 = 1.0 / 20.0;
@@ -10,11 +12,14 @@ const DOWNSAMPLE: usize = 2;
 const KERNEL_R: i32 = 6;
 const PEAK_R: f64 = 3.5;
 const WIDTH_K: f64 = 1.5;
+/// Seconds between gentle perturbations that keep the field perpetually evolving.
+const PERTURB_INTERVAL: f64 = 6.0;
 
 /// Lenia: a continuous generalization of Conway's Game of Life. A soft
 /// gaussian-ring kernel convolves a [0,1] grid; a gaussian growth function
-/// drives cells toward life, producing smooth gliding organic patterns. A
-/// low-mass reseed prevents the field from ever collapsing to black.
+/// drives cells toward life. The growth target slowly oscillates and a gentle
+/// periodic perturbation is injected, so the field never settles into a static
+/// pattern. A low-mass reseed prevents collapse to black.
 pub struct Lenia {
     sw: usize,
     sh: usize,
@@ -23,6 +28,7 @@ pub struct Lenia {
     kernel: Vec<(i32, i32, f64)>,
     ksum: f64,
     step_timer: f64,
+    perturb_timer: f64,
 }
 
 impl Lenia {
@@ -37,6 +43,7 @@ impl Lenia {
             kernel: Vec::new(),
             ksum: 1.0,
             step_timer: 0.0,
+            perturb_timer: 0.0,
         };
         l.build_kernel();
         l.init_grid(width.max(1), height.max(1));
@@ -70,9 +77,14 @@ impl Lenia {
         self.grid = vec![0.0; n];
         self.back = vec![0.0; n];
         self.seed_random(8);
+        // Faint global texture so empty regions have something to evolve.
+        let mut rng = rand::rng();
+        for v in &mut self.grid {
+            *v = (*v + rng.random_range(0.0..0.12)).clamp(0.0, 1.0);
+        }
     }
 
-    /// Stamp gaussian disks of life at random positions, plus a faint texture.
+    /// Stamp gaussian disks of life at random positions.
     fn seed_random(&mut self, count: usize) {
         let mut rng = rand::rng();
         for _ in 0..count {
@@ -90,13 +102,11 @@ impl Lenia {
                 }
             }
         }
-        // Faint global texture so empty regions still have something to evolve.
-        for v in &mut self.grid {
-            *v = (*v + rng.random_range(0.0..0.12)).clamp(0.0, 1.0);
-        }
     }
 
-    fn step(&mut self) {
+    /// One CA tick with the time-varying growth target `mu`.
+    fn step(&mut self, time: f64) {
+        let mu = MU_BASE + MU_AMP * (time * MU_FREQ).sin();
         let sw = self.sw;
         let sh = self.sh;
         let swi = sw as i32;
@@ -110,7 +120,7 @@ impl Lenia {
                     u += self.grid[ny * sw + nx] * w;
                 }
                 u /= self.ksum;
-                let g = 2.0 * (-((u - MU) / SIGMA_L).powi(2)).exp() - 1.0;
+                let g = 2.0 * (-((u - mu) / SIGMA_L).powi(2)).exp() - 1.0;
                 self.back[y * sw + x] = (self.grid[y * sw + x] + DT * g).clamp(0.0, 1.0);
             }
         }
@@ -134,17 +144,24 @@ impl Animation for Lenia {
         "lenia"
     }
 
-    fn update(&mut self, canvas: &mut Canvas, dt: f64, _time: f64) {
+    fn update(&mut self, canvas: &mut Canvas, dt: f64, time: f64) {
         let target_sw = (canvas.width / DOWNSAMPLE).max(8);
         let target_sh = (canvas.height / DOWNSAMPLE).max(8);
         if target_sw != self.sw || target_sh != self.sh {
             self.init_grid(canvas.width.max(1), canvas.height.max(1));
         }
 
+        // Gentle periodic perturbation keeps the system perpetually evolving.
+        self.perturb_timer += dt;
+        if self.perturb_timer >= PERTURB_INTERVAL {
+            self.perturb_timer = 0.0;
+            self.seed_random(2);
+        }
+
         self.step_timer += dt;
         let mut steps = 0;
         while self.step_timer >= STEP_INTERVAL && steps < 3 {
-            self.step();
+            self.step(time);
             self.step_timer -= STEP_INTERVAL;
             steps += 1;
         }
