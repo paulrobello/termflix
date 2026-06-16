@@ -498,4 +498,80 @@ mod tests {
         c.post_process(&PostProcessConfig::default());
         assert!((c.pixels[5 * c.width + 5] - before).abs() < 1e-10);
     }
+
+    /// Deterministic canvases exercising each render mode × color mode + a bloom variant.
+    /// KEEP STABLE — their rendered bytes are the golden snapshots.
+    fn snapshot_fixtures() -> Vec<(String, Canvas)> {
+        let mut v: Vec<(String, Canvas)> = Vec::new();
+        for mode in [
+            RenderMode::HalfBlock,
+            RenderMode::Braille,
+            RenderMode::Ascii,
+        ] {
+            for cm in [ColorMode::Mono, ColorMode::TrueColor, ColorMode::Ansi256] {
+                let name = format!("{mode:?}-{cm:?}").to_lowercase().replace(' ', "");
+                let mut c = Canvas::new(8, 4, mode, cm);
+                for i in 0..16usize {
+                    let x = i % c.width;
+                    let y = i / c.width;
+                    if x < c.width && y < c.height {
+                        c.set_colored(x, y, 0.8, 200 - i as u8 * 3, i as u8 * 7, 100);
+                    }
+                }
+                v.push((name, c));
+            }
+        }
+        let mut c = Canvas::new(8, 4, RenderMode::HalfBlock, ColorMode::TrueColor);
+        for i in 0..16usize {
+            let x = i % c.width;
+            let y = i / c.width;
+            if x < c.width && y < c.height {
+                c.set_colored(x, y, 0.9, 255, 100, 50);
+            }
+        }
+        c.apply_effects(1.0, 0.0);
+        c.post_process(&PostProcessConfig {
+            bloom: 0.5,
+            bloom_threshold: 0.6,
+            vignette: 0.4,
+            scanlines: false,
+        });
+        v.push(("halfblock-truecolor-bloom".to_string(), c));
+        v
+    }
+
+    fn snapshot_dir() -> String {
+        format!("{}/src/render/snapshots", env!("CARGO_MANIFEST_DIR"))
+    }
+
+    /// Regenerate the snapshot fixture files from the CURRENT render() output.
+    /// Run: cargo test gen_render_snapshots -- --ignored --nocapture
+    #[test]
+    #[ignore = "regenerator; run with --ignored"]
+    fn gen_render_snapshots() {
+        let dir = snapshot_dir();
+        std::fs::create_dir_all(&dir).unwrap();
+        for (name, c) in snapshot_fixtures() {
+            std::fs::write(format!("{dir}/{name}.txt"), c.render()).unwrap();
+        }
+        eprintln!("wrote snapshots to {dir}");
+    }
+
+    #[test]
+    fn render_matches_snapshots() {
+        let dir = snapshot_dir();
+        for (name, c) in snapshot_fixtures() {
+            let path = format!("{dir}/{name}.txt");
+            let expected = std::fs::read_to_string(&path).unwrap_or_else(|e| {
+                panic!(
+                    "missing snapshot {path}: run `cargo test gen_render_snapshots -- --ignored` ({e})"
+                )
+            });
+            assert_eq!(
+                c.render(),
+                expected,
+                "render() bytes changed for fixture {name}"
+            );
+        }
+    }
 }
