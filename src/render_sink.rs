@@ -62,14 +62,12 @@ pub fn write_chunked(
 
 /// Returns true if the given key event is a quit gesture (a configured quit key
 /// or Ctrl+C). Shared by the inline write closure and the threaded submit loop.
-#[allow(dead_code)] // wired in Task 3
 pub fn is_quit_key(code: KeyCode, modifiers: KeyModifiers, quit_keys: &[KeyCode]) -> bool {
     quit_keys.contains(&code)
         || (code == KeyCode::Char('c') && modifiers.contains(KeyModifiers::CONTROL))
 }
 
 /// Result of submitting a frame to a `ThreadedRenderer`.
-#[allow(dead_code)] // wired in Task 3
 pub enum SubmitResult {
     /// Frame was accepted (sent to the writer thread).
     Ok,
@@ -82,14 +80,12 @@ pub enum SubmitResult {
 /// Frame sink that writes on a dedicated thread. The main loop hands off owned
 /// `Vec<u8>` frame buffers via a bounded channel; the writer does the chunked
 /// `libc::write()` and publishes its measured write time.
-#[allow(dead_code)] // wired in Task 3
 pub struct ThreadedRenderer {
     tx: Option<SyncSender<Vec<u8>>>,
     write_time: Arc<AtomicU64>,
     handle: Option<JoinHandle<()>>,
 }
 
-#[allow(dead_code)] // wired in Task 3
 impl ThreadedRenderer {
     /// Spawn the writer thread. The thread holds a clone of `quit` so it can bail
     /// between write chunks; `fd` is the raw terminal fd (stdout, fd 1).
@@ -172,7 +168,6 @@ impl ThreadedRenderer {
 
 /// Read one pending input event (event::poll already confirmed one is ready) and
 /// return true if it is a quit gesture, setting `quit` when it is.
-#[allow(dead_code)] // wired in Task 3 (called by ThreadedRenderer::submit)
 fn poll_quit(quit: &AtomicBool, quit_keys: &[KeyCode]) -> io::Result<bool> {
     if let Event::Key(KeyEvent {
         code,

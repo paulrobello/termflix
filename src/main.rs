@@ -23,6 +23,8 @@ use external::{CurrentState, ExternalParams, ParamsSource, spawn_reader};
 use render::{Canvas, ColorMode, PostProcessConfig, RenderMode};
 use std::io;
 use std::io::IsTerminal;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
@@ -114,6 +116,11 @@ struct Cli {
     /// Profile per-frame timing and print summary on exit
     #[arg(long)]
     profile: bool,
+
+    /// Disable the writer thread; write frames inline on the main thread (today's
+    /// behavior). Useful for debugging and A/B comparison.
+    #[arg(long)]
+    single_threaded: bool,
 
     /// Capture animations as PNG+GIF gallery (optional: comma-separated animation names)
     #[arg(long)]
@@ -352,6 +359,7 @@ fn main() -> io::Result<()> {
         default_bloom,
         &keybindings,
         cli.profile,
+        cli.single_threaded,
     );
 
     // Restore terminal — disable raw mode first (doesn't write to stdout)
@@ -537,6 +545,7 @@ fn run_loop(
     default_bloom: f64,
     keybindings: &KeyBindings,
     profile: bool,
+    single_threaded: bool,
 ) -> io::Result<()> {
     let (mut cols, mut rows) = terminal::size()?;
     let is_tmux = std::env::var("TMUX").is_ok();
@@ -578,8 +587,6 @@ fn run_loop(
     let mut fps_update = Instant::now();
     let mut recorder = record_path.map(|_| record::Recorder::new());
     let mut needs_rebuild = false;
-    // Manual frame buffer — we control when it gets written
-    let mut frame_buf: Vec<u8> = Vec::with_capacity(256 * 1024);
     // Resize cooldown — skip frames after resize
     let mut resize_cooldown = Instant::now();
     // External control channel setup
@@ -596,6 +603,17 @@ fn run_loop(
     let mut transition = TransitionState::None;
     let mut virtual_time: f64 = 0.0;
     let mut frame_profile = profile.then(|| FrameProfile::new(initial_anim));
+    let quit = Arc::new(AtomicBool::new(false));
+    #[cfg(unix)]
+    let mut renderer: Option<render_sink::ThreadedRenderer> = if !single_threaded {
+        use std::os::unix::io::AsRawFd;
+        Some(render_sink::ThreadedRenderer::new(
+            quit.clone(),
+            io::stdout().as_raw_fd(),
+        ))
+    } else {
+        None
+    };
     let result: io::Result<()> = 'outer: loop {
         // Use event::poll as frame timer — properly yields to OS for signal handling
         let time_to_next = adaptive_frame_dur.saturating_sub(last_frame.elapsed());
@@ -617,9 +635,11 @@ fn run_loop(
                     }) => {
                         // Ctrl+C always quits
                         if code == KeyCode::Char('c') && modifiers.contains(KeyModifiers::CONTROL) {
+                            quit.store(true, Ordering::Release);
                             break 'outer Ok(());
                         }
                         if screensaver && !screensaver_keys {
+                            quit.store(true, Ordering::Release);
                             break 'outer Ok(());
                         }
                         match code {
@@ -633,6 +653,7 @@ fn run_loop(
                                     terminal::enable_raw_mode()?;
                                     execute!(stdout, terminal::EnterAlternateScreen, cursor::Hide)?;
                                 }
+                                quit.store(true, Ordering::Release);
                                 break 'outer Ok(());
                             }
                             kc if keybindings.next.contains(&kc) => {
@@ -680,6 +701,7 @@ fn run_loop(
                         }
                     }
                     Event::FocusGained if screensaver && !screensaver_keys => {
+                        quit.store(true, Ordering::Release);
                         break 'outer Ok(());
                     }
                     _ => {}
@@ -875,7 +897,7 @@ fn run_loop(
         }
 
         // Build frame buffer with synchronized output
-        frame_buf.clear();
+        let mut frame_buf: Vec<u8> = Vec::with_capacity(256 * 1024);
         // Begin synchronized update — terminal batches everything until end marker
         // tmux strips these but they're harmless; direct terminals benefit from them
         frame_buf.extend_from_slice(b"\x1b[?2026h");
@@ -931,26 +953,36 @@ fn run_loop(
         let write_start = Instant::now();
         #[cfg(unix)]
         {
-            use std::os::unix::io::AsRawFd;
-            let fd = io::stdout().as_raw_fd();
-            let outcome = match render_sink::write_chunked(fd, &frame_buf, || {
-                if event::poll(Duration::ZERO)?
-                    && let Event::Key(KeyEvent {
-                        code,
-                        kind: KeyEventKind::Press,
-                        modifiers,
-                        ..
-                    }) = event::read()?
-                    && (keybindings.quit.contains(&code)
-                        || (code == KeyCode::Char('c')
-                            && modifiers.contains(KeyModifiers::CONTROL)))
-                {
-                    return Ok(true);
+            let outcome = if let Some(ref mut r) = renderer {
+                // Threaded: hand the owned frame buffer to the writer thread.
+                match r.submit(frame_buf, &quit, &keybindings.quit) {
+                    Ok(render_sink::SubmitResult::Ok) => render_sink::WriteOutcome::Complete,
+                    Ok(render_sink::SubmitResult::Quit) => render_sink::WriteOutcome::QuitSignaled,
+                    Ok(render_sink::SubmitResult::WriterDied) => break 'outer Ok(()),
+                    Err(e) => break 'outer Err(e),
                 }
-                Ok(false)
-            }) {
-                Ok(o) => o,
-                Err(e) => break 'outer Err(e),
+            } else {
+                // Inline (--single-threaded): today's exact behavior via the shared core.
+                use std::os::unix::io::AsRawFd;
+                let fd = io::stdout().as_raw_fd();
+                match render_sink::write_chunked(fd, &frame_buf, || {
+                    if event::poll(Duration::ZERO)?
+                        && let Event::Key(KeyEvent {
+                            code,
+                            kind: KeyEventKind::Press,
+                            modifiers,
+                            ..
+                        }) = event::read()?
+                        && render_sink::is_quit_key(code, modifiers, &keybindings.quit)
+                    {
+                        quit.store(true, Ordering::Release);
+                        return Ok(true);
+                    }
+                    Ok(false)
+                }) {
+                    Ok(o) => o,
+                    Err(e) => break 'outer Err(e),
+                }
             };
             if matches!(outcome, render_sink::WriteOutcome::QuitSignaled) {
                 break 'outer Ok(());
@@ -972,6 +1004,16 @@ fn run_loop(
         // and making quit unresponsive. With frame_dur=ZERO, the target becomes
         // write_time_ema*1.1 — no hard cap, but no terminal flood either.
         if is_tmux || unlimited {
+            #[cfg(unix)]
+            let write_secs = if renderer.is_some() {
+                renderer
+                    .as_ref()
+                    .map(|r| r.write_time_secs())
+                    .unwrap_or(0.0)
+            } else {
+                write_start.elapsed().as_secs_f64()
+            };
+            #[cfg(not(unix))]
             let write_secs = write_start.elapsed().as_secs_f64();
             write_time_ema = write_time_ema * 0.8 + write_secs * 0.2;
             // Target: frame duration = write time + small margin for animation update
@@ -981,6 +1023,10 @@ fn run_loop(
             adaptive_frame_dur = target.min(Duration::from_millis(200)); // cap at 5fps minimum
         }
     };
+    #[cfg(unix)]
+    if let Some(r) = renderer {
+        let _ = r.shutdown();
+    }
     if let Some(ref p) = frame_profile {
         p.print_summary();
     }
