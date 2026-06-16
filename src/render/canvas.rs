@@ -1,3 +1,4 @@
+use super::cell::{Cell, CellGrid};
 use crossterm::style::Color;
 
 /// How to render sub-cell pixels to terminal characters
@@ -172,6 +173,44 @@ impl Canvas {
             last_fg.clear();
         }
         out
+    }
+
+    #[allow(dead_code)] // wired in Task 3
+    pub fn ascii_build_grid(&self) -> CellGrid {
+        const CHARS: &[u8] = b" .:-=+*#%@";
+        let cols = self.width;
+        let rows = self.height;
+        let use_color = self.color_mode != ColorMode::Mono;
+        let mut cells = Vec::with_capacity(cols * rows);
+        for row in 0..rows {
+            for col in 0..cols {
+                let idx = row * self.width + col;
+                let v = self.pixels[idx].clamp(0.0, 1.0);
+                let co = self.char_override[idx];
+                let ch = if co != '\0' {
+                    co
+                } else {
+                    CHARS[(v * (CHARS.len() - 1) as f64) as usize] as char
+                };
+                let fg = if use_color {
+                    let (r, g, b) = self.colors[idx];
+                    Some(self.map_color(r, g, b))
+                } else {
+                    None
+                };
+                cells.push(Cell { ch, fg, bg: None });
+            }
+        }
+        CellGrid { cols, rows, cells }
+    }
+
+    /// Build the terminal-cell grid for the current render mode.
+    pub fn build_grid(&self) -> CellGrid {
+        match self.render_mode {
+            RenderMode::Braille => super::braille::build_grid(self),
+            RenderMode::HalfBlock => super::halfblock::build_grid(self),
+            RenderMode::Ascii => self.ascii_build_grid(),
+        }
     }
 
     /// Apply post-processing effects to the canvas.
@@ -555,6 +594,26 @@ mod tests {
             std::fs::write(format!("{dir}/{name}.txt"), c.render()).unwrap();
         }
         eprintln!("wrote snapshots to {dir}");
+    }
+
+    #[test]
+    fn build_grid_halfblock_colored_and_dark() {
+        // col 0: top bright, bottom dark-but-present → ▀ with fg + bg(Some dark color)
+        // col 1: both dark → space cell with fg/bg None
+        let mut c = Canvas::new(2, 1, RenderMode::HalfBlock, ColorMode::TrueColor);
+        c.set_colored(0, 0, 1.0, 255, 0, 0); // top bright
+        c.set_colored(0, 1, 0.0, 255, 0, 0); // bottom dark
+        let g = c.build_grid();
+        let cell = g.get(0, 0);
+        assert_eq!(cell.ch, '▀');
+        assert!(cell.fg.is_some(), "bright top → fg Some");
+        assert!(
+            cell.bg.is_some(),
+            "dark-but-present bottom → bg Some (mirrors render())"
+        );
+        let dark = g.get(0, 1);
+        assert_eq!(dark.ch, ' ', "both dark → space");
+        assert!(dark.fg.is_none() && dark.bg.is_none(), "both dark → no SGR");
     }
 
     #[test]

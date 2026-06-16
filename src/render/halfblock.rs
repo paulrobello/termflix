@@ -1,4 +1,5 @@
 use super::canvas::{Canvas, ColorMode, color_to_fg};
+use super::cell::{Cell, CellGrid};
 use crossterm::style::Color;
 
 fn color_to_bg(color: Color) -> String {
@@ -126,4 +127,53 @@ pub fn render(canvas: &Canvas) -> String {
         out.push_str(";1H");
     }
     out
+}
+
+#[allow(dead_code)] // wired in Task 3
+pub fn build_grid(canvas: &Canvas) -> CellGrid {
+    let cols = canvas.width;
+    let rows = canvas.height / 2;
+    let mut cells = Vec::with_capacity(cols * rows);
+    for row in 0..rows {
+        for col in 0..cols {
+            let top_idx = (row * 2) * canvas.width + col;
+            let bot_idx = (row * 2 + 1) * canvas.width + col;
+            let top_v = canvas.pixels[top_idx];
+            let bot_v = canvas.pixels[bot_idx];
+            let top_dark = top_v < DARK_THRESHOLD;
+            let bot_dark = bot_v < DARK_THRESHOLD;
+            let cell = if canvas.color_mode == ColorMode::Mono {
+                let ch = match (!top_dark, !bot_dark) {
+                    (true, true) => '█',
+                    (true, false) => '▀',
+                    (false, true) => '▄',
+                    (false, false) => ' ',
+                };
+                Cell {
+                    ch,
+                    fg: None,
+                    bg: None,
+                }
+            } else if top_dark && bot_dark {
+                Cell {
+                    ch: ' ',
+                    fg: None,
+                    bg: None,
+                }
+            } else {
+                let (tr, tg, tb) = canvas.colors[top_idx];
+                let (br, bgc, bb) = canvas.colors[bot_idx];
+                let scale = |c: u8, v: f64| -> u8 { (c as f64 * v.clamp(0.0, 1.0)) as u8 };
+                let top = canvas.map_color(scale(tr, top_v), scale(tg, top_v), scale(tb, top_v));
+                let bot = canvas.map_color(scale(br, bot_v), scale(bgc, bot_v), scale(bb, bot_v));
+                Cell {
+                    ch: '▀',
+                    fg: Some(top),
+                    bg: Some(bot),
+                }
+            };
+            cells.push(cell);
+        }
+    }
+    CellGrid { cols, rows, cells }
 }
