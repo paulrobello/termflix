@@ -196,6 +196,17 @@ termflix auto-detects tmux and adapts:
 - **Split-safe** — No lockups when splitting panes; FPS scales with pane size
 - **Background-safe** — No output backlog when switching away from iTerm2
 
+### Tearing or flickering rows under tmux
+
+By default termflix uses **differential (dirty-cell) rendering** — each frame sends only the cells that changed, which is the big throughput win under tmux. tmux forwards those updates to your terminal; if it doesn't wrap them in synchronized-output, the terminal applies them non-atomically and you may see brief tearing or a few "stale" rows (most noticeable when the status bar updates each second). Enable tmux's synchronized-output passthrough to fix it:
+
+```bash
+tmux set -as terminal-features '*:sync'                         # apply now, current server
+echo "set -as terminal-features '*:sync'" >> ~/.tmux.conf       # persist across restarts
+```
+
+This needs a terminal that supports synchronized output — iTerm2, Alacritty, kitty, WezTerm, Ghostty, and Warp all do; macOS **Terminal.app does not**. If yours doesn't, run termflix with `--full-frames` under tmux to disable dirty-cell rendering (reverts to a full redraw every frame — no tearing, but no throughput win).
+
 Typical FPS in tmux (200×44, halfblock truecolor):
 - Full pane: ~10 fps (smooth)
 - Split pane: ~20 fps (less output per frame)
