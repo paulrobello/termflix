@@ -7,6 +7,7 @@ mod gif;
 mod png;
 mod record;
 mod render;
+mod render_sink;
 
 use animations::Animation;
 use clap::Parser;
@@ -932,9 +933,7 @@ fn run_loop(
         {
             use std::os::unix::io::AsRawFd;
             let fd = io::stdout().as_raw_fd();
-            let mut written = 0;
-            let buf = &frame_buf;
-            while written < buf.len() {
+            let outcome = match render_sink::write_chunked(fd, &frame_buf, || {
                 if event::poll(Duration::ZERO)?
                     && let Event::Key(KeyEvent {
                         code,
@@ -946,40 +945,15 @@ fn run_loop(
                         || (code == KeyCode::Char('c')
                             && modifiers.contains(KeyModifiers::CONTROL)))
                 {
-                    break 'outer Ok(());
+                    return Ok(true);
                 }
-                let chunk_end = (written + 16384).min(buf.len());
-                let n = unsafe {
-                    libc::write(
-                        fd,
-                        buf[written..chunk_end].as_ptr() as *const libc::c_void,
-                        chunk_end - written,
-                    )
-                };
-                if n > 0 {
-                    written += n as usize;
-                    // Also check for quit AFTER the write — catches events that arrived
-                    // during a blocking write (e.g. during EMA warmup in unlimited mode).
-                    if event::poll(Duration::ZERO)?
-                        && let Event::Key(KeyEvent {
-                            code,
-                            kind: KeyEventKind::Press,
-                            modifiers,
-                            ..
-                        }) = event::read()?
-                        && (keybindings.quit.contains(&code)
-                            || (code == KeyCode::Char('c')
-                                && modifiers.contains(KeyModifiers::CONTROL)))
-                    {
-                        break 'outer Ok(());
-                    }
-                } else if n < 0 {
-                    let err = io::Error::last_os_error();
-                    if err.kind() == io::ErrorKind::Interrupted {
-                        continue;
-                    }
-                    break 'outer Err(err);
-                }
+                Ok(false)
+            }) {
+                Ok(o) => o,
+                Err(e) => break 'outer Err(e),
+            };
+            if matches!(outcome, render_sink::WriteOutcome::QuitSignaled) {
+                break 'outer Ok(());
             }
         }
         #[cfg(not(unix))]
