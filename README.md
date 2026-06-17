@@ -190,6 +190,21 @@ termflix matrix --record session.asciianim
 
 # Play back a recording
 termflix --play session.asciianim
+
+# Post-processing: bloom, vignette, scanlines
+termflix fire --bloom-intensity 0.5 --bloom-threshold 0.6 --vignette 0.4 --scanlines
+
+# Profile per-frame timing (prints a summary on exit)
+termflix --profile plasma
+
+# Full redraw every frame (disables dirty-cell rendering; fixes tearing under tmux)
+termflix plasma --full-frames
+
+# Render inline, no writer thread (for debugging / A-B comparison)
+termflix plasma --single-threaded
+
+# Drive parameters from an external NDJSON file (one JSON object per line)
+termflix --data-file /tmp/termflix.json
 ```
 
 ## Hotkeys
@@ -197,7 +212,7 @@ termflix --play session.asciianim
 | Key | Action |
 |-----|--------|
 | `q` / `Esc` | Quit |
-| `←` / `→` | Previous / next animation |
+| `←` / `→` (or `n` / `p`) | Previous / next animation |
 | `r` | Cycle render mode (braille → half-block → ascii) |
 | `c` | Cycle color mode |
 | `b` | Toggle bloom |
@@ -294,6 +309,31 @@ unlimited_fps = false
 
 # Ordered (Bayer 4x4) dithering for ANSI-256 mode (reduces banding)
 # dither = true
+
+# Temporal brightness smoothing time constant in seconds (0 = off)
+# smoothing = 0.08
+
+# Color quantization step (0 = off, 4/8/16 = coarser colors, less output)
+# color_quant = 0
+
+# External control via an NDJSON file (one JSON object per line)
+# data_file = "/tmp/termflix.json"
+
+# Post-processing effects
+# [postproc]
+# bloom = 0.3               # Glow intensity (0.0-1.0)
+# bloom_threshold = 0.6     # Brightness threshold to trigger bloom (0.0-1.0)
+# vignette = 0.4            # Edge darkening (0.0-1.0)
+# scanlines = false         # CRT scanline effect
+
+# Custom keybindings (action -> key name)
+# [keybindings]
+# next = "Right"
+# prev = "Left"
+# quit = "q"
+# render = "r"
+# color = "c"
+# status = "h"
 ```
 
 ## Gallery
