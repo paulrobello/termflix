@@ -28,8 +28,6 @@ Ideas for enhancing existing functionality or adding new features, organized by 
 - [ ] **[render] Alpha Blending / Additive Compositing (medium)** — Add blend modes to the canvas so overlapping effects combine naturally. `set_colored()` currently overwrites. An additive blend mode would enable glow effects, light trails, and transparency — useful for `fire`, `aurora`, `lightning`, and any particle-heavy animation.
 - [ ] **[render] Custom Color Palettes (small)** — Allow users to define named color palettes in config (e.g., `cyberpunk = ["#0d0221", "#0f084b", "#26408b", "#a6f0c6", "#f72585"]`). Animations sample from these instead of hardcoded gradients. Makes each animation more personalizable without code changes.
 - [ ] **[render] Sixel / Kitty Image Protocol Support (large)** — Output actual pixel graphics via Sixel or Kitty image protocols on supported terminals. Would enable smooth gradients and true anti-aliasing beyond what Braille/half-block can achieve. Fall back to current modes on unsupported terminals.
-- [ ] **[render] Ordered (Bayer) Dithering for ANSI-256 (medium)** — When running in `ansi256` mode, apply ordered/Bayer-matrix dithering so gradients and glows look near-true-color on terminals that can't do 24-bit. Big quality win for SSH sessions and older terminals.
-- [ ] **[render] Colorblind-Safe Palettes (small)** — Ship a curated set of colorblind-safe palettes (Okabe-Ito, viridis) selectable via config/flag. Keeps `plasma`, `aurora`, `boids`, etc. legible for deuteranopia/protanopia users.
 - [ ] **[render] Chromatic Aberration Post-Process (small)** — A new post-process pass that offsets RGB channels near the screen edges for a subtle lens/CRT look. Composes with the existing bloom/scanlines/vignette passes in `canvas.post_process()`.
 
 ---
@@ -101,7 +99,6 @@ Ideas for enhancing existing functionality or adding new features, organized by 
 **Quick wins (< 1 hour):**
 - [ ] Information overlay (`i` key)
 - [ ] `--random` / `--shuffle` flags
-- [ ] Colorblind-safe palettes
 - [ ] "Now Playing" terminal title (OSC 0/2)
 - [ ] Auto-sync README animation count & table (fix the 44 vs 55 drift)
 
@@ -109,7 +106,6 @@ Ideas for enhancing existing functionality or adding new features, organized by 
 - [ ] Custom color palettes in config
 - [ ] Progress bar for auto-cycle
 - [ ] Per-animation config overrides
-- [ ] Ordered (Bayer) dithering for ANSI-256
 - [ ] Fuzzy animation picker / TUI menu
 
 **Large effort (full day+):**

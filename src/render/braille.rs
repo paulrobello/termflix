@@ -64,7 +64,7 @@ pub fn build_grid(canvas: &Canvas) -> CellGrid {
                 let b = (total_b / lit_count) as u8;
                 Cell {
                     ch,
-                    fg: Some(canvas.map_color(r, g, b)),
+                    fg: Some(canvas.map_color(col, row, r, g, b)),
                     bg: None,
                 }
             } else {

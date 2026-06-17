@@ -20,7 +20,7 @@ use crossterm::{
     execute, terminal,
 };
 use external::{CurrentState, ExternalParams, ParamsSource, spawn_reader};
-use render::{Canvas, ColorMode, PostProcessConfig, RenderMode, smoothing_alpha};
+use render::{Canvas, ColorAssist, ColorMode, PostProcessConfig, RenderMode, smoothing_alpha};
 use std::io;
 use std::io::IsTerminal;
 use std::sync::Arc;
@@ -117,6 +117,19 @@ struct Cli {
     /// Reduces flicker in fire/plasma/aurora. Toggle live with `s`.
     #[arg(long)]
     smoothing: Option<f64>,
+
+    /// Colorblind-safe remap palette: viridis | magma | inferno | plasma | okabe-ito
+    #[arg(long, conflicts_with = "colorblind")]
+    palette: Option<String>,
+
+    /// Daltonization correction type: protanopia | deuteranopia | tritanopia
+    #[arg(long)]
+    colorblind: Option<String>,
+
+    /// Enable 4x4 Bayer ordered dithering in ANSI-256 mode (reduces banding).
+    /// Toggle live with `d`.
+    #[arg(long)]
+    dither: bool,
 
     /// Profile per-frame timing and print summary on exit
     #[arg(long)]
@@ -362,6 +375,15 @@ fn main() -> io::Result<()> {
         .unwrap_or(0.1)
         .clamp(0.0, 1.0);
 
+    // Colorblind-safe color assist: palette remap or daltonization (mutually exclusive).
+    // CLI > config; None when unset or name invalid.
+    let assist = ColorAssist::from_cli(
+        cli.palette.as_deref().or(cfg.palette.as_deref()),
+        cli.colorblind.as_deref().or(cfg.colorblind.as_deref()),
+    )
+    .unwrap_or(ColorAssist::None);
+    let dither = cli.dither || cfg.dither.unwrap_or(false);
+
     let result = run_loop(
         &anim_name,
         render_override,
@@ -380,6 +402,8 @@ fn main() -> io::Result<()> {
         smoothing_tau,
         default_smoothing_tau,
         default_bloom,
+        assist,
+        dither,
         &keybindings,
         cli.profile,
         cli.single_threaded,
@@ -583,6 +607,8 @@ fn run_loop(
     mut smoothing_tau: f64,
     default_smoothing_tau: f64,
     default_bloom: f64,
+    assist: ColorAssist,
+    dither: bool,
     keybindings: &KeyBindings,
     profile: bool,
     single_threaded: bool,
@@ -612,6 +638,7 @@ fn run_loop(
     let mut render_mode = explicit_render.unwrap_or_else(|| anim.preferred_render());
     let mut canvas = Canvas::new(cols as usize, display_rows, render_mode, color_mode);
     canvas.color_quant = color_quant;
+    canvas.dither = dither;
     anim = animations::create(initial_anim, canvas.width, canvas.height, scale)
         .expect("animation name validated before calling create");
     anim.on_resize(canvas.width, canvas.height);
@@ -751,6 +778,9 @@ fn run_loop(
                                     default_smoothing_tau
                                 };
                             }
+                            KeyCode::Char('d') => {
+                                canvas.dither = !canvas.dither;
+                            }
                             _ => {}
                         }
                     }
@@ -787,6 +817,7 @@ fn run_loop(
                 };
                 canvas = Canvas::new(cols as usize, display_rows, render_mode, color_mode);
                 canvas.color_quant = color_quant;
+                canvas.dither = dither;
                 anim = animations::create(
                     animations::ANIMATION_NAMES[anim_index],
                     canvas.width,
@@ -941,6 +972,7 @@ fn run_loop(
         let intensity = ext_state.intensity().clamp(0.0, 2.0) * transition_factor;
         let hue = ext_state.color_shift().clamp(0.0, 1.0);
         canvas.apply_effects(intensity, hue);
+        canvas.apply_color_assist(&assist);
         canvas.post_process(&postproc);
 
         // Render to string
@@ -992,8 +1024,14 @@ fn run_loop(
             };
             let bloom_str = if postproc.bloom > 0.0 { "ON" } else { "off" };
             let smooth_str = if smoothing_tau > 0.0 { "ON" } else { "off" };
+            let dither_str = if canvas.dither { "ON" } else { "off" };
+            let assist_str = match &assist {
+                ColorAssist::None => String::new(),
+                ColorAssist::Remap(p) => format!(" | pal:{}", p.name()),
+                ColorAssist::Daltonize(d) => format!(" | cb:{}", d.name()),
+            };
             let status = format!(
-                " {} | {:?} | {:?} | {}{} | bloom:{} | smooth:{} | [←/→] anim  [b] bloom  [s] smooth  [r] render  [c] color  [h] hide  [q] quit ",
+                " {} | {:?} | {:?} | {}{} | bloom:{} | smooth:{} | dither:{}{assist_str} | [←/→] anim  [b] bloom  [s] smooth  [d] dither  [r] render  [c] color  [h] hide  [q] quit ",
                 anim.name(),
                 render_mode,
                 color_mode,
@@ -1001,6 +1039,7 @@ fn run_loop(
                 rec_indicator,
                 bloom_str,
                 smooth_str,
+                dither_str,
             );
             let w = cols as usize;
             let truncated: String = status.chars().take(w).collect();

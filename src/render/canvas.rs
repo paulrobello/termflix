@@ -1,5 +1,9 @@
 use super::cell::{Cell, CellGrid};
+use super::color_assist::{ColorAssist, daltonize, luminance};
 use crossterm::style::Color;
+
+/// 4×4 Bayer ordered-dither thresholds (values 0..=15).
+const BAYER_4X4: [[u8; 4]; 4] = [[0, 8, 2, 10], [12, 4, 14, 6], [3, 11, 1, 9], [15, 7, 13, 5]];
 
 /// How to render sub-cell pixels to terminal characters
 #[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum)]
@@ -52,6 +56,8 @@ pub struct Canvas {
     /// Color quantization step (0 = off, 4/8/16 = round RGB to nearest N).
     /// Higher values = fewer unique colors = better dedup = less output.
     pub color_quant: u8,
+    /// Apply 4×4 Bayer ordered dithering when quantizing to ANSI-256.
+    pub dither: bool,
     /// Previous-frame brightness, used by temporal smoothing.
     /// NOT touched by `clear()` — persists across the per-frame wipe.
     /// `None` until first use; resets to `None` on `Canvas::new()`.
@@ -80,6 +86,7 @@ impl Canvas {
             render_mode,
             color_mode,
             color_quant: 0,
+            dither: false,
             prev_pixels: None,
         }
     }
@@ -157,7 +164,7 @@ impl Canvas {
                 };
                 let fg = if use_color {
                     let (r, g, b) = self.colors[idx];
-                    Some(self.map_color(r, g, b))
+                    Some(self.map_color(col, row, r, g, b))
                 } else {
                     None
                 };
@@ -199,6 +206,30 @@ impl Canvas {
             let blended = *pv + alpha * (*p - *pv);
             *p = blended;
             *pv = blended;
+        }
+    }
+
+    /// Apply colorblind-safe color assist (palette remap or daltonization).
+    /// No-op for `ColorAssist::None` and in `Mono` mode (no color to transform).
+    pub fn apply_color_assist(&mut self, assist: &ColorAssist) {
+        let assist = if matches!(self.color_mode, ColorMode::Mono) {
+            ColorAssist::None
+        } else {
+            *assist
+        };
+        match assist {
+            ColorAssist::None => {}
+            ColorAssist::Remap(p) => {
+                for i in 0..self.pixels.len() {
+                    let t = (self.pixels[i] * luminance(self.colors[i])).clamp(0.0, 1.0);
+                    self.colors[i] = p.sample(t);
+                }
+            }
+            ColorAssist::Daltonize(d) => {
+                for c in self.colors.iter_mut() {
+                    *c = daltonize(*c, d);
+                }
+            }
         }
     }
 
@@ -289,7 +320,7 @@ impl Canvas {
         }
     }
 
-    pub fn map_color(&self, r: u8, g: u8, b: u8) -> Color {
+    pub fn map_color(&self, x: usize, y: usize, r: u8, g: u8, b: u8) -> Color {
         // Apply color quantization if enabled (reduces unique colors for better dedup)
         let (r, g, b) = if self.color_quant > 1 {
             let q = self.color_quant as u16;
@@ -305,9 +336,20 @@ impl Canvas {
             ColorMode::Mono => Color::White,
             ColorMode::TrueColor => Color::Rgb { r, g, b },
             ColorMode::Ansi256 => {
-                // Approximate RGB to 256-color
-                let idx = 16 + (36 * (r as u16 / 51)) + (6 * (g as u16 / 51)) + (b as u16 / 51);
-                Color::AnsiValue(idx as u8)
+                if self.dither {
+                    // Position-keyed Bayer threshold biases cube-level rounding so
+                    // that gradients average out near-true-color across cells.
+                    let thr = BAYER_4X4[y % 4][x % 4] as f64 / 16.0;
+                    let bias = (thr - 0.5) * 51.0;
+                    let cube =
+                        |c: u8| -> u8 { ((c as f64 + bias) / 51.0).floor().clamp(0.0, 5.0) as u8 };
+                    let idx = 16 + 36 * cube(r) as usize + 6 * cube(g) as usize + cube(b) as usize;
+                    Color::AnsiValue(idx as u8)
+                } else {
+                    // Approximate RGB to 256-color (legacy truncation).
+                    let idx = 16 + (36 * (r as u16 / 51)) + (6 * (g as u16 / 51)) + (b as u16 / 51);
+                    Color::AnsiValue(idx as u8)
+                }
             }
             ColorMode::Ansi16 => {
                 // Simple mapping to basic colors
@@ -601,6 +643,90 @@ mod tests {
     }
 
     #[test]
+    fn new_initializes_dither_false() {
+        let c = Canvas::new(4, 2, RenderMode::HalfBlock, ColorMode::Ansi256);
+        assert!(!c.dither);
+    }
+
+    #[test]
+    fn map_color_ansi256_off_matches_truncation() {
+        let c = Canvas::new(16, 4, RenderMode::HalfBlock, ColorMode::Ansi256);
+        // 30/51 truncates to 0 -> all channels level 0 -> base index 16.
+        assert_eq!(c.map_color(0, 0, 30, 30, 30), Color::AnsiValue(16));
+        // Position is ignored when dither is off.
+        assert_eq!(c.map_color(5, 3, 30, 30, 30), Color::AnsiValue(16));
+    }
+
+    #[test]
+    fn map_color_ansi256_dither_rounds_by_position() {
+        let mut c = Canvas::new(16, 4, RenderMode::HalfBlock, ColorMode::Ansi256);
+        c.dither = true;
+        // BAYER_4X4[0][0] = 0  (low threshold  -> bias negative -> rounds down)
+        // BAYER_4X4[3][0] = 15 (high threshold -> bias positive -> rounds up)
+        // For input 30: with negative bias cube stays 0 (idx 16);
+        // with positive bias (30 + 22.3)/51 ~ 1.02 -> cube 1 (idx 16+36+6+1 = 59).
+        assert_eq!(c.map_color(0, 0, 30, 30, 30), Color::AnsiValue(16));
+        assert_eq!(c.map_color(0, 3, 30, 30, 30), Color::AnsiValue(59));
+    }
+
+    #[test]
+    fn map_color_truecolor_ignores_xy_and_dither() {
+        let mut c = Canvas::new(4, 2, RenderMode::HalfBlock, ColorMode::TrueColor);
+        c.dither = true;
+        assert_eq!(
+            c.map_color(1, 1, 10, 20, 30),
+            Color::Rgb {
+                r: 10,
+                g: 20,
+                b: 30
+            }
+        );
+    }
+
+    #[test]
+    fn apply_color_assist_remap_by_luminance() {
+        use crate::render::color_assist::{ColorAssist, Palette};
+        let mut c = Canvas::new(2, 1, RenderMode::HalfBlock, ColorMode::TrueColor);
+        c.pixels[0] = 1.0; // bright white -> t = 1.0 * luminance(white) = 1.0
+        c.colors[0] = (255, 255, 255);
+        c.pixels[1] = 0.0; // dark -> t = 0.0
+        c.colors[1] = (255, 255, 255);
+        c.apply_color_assist(&ColorAssist::Remap(Palette::Viridis));
+        assert_eq!(c.colors[0], Palette::Viridis.sample(1.0));
+        assert_eq!(c.colors[1], Palette::Viridis.sample(0.0));
+    }
+
+    #[test]
+    fn apply_color_assist_daltonize_rewrites_colors() {
+        use crate::render::color_assist::{ColorAssist, Deficiency, daltonize};
+        let mut c = Canvas::new(1, 1, RenderMode::HalfBlock, ColorMode::TrueColor);
+        c.colors[0] = (255, 0, 0);
+        c.apply_color_assist(&ColorAssist::Daltonize(Deficiency::Deuteranopia));
+        assert_eq!(
+            c.colors[0],
+            daltonize((255, 0, 0), Deficiency::Deuteranopia)
+        );
+    }
+
+    #[test]
+    fn apply_color_assist_is_noop_in_mono() {
+        use crate::render::color_assist::{ColorAssist, Palette};
+        let mut c = Canvas::new(1, 1, RenderMode::HalfBlock, ColorMode::Mono);
+        c.colors[0] = (123, 45, 67);
+        c.apply_color_assist(&ColorAssist::Remap(Palette::Viridis));
+        assert_eq!(c.colors[0], (123, 45, 67));
+    }
+
+    #[test]
+    fn apply_color_assist_none_is_noop() {
+        use crate::render::color_assist::ColorAssist;
+        let mut c = Canvas::new(1, 1, RenderMode::HalfBlock, ColorMode::TrueColor);
+        c.colors[0] = (9, 8, 7);
+        c.apply_color_assist(&ColorAssist::None);
+        assert_eq!(c.colors[0], (9, 8, 7));
+    }
+
+    #[test]
     fn apply_smoothing_alpha_ge_one_is_noop() {
         let mut c = Canvas::new(2, 1, RenderMode::HalfBlock, ColorMode::TrueColor);
         c.prev_pixels = Some(vec![0.0; c.pixels.len()]);
@@ -634,6 +760,27 @@ mod tests {
                 v.push((name, c));
             }
         }
+        // Dithered ANSI-256 variants (4x4 Bayer) for each render mode.
+        for mode in [
+            RenderMode::HalfBlock,
+            RenderMode::Braille,
+            RenderMode::Ascii,
+        ] {
+            let name = format!("{mode:?}-ansi256-dither")
+                .to_lowercase()
+                .replace(' ', "");
+            let mut c = Canvas::new(8, 4, mode, ColorMode::Ansi256);
+            c.dither = true;
+            for i in 0..16usize {
+                let x = i % c.width;
+                let y = i / c.width;
+                if x < c.width && y < c.height {
+                    c.set_colored(x, y, 0.8, 200 - i as u8 * 3, i as u8 * 7, 100);
+                }
+            }
+            v.push((name, c));
+        }
+
         let mut c = Canvas::new(8, 4, RenderMode::HalfBlock, ColorMode::TrueColor);
         for i in 0..16usize {
             let x = i % c.width;

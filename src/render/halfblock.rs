@@ -45,8 +45,20 @@ pub fn build_grid(canvas: &Canvas) -> CellGrid {
                 let (tr, tg, tb) = canvas.colors[top_idx];
                 let (br, bgc, bb) = canvas.colors[bot_idx];
                 let scale = |c: u8, v: f64| -> u8 { (c as f64 * v.clamp(0.0, 1.0)) as u8 };
-                let top = canvas.map_color(scale(tr, top_v), scale(tg, top_v), scale(tb, top_v));
-                let bot = canvas.map_color(scale(br, bot_v), scale(bgc, bot_v), scale(bb, bot_v));
+                let top = canvas.map_color(
+                    col,
+                    row,
+                    scale(tr, top_v),
+                    scale(tg, top_v),
+                    scale(tb, top_v),
+                );
+                let bot = canvas.map_color(
+                    col,
+                    row,
+                    scale(br, bot_v),
+                    scale(bgc, bot_v),
+                    scale(bb, bot_v),
+                );
                 Cell {
                     ch: '▀',
                     fg: Some(top),

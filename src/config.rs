@@ -35,6 +35,13 @@ pub struct Config {
     /// Temporal brightness smoothing time constant in seconds (0 = off).
     /// Reduces flicker in fire/plasma/aurora; best on continuous-noise animations.
     pub smoothing: Option<f64>,
+    /// Colorblind-safe remap palette: viridis | magma | inferno | plasma | okabe-ito
+    pub palette: Option<String>,
+    /// Daltonization correction: protanopia | deuteranopia | tritanopia
+    /// (mutually exclusive with `palette`).
+    pub colorblind: Option<String>,
+    /// Ordered (Bayer 4x4) dithering for ANSI-256 mode (reduces banding).
+    pub dither: Option<bool>,
 }
 
 /// Render mode names for config file (kebab-case friendly)
@@ -164,6 +171,16 @@ pub fn default_config_string() -> String {
 # Temporal brightness smoothing time constant in seconds (0 = off).
 # Reduces flicker in fire/plasma/aurora. Best on continuous-noise animations.
 # smoothing = 0.08
+
+# Colorblind-safe remap palette: viridis | magma | inferno | plasma | okabe-ito
+# palette = "viridis"
+
+# Daltonization correction: protanopia | deuteranopia | tritanopia
+# (mutually exclusive with palette)
+# colorblind = "deuteranopia"
+
+# Ordered (Bayer 4x4) dithering for ANSI-256 mode (reduces banding on 256-color terminals)
+# dither = true
 "#
     .to_string()
 }
@@ -207,6 +224,15 @@ mod tests {
         let toml = "smoothing = 0.08\n";
         let cfg: Config = toml::from_str(toml).unwrap();
         assert_eq!(cfg.smoothing, Some(0.08));
+    }
+
+    #[test]
+    fn config_parses_palette_colorblind_dither() {
+        let toml = "palette = \"viridis\"\ncolorblind = \"deuteranopia\"\ndither = true\n";
+        let cfg: Config = toml::from_str(toml).unwrap();
+        assert_eq!(cfg.palette.as_deref(), Some("viridis"));
+        assert_eq!(cfg.colorblind.as_deref(), Some("deuteranopia"));
+        assert_eq!(cfg.dither, Some(true));
     }
 
     #[test]
