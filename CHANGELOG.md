@@ -11,6 +11,9 @@ All notable changes to this project will be documented in this file.
 ### Dependencies
 - `cargo update` — transitive refresh: `getrandom` 0.4.2 → 0.4.3, `syn` 2.0.117 → 2.0.118; pruned ~18 orphaned transitive crates. No direct-dependency changes.
 
+### Fixed
+- **Windows build** — The writer-thread module (`render_sink`) used unix-only APIs (`RawFd`, `libc::write`) without a `cfg(unix)` gate, breaking the Windows release build (a regression introduced when threaded rendering landed after 0.6.0 — it had never been built on Windows since). It is now gated to unix; on Windows, frames are written inline via `stdout.write_all()` (the existing non-threaded path). Verified with `cargo check --target x86_64-pc-windows-msvc`.
+
 ## [0.7.0] - 2026-06-17
 
 ### Added

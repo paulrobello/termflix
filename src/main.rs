@@ -7,6 +7,10 @@ mod gif;
 mod png;
 mod record;
 mod render;
+// The writer thread uses raw fd + libc::write (deliberately unbuffered, to
+// bypass Stdout's LineWriter). That's unix-only; on Windows main.rs writes
+// frames inline via stdout.write_all() (see the cfg(not(unix)) branches).
+#[cfg(unix)]
 mod render_sink;
 
 use animations::Animation;
