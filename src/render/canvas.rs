@@ -52,6 +52,10 @@ pub struct Canvas {
     /// Color quantization step (0 = off, 4/8/16 = round RGB to nearest N).
     /// Higher values = fewer unique colors = better dedup = less output.
     pub color_quant: u8,
+    /// Previous-frame brightness, used by temporal smoothing.
+    /// NOT touched by `clear()` — persists across the per-frame wipe.
+    /// `None` until first use; resets to `None` on `Canvas::new()`.
+    pub prev_pixels: Option<Vec<f64>>,
 }
 
 impl Canvas {
@@ -76,6 +80,7 @@ impl Canvas {
             render_mode,
             color_mode,
             color_quant: 0,
+            prev_pixels: None,
         }
     }
 
@@ -174,6 +179,27 @@ impl Canvas {
     /// Build the terminal-cell grid for dirty-cell diffing.
     pub fn render_cells(&self) -> super::cell::CellGrid {
         self.build_grid()
+    }
+
+    /// Blend each pixel's brightness toward its target using a first-order EMA.
+    /// `alpha` in `(0.0, 1.0]`: `1.0` = no smoothing (no-op). Pass
+    /// `smoothing_alpha(dt, tau)`. Brightness-only; `colors` is untouched.
+    /// Uses and updates `prev_pixels`; snaps on first use / after a resize.
+    pub fn apply_smoothing(&mut self, alpha: f64) {
+        if alpha >= 1.0 {
+            return;
+        }
+        let prev = self.prev_pixels.get_or_insert_with(|| self.pixels.clone());
+        if prev.len() != self.pixels.len() {
+            // Resize happened without Canvas::new() — re-snap to avoid bleed.
+            *prev = self.pixels.clone();
+            return;
+        }
+        for (p, pv) in self.pixels.iter_mut().zip(prev.iter_mut()) {
+            let blended = *pv + alpha * (*p - *pv);
+            *p = blended;
+            *pv = blended;
+        }
     }
 
     /// Apply post-processing effects to the canvas.
@@ -388,6 +414,13 @@ pub fn color_to_fg(color: Color) -> String {
     }
 }
 
+/// EMA smoothing factor for a frame interval `dt` and time constant `tau`
+/// (both in seconds): `alpha = 1 - exp(-dt / tau)`. Equals `1 - 1/e ≈ 0.632`
+/// when `dt == tau`. Callers must guard `tau > 0` (this divides by `tau`).
+pub fn smoothing_alpha(dt: f64, tau: f64) -> f64 {
+    1.0 - (-dt / tau).exp()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -499,6 +532,84 @@ mod tests {
         let before = c.pixels[5 * c.width + 5];
         c.post_process(&PostProcessConfig::default());
         assert!((c.pixels[5 * c.width + 5] - before).abs() < 1e-10);
+    }
+
+    #[test]
+    fn smoothing_alpha_at_tau_equals_one_minus_inv_e() {
+        // dt == tau => alpha = 1 - e^-1 ≈ 0.6321
+        let alpha = super::smoothing_alpha(0.1, 0.1);
+        assert!((alpha - (1.0 - 1.0 / std::f64::consts::E)).abs() < 1e-9);
+    }
+
+    #[test]
+    fn smoothing_alpha_grows_with_dt_and_stays_in_unit_interval() {
+        let small = super::smoothing_alpha(0.01, 0.1);
+        let large = super::smoothing_alpha(0.2, 0.1);
+        assert!(small > 0.0 && small < 1.0);
+        assert!(large > 0.0 && large < 1.0);
+        assert!(small < large, "larger dt => larger alpha (snaps faster)");
+    }
+
+    #[test]
+    fn new_initializes_prev_pixels_none() {
+        let c = Canvas::new(4, 2, RenderMode::HalfBlock, ColorMode::TrueColor);
+        assert!(c.prev_pixels.is_none());
+    }
+
+    #[test]
+    fn clear_does_not_reset_prev_pixels() {
+        let mut c = Canvas::new(4, 2, RenderMode::HalfBlock, ColorMode::TrueColor);
+        c.prev_pixels = Some(vec![0.5; c.pixels.len()]);
+        c.clear();
+        let prev = c.prev_pixels.expect("prev_pixels must survive clear()");
+        assert!(prev.iter().all(|&v| (v - 0.5).abs() < 1e-12));
+    }
+
+    #[test]
+    fn apply_smoothing_first_call_snaps_to_target() {
+        let mut c = Canvas::new(4, 1, RenderMode::HalfBlock, ColorMode::TrueColor);
+        c.pixels[0] = 1.0; // target = full bright
+        c.apply_smoothing(0.5);
+        // prev was None -> snap: pixel unchanged, prev now equals pixels
+        assert!((c.pixels[0] - 1.0).abs() < 1e-12);
+        assert!((c.prev_pixels.as_ref().unwrap()[0] - 1.0).abs() < 1e-12);
+    }
+
+    #[test]
+    fn apply_smoothing_half_step_blends_and_updates_prev() {
+        let mut c = Canvas::new(4, 1, RenderMode::HalfBlock, ColorMode::TrueColor);
+        c.prev_pixels = Some(vec![0.0; c.pixels.len()]); // prev = black
+        c.pixels[0] = 1.0; // target = full bright
+        c.apply_smoothing(0.5);
+        assert!((c.pixels[0] - 0.5).abs() < 1e-12);
+        assert!((c.prev_pixels.as_ref().unwrap()[0] - 0.5).abs() < 1e-12);
+    }
+
+    #[test]
+    fn apply_smoothing_held_step_converges_monotonically() {
+        let mut c = Canvas::new(2, 1, RenderMode::HalfBlock, ColorMode::TrueColor);
+        c.prev_pixels = Some(vec![0.0; c.pixels.len()]);
+        let mut last = 0.0f64;
+        for _ in 0..40 {
+            c.pixels[0] = 1.0; // held target
+            c.apply_smoothing(0.3);
+            assert!(c.pixels[0] > last, "monotonic increase");
+            assert!(c.pixels[0] <= 1.0, "bounded by 1.0");
+            last = c.pixels[0];
+        }
+        assert!(last > 0.99, "converges toward the target");
+    }
+
+    #[test]
+    fn apply_smoothing_alpha_ge_one_is_noop() {
+        let mut c = Canvas::new(2, 1, RenderMode::HalfBlock, ColorMode::TrueColor);
+        c.prev_pixels = Some(vec![0.0; c.pixels.len()]);
+        c.pixels[0] = 0.8;
+        c.apply_smoothing(1.0);
+        assert!(
+            (c.pixels[0] - 0.8).abs() < 1e-12,
+            "alpha >= 1.0 must leave pixels unchanged"
+        );
     }
 
     /// Deterministic canvases exercising each render mode × color mode + a bloom variant.

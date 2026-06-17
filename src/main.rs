@@ -20,7 +20,7 @@ use crossterm::{
     execute, terminal,
 };
 use external::{CurrentState, ExternalParams, ParamsSource, spawn_reader};
-use render::{Canvas, ColorMode, PostProcessConfig, RenderMode};
+use render::{Canvas, ColorMode, PostProcessConfig, RenderMode, smoothing_alpha};
 use std::io;
 use std::io::IsTerminal;
 use std::sync::Arc;
@@ -112,6 +112,11 @@ struct Cli {
     /// Enable CRT scanline effect
     #[arg(long)]
     scanlines: bool,
+
+    /// Temporal brightness smoothing time constant in seconds (0 = off).
+    /// Reduces flicker in fire/plasma/aurora. Toggle live with `s`.
+    #[arg(long)]
+    smoothing: Option<f64>,
 
     /// Profile per-frame timing and print summary on exit
     #[arg(long)]
@@ -345,6 +350,18 @@ fn main() -> io::Result<()> {
         scanlines: cli.scanlines || cfg.postproc.and_then(|p| p.scanlines).unwrap_or(false),
     };
 
+    // Smoothing: live tau (0 = off) + the on-value the `s` key toggles to.
+    let smoothing_tau = cli
+        .smoothing
+        .or(cfg.smoothing)
+        .map(|v| v.clamp(0.0, 1.0))
+        .unwrap_or(0.0);
+    let default_smoothing_tau = cli
+        .smoothing
+        .or(cfg.smoothing)
+        .unwrap_or(0.1)
+        .clamp(0.0, 1.0);
+
     let result = run_loop(
         &anim_name,
         render_override,
@@ -360,6 +377,8 @@ fn main() -> io::Result<()> {
         cli.record.as_deref(),
         data_file,
         postproc,
+        smoothing_tau,
+        default_smoothing_tau,
         default_bloom,
         &keybindings,
         cli.profile,
@@ -561,6 +580,8 @@ fn run_loop(
     record_path: Option<&str>,
     data_file: Option<String>,
     mut postproc: PostProcessConfig,
+    mut smoothing_tau: f64,
+    default_smoothing_tau: f64,
     default_bloom: f64,
     keybindings: &KeyBindings,
     profile: bool,
@@ -723,6 +744,13 @@ fn run_loop(
                                     default_bloom
                                 };
                             }
+                            KeyCode::Char('s') => {
+                                smoothing_tau = if smoothing_tau > 0.0 {
+                                    0.0
+                                } else {
+                                    default_smoothing_tau
+                                };
+                            }
                             _ => {}
                         }
                     }
@@ -856,6 +884,12 @@ fn run_loop(
         anim.update(&mut canvas, effective_dt, virtual_time);
         let update_dur = update_start.elapsed();
 
+        // Temporal brightness smoothing (opt-in). Runs on raw animation output,
+        // before effects/post-process, so intentional changes stay responsive.
+        if smoothing_tau > 0.0 {
+            canvas.apply_smoothing(smoothing_alpha(effective_dt, smoothing_tau));
+        }
+
         // Transition fade processing
         let transition_factor = match &mut transition {
             TransitionState::None => 1.0,
@@ -957,14 +991,16 @@ fn run_loop(
                 format!("{:.0} fps", actual_fps)
             };
             let bloom_str = if postproc.bloom > 0.0 { "ON" } else { "off" };
+            let smooth_str = if smoothing_tau > 0.0 { "ON" } else { "off" };
             let status = format!(
-                " {} | {:?} | {:?} | {}{} | bloom:{} | [←/→] anim  [b] bloom  [r] render  [c] color  [h] hide  [q] quit ",
+                " {} | {:?} | {:?} | {}{} | bloom:{} | smooth:{} | [←/→] anim  [b] bloom  [s] smooth  [r] render  [c] color  [h] hide  [q] quit ",
                 anim.name(),
                 render_mode,
                 color_mode,
                 fps_str,
                 rec_indicator,
                 bloom_str,
+                smooth_str,
             );
             let w = cols as usize;
             let truncated: String = status.chars().take(w).collect();

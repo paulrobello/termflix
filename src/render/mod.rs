@@ -4,4 +4,4 @@ pub mod cell;
 pub mod encoder;
 pub mod halfblock;
 
-pub use canvas::{Canvas, ColorMode, PostProcessConfig, RenderMode};
+pub use canvas::{Canvas, ColorMode, PostProcessConfig, RenderMode, smoothing_alpha};

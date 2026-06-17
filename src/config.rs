@@ -32,6 +32,9 @@ pub struct Config {
     pub keybindings: Option<HashMap<String, String>>,
     /// Post-processing effects configuration
     pub postproc: Option<PostProcConfig>,
+    /// Temporal brightness smoothing time constant in seconds (0 = off).
+    /// Reduces flicker in fire/plasma/aurora; best on continuous-noise animations.
+    pub smoothing: Option<f64>,
 }
 
 /// Render mode names for config file (kebab-case friendly)
@@ -157,6 +160,10 @@ pub fn default_config_string() -> String {
 # bloom_threshold = 0.6     # Brightness threshold to trigger bloom (0.0-1.0)
 # vignette = 0.4            # Edge darkening (0.0-1.0)
 # scanlines = false         # CRT scanline effect
+
+# Temporal brightness smoothing time constant in seconds (0 = off).
+# Reduces flicker in fire/plasma/aurora. Best on continuous-noise animations.
+# smoothing = 0.08
 "#
     .to_string()
 }
@@ -193,6 +200,13 @@ mod tests {
         // We just verify the type is correct and no panic
         let cfg = Config::default();
         assert!(cfg.fps.is_none()); // All fields are None by default
+    }
+
+    #[test]
+    fn config_parses_smoothing() {
+        let toml = "smoothing = 0.08\n";
+        let cfg: Config = toml::from_str(toml).unwrap();
+        assert_eq!(cfg.smoothing, Some(0.08));
     }
 
     #[test]
