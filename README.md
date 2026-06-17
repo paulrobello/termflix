@@ -5,7 +5,7 @@
 ![Arch x86-64 | ARM | AppleSilicon](https://img.shields.io/badge/arch-x86--64%20%7C%20ARM%20%7C%20AppleSilicon-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
-A terminal animation player with 44 procedurally generated animations, multiple render modes, and true color support. Low CPU impact, works great in tmux, only needs your terminal.
+A terminal animation player with 60 procedurally generated animations, multiple render modes, and true color support. Low CPU impact, works great in tmux, only needs your terminal.
 
 [!["Buy Me A Coffee"](https://www.buymeacoffee.com/assets/img/custom_images/orange_img.png)](https://buymeacoffee.com/probello3)
 
@@ -15,9 +15,11 @@ A terminal animation player with 44 procedurally generated animations, multiple 
 
 ## Features
 
-- **44 Animations** — Fire, matrix rain, starfields, plasma, ocean waves, aurora, lightning, and much more
+- **60 Animations** — Fire, matrix rain, starfields, plasma, ocean waves, aurora, lightning, and much more
 - **3 Render Modes** — Braille (highest resolution), half-block, and ASCII density mapping
 - **4 Color Modes** — Mono, ANSI 16, ANSI 256, and 24-bit true color
+- **ANSI-256 Dithering** — 4×4 Bayer ordered dithering makes gradients look near-true-color on 256-color terminals (`--dither`)
+- **Colorblind-Safe** — Remap any animation onto a perceptually-uniform palette (`--palette`) or apply daltonization correction (`--colorblind`)
 - **Per-Animation Defaults** — Each animation auto-selects its best render mode
 - **Runtime Hotkeys** — Cycle animations, render modes, and color modes on the fly
 - **Recording & Playback** — Record sessions and replay them
@@ -34,20 +36,22 @@ A terminal animation player with 44 procedurally generated animations, multiple 
 | `plasma` | Classic plasma with overlapping sine waves | Half-block |
 | `starfield` | 3D starfield with depth parallax | Braille |
 | `wave` | Sine wave interference from moving sources | Half-block |
-| `life` | Conway's Game of Life cellular automaton | Half-block |
-| `particles` | Fireworks bursting with physics and fade | Half-block |
+| `life` | Conway's Game of Life cellular automaton | Braille |
+| `particles` | Fireworks bursting with physics and fade | Braille |
+| `pendulum` | Pendulum wave with mesmerizing phase patterns | Half-block |
 | `rain` | Raindrops with splash particles and wind | Half-block |
 | `fountain` | Water fountain with jets, splashes, and mist | Half-block |
-| `flow` | Perlin noise flow field with particle trails | Half-block |
+| `flow` | Perlin noise flow field with particle trails | Braille |
 | `spiral` | Rotating multi-arm spiral pattern | Half-block |
 | `ocean` | Ocean waves with foam and depth shading | Half-block |
 | `aurora` | Aurora borealis with layered curtains | Half-block |
-| `lightning` | Lightning bolts with recursive branching | Half-block |
+| `lightning` | Lightning bolts with recursive branching | Braille |
 | `smoke` | Smoke rising with Perlin turbulence | Half-block |
 | `ripple` | Ripple interference from random drop points | Half-block |
 | `snow` | Snowfall with accumulation on the ground | Half-block |
+| `garden` | Growing garden with rain, clouds, and blooming plants | ASCII |
 | `fireflies` | Fireflies blinking with warm glow | Half-block |
-| `dna` | Rotating DNA double helix with base pairs | Half-block |
+| `dna` | Rotating DNA double helix with base pairs | ASCII |
 | `pulse` | Expanding pulse rings from center | Half-block |
 | `boids` | Boids flocking simulation with trails | Half-block |
 | `lava` | Lava lamp blobs rising, merging, and splitting | Half-block |
@@ -58,21 +62,35 @@ A terminal animation player with 44 procedurally generated animations, multiple 
 | `eclipse` | Moon crossing sun with corona rays | Half-block |
 | `blackhole` | Black hole with accretion disk and lensing | Half-block |
 | `radar` | Rotating radar sweep with fading blips | Half-block |
+| `rainforest` | Layered rainforest with parallax scrolling, rain, birds, and falling leaves | Half-block |
 | `crystallize` | DLA crystal growth from center seed | Braille |
 | `hackerman` | Scrolling hex/binary hacker terminal | ASCII |
 | `visualizer` | Audio spectrum analyzer with bouncing bars | Half-block |
 | `cells` | Cell division and mitosis animation | Half-block |
 | `atom` | Electrons orbiting a nucleus in 3D | Half-block |
+| `automata` | Cellular automata cycling through multiple rulesets | Half-block |
 | `globe` | Rotating wireframe Earth with continents | Half-block |
 | `dragon` | Dragon curve fractal with color cycling | Braille |
 | `sierpinski` | Animated Sierpinski triangle with zoom | Braille |
 | `mandelbrot` | Mandelbrot set with zoom and color cycling | Braille |
+| `maze` | Animated maze generation with recursive backtracking and BFS solving | Half-block |
+| `metaballs` | Organic metaballs merging and splitting with smooth distance fields | Half-block |
+| `nbody` | N-body gravitational simulation with colorful orbiting masses and merging | Half-block |
 | `langton` | Langton's Ant cellular automaton | Half-block |
 | `sort` | Sorting algorithm visualizer | Half-block |
+| `tetris` | Self-playing Tetris with AI piece placement | Half-block |
 | `snake` | Self-playing Snake game AI | Half-block |
 | `invaders` | Space Invaders attract mode demo | Half-block |
 | `pong` | Self-playing Pong with AI paddles | Half-block |
-| `garden` | Garden scene with six plant varieties that grow when it rains; resets after full bloom | ASCII |
+| `flappy_bird` | Self-playing Flappy Bird with AI | Half-block |
+| `reaction_diffusion` | Gray-Scott reaction-diffusion coral/brain patterns | Half-block |
+| `voronoi` | Animated Voronoi diagram with drifting colored cells and edge detection | Half-block |
+| `galton` | Galton board with balls cascading into a bell-curve histogram | Half-block |
+| `solar_system` | Solar system with planets, moons, rings, and an asteroid belt | Half-block |
+| `physarum` | Physarum slime mold agents self-organizing into networks | Half-block |
+| `newtons_cradle` | Newton's cradle with energy-conserving swings | Half-block |
+| `strange_attractor` | Lorenz strange attractor with a rotating rainbow trail | Half-block |
+| `ink_in_water` | Colored ink puffs dispersing through a turbulent flow field | Half-block |
 
 ## Installation
 
@@ -140,6 +158,15 @@ termflix plasma -r braille
 # Set color mode (mono, ansi16, ansi256, true-color)
 termflix fire -c true-color
 
+# ANSI-256 with Bayer dithering (near-true-color on 256-color terminals)
+termflix plasma -c ansi256 --dither
+
+# Colorblind-safe palette remap (viridis, magma, inferno, plasma, okabe-ito)
+termflix fire --palette viridis
+
+# Daltonization correction (protanopia, deuteranopia, tritanopia)
+termflix plasma --colorblind deuteranopia
+
 # Auto-cycle through animations every 10 seconds
 termflix --cycle 10
 
@@ -173,6 +200,9 @@ termflix --play session.asciianim
 | `←` / `→` | Previous / next animation |
 | `r` | Cycle render mode (braille → half-block → ascii) |
 | `c` | Cycle color mode |
+| `b` | Toggle bloom |
+| `s` | Toggle brightness smoothing |
+| `d` | Toggle ANSI-256 dithering |
 | `h` | Toggle status bar |
 
 ## How It Works
@@ -254,6 +284,16 @@ cycle = 0
 
 # Remove FPS cap and render as fast as possible (overrides fps)
 unlimited = false
+
+# Colorblind-safe remap palette: viridis | magma | inferno | plasma | okabe-ito
+# palette = "viridis"
+
+# Daltonization correction: protanopia | deuteranopia | tritanopia
+# (mutually exclusive with palette)
+# colorblind = "deuteranopia"
+
+# Ordered (Bayer 4x4) dithering for ANSI-256 mode (reduces banding)
+# dither = true
 ```
 
 ## Gallery

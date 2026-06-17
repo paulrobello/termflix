@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.7.0] - 2026-06-17
+
+### Added
+- **Ordered (Bayer) dithering for ANSI-256** — In `ansi256` color mode, `--dither` (or `dither = true` in config, or the live `d` hotkey) applies 4×4 Bayer-matrix ordered dithering so gradients and glows look near-true-color on 256-color terminals (SSH sessions, older terminals). Off by default; non-dithered output is byte-identical to before.
+- **Colorblind-safe color assist** — Two opt-in, mutually exclusive modes selectable via flag or config (the status bar reports the active mode):
+  - **`--palette <name>`** — Remaps every animation onto a perceptually-uniform, colorblind-safe gradient (`viridis`, `magma`, `inferno`, `plasma`, `okabe-ito`) keyed by perceived luminance, keeping `plasma`/`aurora`/`boids`/etc. legible for deuteranopia/protanopia users.
+  - **`--colorblind <type>`** — Daltonization (Viénot/Brettel LMS-space correction) that nudges each animation's own colors to stay distinguishable for `protanopia`, `deuteranopia`, or `tritanopia`.
+
 ## [0.6.0] - 2026-06-15
 
 ### Added
