@@ -937,7 +937,6 @@ mod tests {
 
         let mut next_code = (eoi_code + 1) as usize;
         let mut code_width = init_width;
-        let mut max_code = (1u16 << code_width) - 1;
 
         let mut output = Vec::new();
         let mut prev: Option<u16> = None;
@@ -947,7 +946,6 @@ mod tests {
                 dict.truncate(258);
                 next_code = (eoi_code + 1) as usize;
                 code_width = init_width;
-                max_code = (1u16 << code_width) - 1;
                 prev = None;
                 continue;
             }
@@ -1001,7 +999,6 @@ mod tests {
                 // uses `>= 1<<width`.
                 if next_code as u16 >= (1u16 << code_width) && code_width < 12 {
                     code_width += 1;
-                    max_code = (1u16 << code_width) - 1;
                 }
             }
 

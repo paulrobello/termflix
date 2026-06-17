@@ -416,12 +416,11 @@ mod tests {
                     } else {
                         4
                     };
-                    if i + adv <= n {
-                        if let Ok(s) = std::str::from_utf8(&b[i..i + adv]) {
-                            if let Some(c) = s.chars().next() {
-                                self.put(c);
-                            }
-                        }
+                    if i + adv <= n
+                        && let Ok(s) = std::str::from_utf8(&b[i..i + adv])
+                        && let Some(c) = s.chars().next()
+                    {
+                        self.put(c);
                     }
                     i += adv;
                 }
