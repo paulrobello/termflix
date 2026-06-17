@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.7.1] - 2026-06-17
+
+### Changed
+- **Documentation refresh** — Synced `ARCHITECTURE.md`, `EXTERNAL_ANIMATION.md`, and `README.md` to the v0.7.0 implementation: corrected the animation count (54 → 60), fixed the render pipeline and `map_color` signature, documented the new `color_assist` module / dirty-cell rendering / threaded writer, and fixed the config example key `unlimited` → `unlimited_fps` (the old name was silently ignored by serde).
+- **README** — Documented additional stable options: post-processing flags (`--bloom-intensity` / `--bloom-threshold` / `--vignette` / `--scanlines`), `--profile`, `--full-frames`, `--single-threaded`, `--data-file`, the `n` / `p` hotkey aliases, and the `[postproc]` / `[keybindings]` / `smoothing` / `color_quant` config options.
+
+### Dependencies
+- `cargo update` — transitive refresh: `getrandom` 0.4.2 → 0.4.3, `syn` 2.0.117 → 2.0.118; pruned ~18 orphaned transitive crates. No direct-dependency changes.
+
 ## [0.7.0] - 2026-06-17
 
 ### Added
