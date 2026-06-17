@@ -12,9 +12,11 @@ Comprehensive technical architecture reference for termflix — a single-binary 
   - [Render Modes](#render-modes)
   - [Color Modes](#color-modes)
   - [Post-Process Effects](#post-process-effects)
+  - [Color Assist](#color-assist)
 - [Frame Loop](#frame-loop)
   - [Frame Timing and Adaptive Pacing](#frame-timing-and-adaptive-pacing)
   - [Synchronized Output](#synchronized-output)
+  - [Dirty-Cell Rendering and Threaded Writer](#dirty-cell-rendering-and-threaded-writer)
   - [Resize Handling](#resize-handling)
 - [Configuration System](#configuration-system)
 - [External Control Subsystem](#external-control-subsystem)
@@ -33,7 +35,7 @@ Comprehensive technical architecture reference for termflix — a single-binary 
 
 ## Overview
 
-termflix renders 54 procedurally generated animations directly in the terminal using Unicode sub-cell characters. All animation logic writes to a mode-agnostic pixel buffer; the renderer translates that buffer into ANSI escape sequences appropriate for the configured render and color modes. The result is a clean separation between simulation and display that allows both to evolve independently.
+termflix renders 60 procedurally generated animations directly in the terminal using Unicode sub-cell characters. All animation logic writes to a mode-agnostic pixel buffer; the renderer translates that buffer into ANSI escape sequences appropriate for the configured render and color modes. The result is a clean separation between simulation and display that allows both to evolve independently.
 
 The binary is fully synchronous — one main thread drives the event loop, a single optional background thread reads external control parameters, and `crossterm` handles terminal I/O.
 
@@ -52,11 +54,16 @@ graph TD
     gif["gif.rs\nGIF89a encoder\nLZW compression"]
     generators["generators/mod.rs\nParticle · ParticleSystem\nColorGradient · EmitterConfig"]
     anim_mod["animations/mod.rs\nAnimation trait · create() factory\nANIMATION_NAMES · ANIMATIONS"]
-    anim_impls["animations/*.rs\n54 animation modules"]
-    render_mod["render/mod.rs\nre-exports Canvas · ColorMode · RenderMode"]
-    canvas["render/canvas.rs\nCanvas · pixel buffer\napply_effects · post_process"]
+    anim_impls["animations/*.rs\n60 animation modules"]
+    render_mod["render/mod.rs\nre-exports Canvas · ColorMode · RenderMode\nColorAssist · smoothing_alpha"]
+    canvas["render/canvas.rs\nCanvas · pixel buffer\napply_effects · post_process\napply_color_assist · build_grid"]
     braille["render/braille.rs\nBraille renderer\nU+2800–U+28FF"]
     halfblock["render/halfblock.rs\nHalfBlock renderer\n▀ / ▄ / █"]
+    cell["render/cell.rs\nCell · CellGrid\nterminal-cell grid"]
+    encoder["render/encoder.rs\nencode_full · encode_diff\ndirty_ratio · FULL_REDRAW_THRESHOLD"]
+    color_assist["render/color_assist.rs\nPalette · Deficiency · daltonize\nColorAssist"]
+    render_sink["render_sink.rs\nThreadedRenderer\nwrite_chunked · dirty-cell write path"]
+    gallery["gallery.rs\noffscreen capture\nPNG · GIF · index.html"]
 
     main --> config
     main --> external
@@ -64,6 +71,8 @@ graph TD
     main --> gif
     main --> anim_mod
     main --> render_mod
+    main --> render_sink
+    main --> gallery
     anim_mod --> anim_impls
     anim_mod --> render_mod
     anim_mod --> external
@@ -72,8 +81,13 @@ graph TD
     render_mod --> canvas
     render_mod --> braille
     render_mod --> halfblock
-    braille --> canvas
-    halfblock --> canvas
+    render_mod --> cell
+    render_mod --> encoder
+    render_mod --> color_assist
+    braille --> cell
+    halfblock --> cell
+    canvas --> color_assist
+    encoder --> cell
     gif --> record
 
     style main fill:#e65100,stroke:#ff9800,stroke-width:3px,color:#ffffff
@@ -88,6 +102,11 @@ graph TD
     style canvas fill:#880e4f,stroke:#c2185b,stroke-width:2px,color:#ffffff
     style braille fill:#880e4f,stroke:#c2185b,stroke-width:1px,color:#ffffff
     style halfblock fill:#880e4f,stroke:#c2185b,stroke-width:1px,color:#ffffff
+    style cell fill:#880e4f,stroke:#c2185b,stroke-width:1px,color:#ffffff
+    style encoder fill:#880e4f,stroke:#c2185b,stroke-width:2px,color:#ffffff
+    style color_assist fill:#4a148c,stroke:#9c27b0,stroke-width:2px,color:#ffffff
+    style render_sink fill:#1b5e20,stroke:#4caf50,stroke-width:2px,color:#ffffff
+    style gallery fill:#37474f,stroke:#78909c,stroke-width:2px,color:#ffffff
 ```
 
 **Source layout:**
@@ -99,16 +118,21 @@ src/
 ├── external.rs        — External control: ExternalParams, CurrentState, spawn_reader
 ├── record.rs          — Recording (Recorder) and playback (Player), .asciianim format
 ├── gif.rs             — Hand-written GIF89a encoder with LZW compression
+├── gallery.rs         — Offscreen gallery capture (PNG + GIF + index.html)
+├── render_sink.rs     — ThreadedRenderer, chunked/dirty-cell write path
 ├── generators/
 │   └── mod.rs         — Shared: Particle, ParticleSystem, ColorGradient, EmitterConfig
 ├── animations/
 │   ├── mod.rs         — Animation trait + create() factory + ANIMATION_NAMES/ANIMATIONS
-│   └── *.rs           — 54 individual animation modules
+│   └── *.rs           — 60 individual animation modules
 └── render/
-    ├── mod.rs          — Re-exports Canvas, ColorMode, PostProcessConfig, RenderMode
-    ├── canvas.rs       — Canvas struct, pixel/color buffers, apply_effects, post_process
+    ├── mod.rs          — Re-exports Canvas, ColorMode, PostProcessConfig, RenderMode, ColorAssist, smoothing_alpha
+    ├── canvas.rs       — Canvas struct, pixel/color buffers, apply_effects, post_process, apply_color_assist, build_grid
     ├── braille.rs      — Braille renderer (2×4 sub-cell, Unicode U+2800–U+28FF)
-    └── halfblock.rs    — Half-block renderer (▀/▄/█, foreground+background color pairs)
+    ├── halfblock.rs    — Half-block renderer (▀/▄/█, foreground+background color pairs)
+    ├── cell.rs         — Cell / CellGrid terminal-cell grid type
+    ├── encoder.rs      — encode_full / encode_diff / dirty_ratio (dirty-cell rendering)
+    └── color_assist.rs — Palette / Deficiency / daltonize / ColorAssist (colorblind-safe assist)
 ```
 
 ---
@@ -196,6 +220,7 @@ pub struct Canvas {
     pub render_mode: RenderMode,
     pub color_mode: ColorMode,
     pub color_quant: u8,            // color quantization step (0 = off)
+    pub dither: bool,               // 4×4 Bayer ordered dithering (ANSI-256 mode)
 }
 ```
 
@@ -214,19 +239,24 @@ sequenceDiagram
     participant AL as Animation Loop
     participant AN as Animation
     participant CV as Canvas
-    participant RN as Renderer
+    participant CA as ColorAssist
+    participant EN as encoder
+    participant RN as Renderer (sink)
     participant ST as stdout
 
     AL->>AN: set_params(&ext_state.params)
     AL->>AN: update(&mut canvas, effective_dt, virtual_time)
     AN->>CV: set_colored(x, y, brightness, r, g, b)
+    AL->>CV: apply_smoothing(alpha) (opt-in, --smoothing)
     AL->>CV: apply_effects(intensity, hue_shift)
+    AL->>CV: apply_color_assist(&ColorAssist)
     AL->>CV: post_process(&PostProcessConfig)
-    AL->>CV: render()
-    CV->>RN: dispatch to braille/halfblock/ascii renderer
-    RN-->>CV: ANSI escape String
+    AL->>CV: render_cells() → build_grid() → CellGrid
+    CV->>EN: encode_full(grid) or encode_diff(prev, grid)
+    EN-->>AL: ANSI escape String
     AL->>AL: wrap in sync markers + status bar
-    AL->>ST: libc::write() in 16 KB chunks (Unix)
+    AL->>RN: ThreadedRenderer.submit() (default) or inline write
+    RN->>ST: libc::write() in 16 KB chunks (Unix)
 ```
 
 ### Render Modes
@@ -247,13 +277,13 @@ Cell dot layout:      Unicode bit weights:
 
 Each terminal character cell covers two vertical sub-pixels: a top pixel rendered as the foreground color of `▀` (U+2580, Upper Half Block) and a bottom pixel rendered as the background color of the same character. This allows two independently colored sub-rows per character cell. Both pixels below the 0.02 dark threshold emit a plain space with no color codes.
 
-**ASCII renderer** (`render/canvas.rs`):
+**ASCII renderer** (`render/canvas.rs::ascii_build_grid`, emitted via `render/encoder.rs::encode_full`):
 
 Brightness values map to characters from the density scale `" .:-=+*#%@"`. Animations may set `char_override` on specific cells to emit literal characters instead (used by `matrix`, `hackerman`, and other text-oriented animations).
 
 ### Color Modes
 
-All three renderers share a common `map_color(r, g, b)` method on `Canvas` that translates RGB values to the appropriate ANSI escape representation:
+All three renderers share a common `map_color(x, y, r, g, b)` method on `Canvas` that translates RGB values to the appropriate ANSI escape representation. The `(x, y)` coordinates feed the optional 4×4 Bayer ordered dithering used in ANSI-256 mode (enabled via `--dither`):
 
 | Mode | Behavior | ANSI sequence |
 |------|---------|---------------|
@@ -266,7 +296,12 @@ All renderers track the previously emitted ANSI code and skip writing a new one 
 
 ### Post-Process Effects
 
-`canvas.apply_effects(intensity, hue_shift)` runs after `update()` and before `render()`. Then `canvas.post_process(&PostProcessConfig)` applies visual effects. This keeps all effects fully decoupled from animation logic.
+The per-frame pipeline after `update()` is: `apply_smoothing()` (opt-in) → `apply_effects()` → `apply_color_assist()` → `post_process()` → `render_cells()`/`build_grid()`. Each stage is a separate `Canvas` method, keeping all transforms fully decoupled from animation logic.
+
+- **`apply_smoothing(alpha)`** (opt-in via `--smoothing TAU`): first-order EMA that blends each pixel's brightness toward its target using `smoothing_alpha(dt, tau)`. Brightness-only; `colors` is untouched. Eliminates per-frame flicker in high-frequency animations.
+- **`apply_effects(intensity, hue_shift)`**: global brightness multiplier and hue rotation (see below).
+- **`apply_color_assist(&ColorAssist)`**: colorblind-safe remap or daltonization (see [Color Assist](#color-assist) below).
+- **`post_process(&PostProcessConfig)`**: bloom, vignette, scanlines (see table below).
 
 **`apply_effects` parameters:**
 
@@ -282,6 +317,26 @@ All renderers track the previously emitted ANSI code and skip writing a new one 
 | Scanlines | `scanlines` (bool) | CRT-style effect that darkens every other row by 30%. |
 
 These effects are configured via CLI flags (`--bloom-intensity`, `--bloom-threshold`, `--vignette`, `--scanlines`) or the `[postproc]` section in the config file. Bloom is enabled by default at 0.4 intensity with a 0.6 threshold.
+
+### Color Assist
+
+`render/color_assist.rs` provides colorblind-safe color correction, applied per-frame via `canvas.apply_color_assist(&assist)` between `apply_effects` and `post_process`. It is resolved once at startup from the mutually-exclusive `--palette` / `--colorblind` flags (or their config equivalents) by `ColorAssist::from_cli()`.
+
+```rust
+pub enum ColorAssist {
+    None,                  // default — no assist
+    Remap(Palette),        // remap every pixel onto a gradient by luminance
+    Daltonize(Deficiency), // LMS-space daltonization for a color-vision deficiency
+}
+```
+
+| Component | Purpose |
+|-----------|---------|
+| `Palette` | Perceptually uniform gradient (`viridis`, `magma`, `inferno`, `plasma`, `okabe-ito`). `Remap` rewrites each pixel's color to the gradient sample matching its Rec.601 luminance. |
+| `Deficiency` | Color-vision deficiency (`protanopia`, `deuteranopia`, `tritanopia`) corrected by Viénot/Brettel LMS-space `daltonize()`. |
+| `ColorAssist` | Resolved per-frame setting. `None` is a no-op; `Mono` color mode also short-circuits to a no-op. |
+
+`--palette` and `--colorblind` are mutually exclusive (clap `conflicts_with`). An invalid name on either is silently ignored. The `d` hotkey toggles `canvas.dither` at runtime (Bayer dithering for ANSI-256; independent of color assist but also lives on `Canvas`).
 
 ---
 
@@ -310,9 +365,13 @@ flowchart TD
     EXTPARAMS --> VTIME["effective_dt = (dt × speed).min(0.5)\nvirtual_time += effective_dt"]
     VTIME --> SETPARAMS["anim.set_params(&ext_state.params)"]
     SETPARAMS --> UPDATE["anim.update(&mut canvas, effective_dt, virtual_time)"]
-    UPDATE --> EFFECTS["canvas.apply_effects(intensity, hue_shift)"]
-    EFFECTS --> POSTPROC["canvas.post_process(&PostProcessConfig)"]
-    POSTPROC --> RENDER["canvas.render() → ANSI String"]
+    UPDATE --> SMOOTHING{smoothing_tau > 0?}
+    SMOOTHING -->|yes| SMOOTH["canvas.apply_smoothing(alpha)"]
+    SMOOTHING -->|no| EFFECTS
+    SMOOTH --> EFFECTS["canvas.apply_effects(intensity, hue_shift)"]
+    EFFECTS --> ASSIST["canvas.apply_color_assist(&ColorAssist)"]
+    ASSIST --> POSTPROC["canvas.post_process(&PostProcessConfig)"]
+    POSTPROC --> RENDER["canvas.render_cells() → build_grid() → encode_full/encode_diff"]
     RENDER --> RECORD{Recording?}
     RECORD -->|yes| CAPTURE["rec.capture(&frame)"]
     RECORD -->|no| BUILDFRAME
@@ -341,6 +400,9 @@ flowchart TD
     style SETPARAMS fill:#0d47a1,stroke:#2196f3,stroke-width:2px,color:#ffffff
     style UPDATE fill:#e65100,stroke:#ff9800,stroke-width:3px,color:#ffffff
     style EFFECTS fill:#e65100,stroke:#ff9800,stroke-width:2px,color:#ffffff
+    style SMOOTHING fill:#ff6f00,stroke:#ffa726,stroke-width:2px,color:#ffffff
+    style SMOOTH fill:#e65100,stroke:#ff9800,stroke-width:1px,color:#ffffff
+    style ASSIST fill:#4a148c,stroke:#9c27b0,stroke-width:2px,color:#ffffff
     style POSTPROC fill:#e65100,stroke:#ff9800,stroke-width:2px,color:#ffffff
     style RENDER fill:#880e4f,stroke:#c2185b,stroke-width:2px,color:#ffffff
     style RECORD fill:#ff6f00,stroke:#ffa726,stroke-width:2px,color:#ffffff
@@ -392,6 +454,13 @@ Every frame is wrapped in ANSI synchronized output markers:
 
 Terminals that support this feature buffer all output between the markers and flush to screen atomically, eliminating the inter-frame flicker that occurs when a partial frame is visible during the draw. tmux strips these markers as unrecognized private sequences but they are harmless.
 
+### Dirty-Cell Rendering and Threaded Writer
+
+Two optimizations reduce the bytes written per frame and keep the UI responsive under backpressure:
+
+- **Dirty-cell (differential) rendering** (`render/encoder.rs`): each frame is built into a `CellGrid` (`render/cell.rs`). When the grid dimensions match the previous frame, the encoder compares the two and emits only the cells that changed via `encode_diff(prev, grid)`, using cursor moves between dirty runs. If `dirty_ratio(prev, grid)` exceeds `FULL_REDRAW_THRESHOLD` (0.6) a full redraw via `encode_full` is cheaper and is emitted instead. Diffing is disabled when recording (`--record`), when `--full-frames` is set, or after a resize.
+- **Threaded writer** (`render_sink.rs`): by default the chunked `libc::write()` runs on a dedicated writer thread via `ThreadedRenderer::submit()`, so a blocking write to a full tmux pane does not stall the simulation. `--single-threaded` disables the thread and writes inline on the main loop. The writer checks the quit flag between 16 KB chunks so `q` remains responsive either way.
+
 ### Resize Handling
 
 ```mermaid
@@ -428,7 +497,7 @@ termflix uses a three-tier priority system where each level can override the one
 
 ```mermaid
 flowchart LR
-    CLI["CLI Flags\n--fps --render --color\n--scale --cycle etc."]
+    CLI["CLI Flags\n--fps --render --color\n--scale --cycle --smoothing\n--palette --colorblind --dither etc."]
     CFG["~/.config/termflix/config.toml\nTOML file (all keys optional)"]
     DEF["Compiled defaults\nfps=24 color=TrueColor\nanim=fire scale=1.0"]
 
@@ -455,6 +524,10 @@ All `Config` struct fields are `Option<T>` and deserialized from TOML. A missing
 | `cycle` | integer | `0` | Auto-cycle interval in seconds (0 = disabled) |
 | `color_quant` | integer | `0` | Color quantization step (0=off, 4/8/16=coarser) |
 | `unlimited_fps` | bool | `false` | Remove FPS cap |
+| `smoothing` | float | `0.0` | Temporal brightness smoothing time constant in seconds (0 = off) |
+| `palette` | string | — | Colorblind-safe remap palette (`viridis`/`magma`/`inferno`/`plasma`/`okabe-ito`) |
+| `colorblind` | string | — | Daltonization deficiency (`protanopia`/`deuteranopia`/`tritanopia`); mutually exclusive with `palette` |
+| `dither` | bool | `false` | 4×4 Bayer ordered dithering in ANSI-256 mode |
 | `data_file` | string | — | Path to ndjson external control file |
 | `keybindings` | table | — | Custom keybindings (maps action names to key names) |
 | `postproc.bloom` | float | `0.4` | Bloom/glow intensity (0.0–1.0) |
@@ -742,34 +815,34 @@ classDiagram
 
 ## Animation Catalog
 
-termflix ships 54 animations, organized by visual category. The `create()` factory in `animations/mod.rs` maps each name to its concrete type.
+termflix ships 60 animations, organized by visual category. The `create()` factory in `animations/mod.rs` maps each name to its concrete type.
 
 ```mermaid
 graph TD
-    CAT["54 Animations"]
+    CAT["60 Animations"]
 
     subgraph FIRE["Fire / Fluid"]
-        F1[fire] & F2[smoke] & F3[lava] & F4[campfire] & F5[waterfall]
+        F1[fire] & F2[smoke] & F3[lava] & F4[campfire] & F5[waterfall] & F6[ink_in_water]
     end
 
     subgraph PART["Particle"]
-        P1[particles] & P2[rain] & P3[fountain] & P4[fireflies] & P5[petals] & P6[sandstorm] & P7[snow]
+        P1[particles] & P2[rain] & P3[fountain] & P4[fireflies] & P5[petals] & P6[sandstorm] & P7[snow] & P8[galton]
     end
 
     subgraph MATH["Mathematical"]
-        M1[plasma] & M2[wave] & M3[ripple] & M4[pulse] & M5[spiral] & M6[mandelbrot] & M7[sierpinski] & M8[dragon]
+        M1[plasma] & M2[wave] & M3[ripple] & M4[pulse] & M5[spiral] & M6[mandelbrot] & M7[sierpinski] & M8[dragon] & M9[strange_attractor]
     end
 
     subgraph SPACE["Space"]
-        S1[starfield] & S2[aurora] & S3[eclipse] & S4[blackhole] & S5[nbody]
+        S1[starfield] & S2[aurora] & S3[eclipse] & S4[blackhole] & S5[nbody] & S6[solar_system]
     end
 
     subgraph NATURE["Nature"]
-        N1[ocean] & N2[boids] & N3[cells] & N4[life] & N5[garden] & N6[rainforest]
+        N1[ocean] & N2[boids] & N3[cells] & N4[life] & N5[garden] & N6[rainforest] & N7[physarum]
     end
 
     subgraph TECH["Tech / Retro"]
-        T1[matrix] & T2[hackerman] & T3[visualizer] & T4[radar] & T5[dna] & T6[atom] & T7[globe] & T8[pendulum]
+        T1[matrix] & T2[hackerman] & T3[visualizer] & T4[radar] & T5[dna] & T6[atom] & T7[globe] & T8[pendulum] & T9[newtons_cradle]
     end
 
     subgraph SIM["Simulation"]
@@ -809,6 +882,7 @@ graph TD
 | `lava` | Fire/Fluid | Lava lamp blobs rising, merging, and splitting |
 | `campfire` | Fire/Fluid | Campfire with rising ember sparks |
 | `waterfall` | Fire/Fluid | Cascading water with mist spray |
+| `ink_in_water` | Fire/Fluid | Colored ink puffs dispersing through a turbulent flow field |
 | `garden` | Nature | Growing garden with rain, clouds, and blooming plants |
 | `particles` | Particle | Fireworks bursting with physics and fade |
 | `rain` | Particle | Raindrops with splash particles and wind |
@@ -817,6 +891,7 @@ graph TD
 | `petals` | Particle | Cherry blossom petals drifting in wind |
 | `sandstorm` | Particle | Blowing sand with dune formation |
 | `snow` | Particle | Snowfall with accumulation on the ground |
+| `galton` | Particle | Galton board with balls cascading into a bell-curve histogram |
 | `plasma` | Mathematical | Classic plasma with overlapping sine waves |
 | `wave` | Mathematical | Sine wave interference from moving sources |
 | `ripple` | Mathematical | Ripple interference from random drop points |
@@ -825,16 +900,19 @@ graph TD
 | `mandelbrot` | Mathematical | Mandelbrot set with zoom and color cycling |
 | `sierpinski` | Mathematical | Animated Sierpinski triangle with zoom |
 | `dragon` | Mathematical | Dragon curve fractal with color cycling |
+| `strange_attractor` | Mathematical | Lorenz strange attractor with a rotating rainbow trail |
 | `starfield` | Space | 3D starfield with depth parallax |
 | `aurora` | Space | Aurora borealis with layered curtains |
 | `eclipse` | Space | Moon crossing sun with corona rays |
 | `blackhole` | Space | Black hole with accretion disk and lensing |
 | `nbody` | Space | N-body gravitational simulation with colorful orbiting masses and merging |
+| `solar_system` | Space | Solar system with planets, moons, rings, and an asteroid belt |
 | `ocean` | Nature | Ocean waves with foam and depth shading |
 | `boids` | Nature | Boids flocking simulation with trails |
 | `cells` | Nature | Cell division and mitosis animation |
 | `life` | Nature | Conway's Game of Life cellular automaton |
 | `rainforest` | Nature | Layered rainforest with parallax scrolling, rain, birds, and falling leaves |
+| `physarum` | Nature | Physarum slime mold agents self-organizing into networks |
 | `matrix` | Tech/Retro | Matrix digital rain with trailing drops |
 | `hackerman` | Tech/Retro | Scrolling hex/binary hacker terminal |
 | `visualizer` | Tech/Retro | Audio spectrum analyzer with bouncing bars |
@@ -843,6 +921,7 @@ graph TD
 | `atom` | Tech/Retro | Electrons orbiting a nucleus in 3D |
 | `globe` | Tech/Retro | Rotating wireframe Earth with continents |
 | `pendulum` | Tech/Retro | Pendulum wave with mesmerizing phase patterns |
+| `newtons_cradle` | Tech/Retro | Newton's cradle with energy-conserving swings |
 | `flow` | Simulation | Perlin noise flow field with particle trails |
 | `langton` | Simulation | Langton's Ant cellular automaton |
 | `sort` | Simulation | Sorting algorithm visualizer |
@@ -926,7 +1005,7 @@ Animations write to a flat pixel buffer using sub-cell coordinates without knowl
 
 **3. Trait object dispatch**
 
-`Box<dyn Animation>` lets the active animation be replaced at runtime (animation switch, resize) with a single pointer swap. The alternative — an `enum` with a `match` arm for each of 54 variants on every frame — would be more code and no faster for this workload.
+`Box<dyn Animation>` lets the active animation be replaced at runtime (animation switch, resize) with a single pointer swap. The alternative — an `enum` with a `match` arm for each of 60 variants on every frame — would be more code and no faster for this workload.
 
 **4. Manual `libc::write` on Unix**
 

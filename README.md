@@ -283,7 +283,7 @@ clean = false
 cycle = 0
 
 # Remove FPS cap and render as fast as possible (overrides fps)
-unlimited = false
+unlimited_fps = false
 
 # Colorblind-safe remap palette: viridis | magma | inferno | plasma | okabe-ito
 # palette = "viridis"
