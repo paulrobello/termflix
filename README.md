@@ -32,7 +32,7 @@ A terminal animation player with 60 procedurally generated animations, multiple 
 | Animation | Description | Default Render |
 |-----------|-------------|---------------|
 | `fire` | Doom-style fire effect with heat propagation | Half-block |
-| `matrix` | Matrix digital rain with trailing drops | ASCII |
+| `matrix` | Matrix digital rain — hiragana, katakana, Latin & digit glyphs | ASCII |
 | `plasma` | Classic plasma with overlapping sine waves | Half-block |
 | `starfield` | 3D starfield with depth parallax | Braille |
 | `wave` | Sine wave interference from moving sources | Half-block |

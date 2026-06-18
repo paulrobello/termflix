@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.8.0] - 2026-06-18
+
+### Added
+- **Matrix digital rain renders glyphs** — the `matrix` animation now draws falling hiragana, katakana, Latin (`A`–`Z`, `a`–`z`), and digit (`0`–`9`) characters instead of brightness-mapped density ASCII, for the classic mixed Japanese/Latin Matrix-code look (kana-forward, ~74% kana). Glyphs use the existing green depth gradient with a bright lead character.
+
+### Changed
+- **Width-aware ASCII renderer** — the ASCII render path now advances by each glyph's display width, so East-Asian-Wide (2-column) characters like kana align correctly instead of shifting subsequent cells. Frames containing wide glyphs route through the full-frame encoder (`encode_full`); `encode_diff` is skipped for them since its per-cell cursor math assumes 1 column. Added `unicode-width` 0.2 as a dependency. Output for all other animations (halfblock/braille/narrow-ASCII) is byte-identical, verified by snapshot tests.
+
 ## [0.7.2] - 2026-06-18
 
 ### Fixed
