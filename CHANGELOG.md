@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.7.2] - 2026-06-18
+
+### Fixed
+- **Screensaver dismisses on unbound keys with `--screensaver-keys`** — Previously, with `--screensaver-keys` active, only the `quit` keybind (or `Ctrl+C`) dismissed the screensaver; every other unbound keypress was silently ignored. Now any key that isn't a bound keybinding (or a live hotkey like `b`/`s`/`d`) dismisses it, matching the expectation that a screen saver exits on arbitrary input. Bound keybindings (`next`/`prev`/`render`/`color`/`status`) still work without dismissing. Plain `--screensaver` (without `--screensaver-keys`) is unchanged — any keypress still dismisses.
+
 ## [0.7.1] - 2026-06-17
 
 ### Changed

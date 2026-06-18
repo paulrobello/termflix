@@ -182,7 +182,7 @@ termflix --clean
 # Screensaver mode (exits on any keypress or focus)
 termflix matrix --clean --screensaver
 
-# Screensaver mode but keep hotkeys active (only q/Esc/Ctrl+C dismiss)
+# Screensaver mode but keep hotkeys active (any unbound key still dismisses)
 termflix matrix --clean --screensaver --screensaver-keys
 
 # Record a session

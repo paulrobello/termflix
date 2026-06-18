@@ -93,7 +93,7 @@ struct Cli {
     #[arg(long)]
     screensaver: bool,
 
-    /// Keep keybindings active in screensaver mode (only quit/Ctrl+C dismiss)
+    /// Keep keybindings active in screensaver mode; any unbound key still dismisses
     #[arg(long, requires = "screensaver")]
     screensaver_keys: bool,
 
@@ -785,7 +785,14 @@ fn run_loop(
                             KeyCode::Char('d') => {
                                 canvas.dither = !canvas.dither;
                             }
-                            _ => {}
+                            // Screensaver with keybindings active: any unbound key still dismisses.
+                            // (Plain screensaver already exited above; reaching here means keys are on.)
+                            _ => {
+                                if screensaver {
+                                    quit.store(true, Ordering::Release);
+                                    break 'outer Ok(());
+                                }
+                            }
                         }
                     }
                     Event::FocusGained if screensaver && !screensaver_keys => {
