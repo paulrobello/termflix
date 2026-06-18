@@ -187,10 +187,40 @@ jobs:
         run: cargo publish --dry-run
 
       - name: Publish to crates.io
-        run: cargo publish --token ${{ secrets.CARGO_REGISTRY_TOKEN }} || echo "Version may already exist, continuing..."
-        continue-on-error: true
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        run: |
+          # Publish; tolerate ONLY the "already published" error so re-running a
+          # release for an already-published version is idempotent. Any other
+          # failure (auth, network, validation, packaging) fails the job loudly
+          # instead of being silently swallowed.
+          if ! output=$(cargo publish 2>&1); then
+            if echo "$output" | grep -qiE 'already (exists|been published)'; then
+              echo "::notice::Version already published on crates.io — treating as success."
+              exit 0
+            fi
+            echo "$output"
+            echo "::error::cargo publish failed for a reason other than 'already published' (see output above)."
+            exit 1
+          fi
+          echo "$output"
+
+      - name: Verify publish landed on crates.io
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          echo "Confirming termflix $VERSION is live and un-yanked on crates.io..."
+          for i in {1..12}; do
+            if curl -fsSL -H 'User-Agent: termflix-release-ci' \
+                "https://crates.io/api/v1/crates/termflix/$VERSION" 2>/dev/null \
+                | jq -e --arg v "$VERSION" '.version.num == $v and (.version.yanked | not)' >/dev/null 2>&1; then
+              echo "✓ termflix $VERSION is live and un-yanked on crates.io."
+              exit 0
+            fi
+            echo "  attempt $i/12: not visible yet, retrying in 15s..."
+            sleep 15
+          done
+          echo "::error::termflix $VERSION did not appear on crates.io within ~3 minutes."
+          exit 1
 
   # Create GitHub Release
   github-release:
