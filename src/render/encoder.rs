@@ -1,6 +1,7 @@
 use crate::render::canvas::color_to_fg;
 use crate::render::cell::{Cell, CellGrid};
 use crossterm::style::Color;
+use unicode_width::UnicodeWidthChar;
 
 /// Dirty ratio at or above which a full redraw is cheaper than a scattered diff.
 pub const FULL_REDRAW_THRESHOLD: f64 = 0.6;
@@ -83,10 +84,18 @@ pub fn encode_full(grid: &CellGrid, always_reset_row_end: bool) -> String {
     let mut last_fg: Option<Color> = None;
     let mut last_bg: Option<Color> = None;
     for row in 0..grid.rows {
-        for col in 0..grid.cols {
+        let mut col = 0;
+        while col < grid.cols {
             let cell = grid.cells[row * grid.cols + col];
             write_color_transition(&mut out, cell, &mut last_fg, &mut last_bg);
             out.push(cell.ch);
+            // Advance by display width: a wide (2-column) glyph absorbs the next grid
+            // cell, so skip it to keep later cells aligned to their true columns.
+            col += if UnicodeWidthChar::width(cell.ch).unwrap_or(1) >= 2 {
+                2
+            } else {
+                1
+            };
         }
         let active = last_fg.is_some() || last_bg.is_some();
         if always_reset_row_end || active {
@@ -99,6 +108,14 @@ pub fn encode_full(grid: &CellGrid, always_reset_row_end: bool) -> String {
         out.push_str(";1H");
     }
     out
+}
+
+/// True if the grid contains any East-Asian-Wide (2-column) glyph. When set, callers should
+/// use [`encode_full`] instead of [`encode_diff`], whose per-cell cursor math assumes 1 column.
+pub fn grid_has_wide(grid: &CellGrid) -> bool {
+    grid.cells
+        .iter()
+        .any(|c| UnicodeWidthChar::width(c.ch).unwrap_or(1) >= 2)
 }
 
 /// Fraction of cells that differ (0.0..=1.0). Assumes equal dimensions (caller guarantees).
@@ -158,6 +175,63 @@ mod tests {
 
     fn g(cells: Vec<Cell>, cols: usize, rows: usize) -> CellGrid {
         CellGrid { cols, rows, cells }
+    }
+
+    #[test]
+    fn encode_full_advances_past_wide_glyph() {
+        // col0 = wide katakana ア (U+30A2, 2 cols); col1 'X' is its absorbed right half and
+        // must NOT be emitted; col2 'Z' must land in its true column.
+        let wide = 'ア';
+        assert_eq!(UnicodeWidthChar::width(wide), Some(2));
+        let cells = vec![
+            Cell {
+                ch: wide,
+                fg: None,
+                bg: None,
+            },
+            Cell {
+                ch: 'X',
+                fg: None,
+                bg: None,
+            },
+            Cell {
+                ch: 'Z',
+                fg: None,
+                bg: None,
+            },
+        ];
+        let grid = g(cells, 3, 1);
+        let out = encode_full(&grid, false);
+        assert!(out.contains('ア'), "wide glyph must be emitted: {out:?}");
+        assert!(out.contains('Z'), "col-2 glyph must be emitted: {out:?}");
+        assert!(
+            !out.contains('X'),
+            "absorbed col-1 must not be emitted: {out:?}"
+        );
+    }
+
+    #[test]
+    fn encode_full_narrow_grid_is_unchanged() {
+        // A width-1-only grid must produce identical output to the pre-change behavior.
+        let cells = vec![
+            Cell {
+                ch: 'a',
+                fg: None,
+                bg: None,
+            },
+            Cell {
+                ch: 'b',
+                fg: None,
+                bg: None,
+            },
+            Cell {
+                ch: 'c',
+                fg: None,
+                bg: None,
+            },
+        ];
+        let grid = g(cells, 3, 1);
+        assert_eq!(encode_full(&grid, false), "abc\x1b[2;1H");
     }
 
     #[test]

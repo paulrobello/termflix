@@ -996,6 +996,7 @@ fn run_loop(
                     && p.rows == grid.rows
                     && !full_frames
                     && recorder.is_none()
+                    && !render::encoder::grid_has_wide(&grid)
                     && render::encoder::dirty_ratio(p, &grid)
                         <= render::encoder::FULL_REDRAW_THRESHOLD =>
             {

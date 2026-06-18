@@ -13,8 +13,6 @@ struct Layer {
     drops: Vec<Drop>,
     speed_min: f64,
     speed_max: f64,
-    brightness_min: f64,
-    brightness_max: f64,
     head_r: u8,
     head_g: u8,
     head_b: u8,
@@ -45,6 +43,29 @@ impl Layer {
     }
 }
 
+/// A uniformly-random glyph for the digital rain, drawn from hiragana (U+3041–U+3096),
+/// katakana (U+30A1–U+30FA), ASCII `A–Z` / `a–z`, and digits `0–9`. Kana dominate by range
+/// size, with Latin/digits sprinkled in for the classic mixed Matrix-code look.
+fn random_glyph(rng: &mut rand::rngs::ThreadRng) -> char {
+    const RANGES: &[(u32, u32)] = &[
+        (0x3041, 0x3096), // hiragana (86)
+        (0x30A1, 0x30FA), // katakana (90)
+        (0x41, 0x5A),     // A–Z (26)
+        (0x61, 0x7A),     // a–z (26)
+        (0x30, 0x39),     // 0–9 (10)
+    ];
+    let total: u32 = RANGES.iter().map(|&(a, b)| b - a + 1).sum();
+    let mut n = rng.random_range(0..total);
+    for &(start, end) in RANGES {
+        let len = end - start + 1;
+        if n < len {
+            return char::from_u32(start + n).unwrap_or('ア');
+        }
+        n -= len;
+    }
+    unreachable!("glyph ranges are exhaustive over `total`")
+}
+
 fn draw_layer(
     canvas: &mut Canvas,
     layer: &mut Layer,
@@ -56,8 +77,6 @@ fn draw_layer(
 ) {
     let speed_min = layer.speed_min;
     let speed_max = layer.speed_max;
-    let brightness_min = layer.brightness_min;
-    let brightness_max = layer.brightness_max;
     let trail_g_base = layer.trail_g_base;
     let trail_g_range = layer.trail_g_range;
     let head_r = layer.head_r;
@@ -74,25 +93,25 @@ fn draw_layer(
             drop.length = rng.random_range(len_range.0..len_range.1);
         }
 
+        // A wide glyph occupies 2 columns, so never draw in the last column (it would
+        // overflow the right edge); that column is left dark instead.
+        let draw = drop.x + 1 < canvas.width;
         let head = drop.y as isize;
         for i in 0..drop.length {
             let py = head - i as isize;
-            if py >= 0 && (py as usize) < canvas.height && drop.x < canvas.width {
+            if draw && py >= 0 && (py as usize) < canvas.height {
                 let fade = 1.0 - (i as f64 / drop.length as f64);
-                let brightness = (brightness_min + (brightness_max - brightness_min) * fade * fade)
-                    .min(brightness_max);
                 let g = trail_g_base + ((trail_g_range as f64 * fade) as u8);
-                canvas.set_colored(drop.x, py as usize, brightness, 0, g, 0);
+                canvas.set_char(drop.x, py as usize, random_glyph(rng), 0, g, 0);
             }
         }
 
-        // Bright head character
-        if head >= 0 && (head as usize) < canvas.height && drop.x < canvas.width {
-            let head_brightness = brightness_max;
-            canvas.set_colored(
+        // Bright head glyph
+        if draw && head >= 0 && (head as usize) < canvas.height {
+            canvas.set_char(
                 drop.x,
                 head as usize,
-                head_brightness,
+                random_glyph(rng),
                 head_r,
                 head_g,
                 head_b,
@@ -134,8 +153,6 @@ impl Matrix {
             ),
             speed_min: 2.0,
             speed_max: 8.0,
-            brightness_min: 0.2,
-            brightness_max: 0.4,
             head_r: 0,
             head_g: 100,
             head_b: 0,
@@ -149,8 +166,6 @@ impl Matrix {
             ),
             speed_min: 6.0,
             speed_max: 16.0,
-            brightness_min: 0.4,
-            brightness_max: 0.7,
             head_r: 0,
             head_g: 200,
             head_b: 0,
@@ -164,8 +179,6 @@ impl Matrix {
             ),
             speed_min: 10.0,
             speed_max: 24.0,
-            brightness_min: 0.7,
-            brightness_max: 1.0,
             head_r: 200,
             head_g: 255,
             head_b: 200,
@@ -277,6 +290,30 @@ impl Animation for Matrix {
             self.near_len.1,
             self.near.speed_min,
             self.near.speed_max,
+        );
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::render::{Canvas, ColorMode, RenderMode};
+
+    #[test]
+    fn matrix_renders_kana_glyphs() {
+        // Drive the real Ascii render path (ascii_build_grid -> encode_full) and confirm
+        // hiragana/katakana glyphs actually appear in the encoded output.
+        let mut canvas = Canvas::new(80, 25, RenderMode::Ascii, ColorMode::TrueColor);
+        let mut anim = Matrix::new(canvas.width, canvas.height, 1.0);
+        anim.on_resize(canvas.width, canvas.height);
+        for f in 0..20u32 {
+            anim.update(&mut canvas, 1.0 / 24.0, f as f64 / 24.0);
+        }
+        let out = canvas.render();
+        let has_kana = out.chars().any(|c| ('\u{3040}'..='\u{30FF}').contains(&c));
+        assert!(
+            has_kana,
+            "matrix output should contain hiragana/katakana glyphs"
         );
     }
 }
