@@ -17,7 +17,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@master
@@ -37,7 +37,7 @@ jobs:
           cp target/aarch64-unknown-linux-gnu/release/termflix release-binaries/termflix-linux-aarch64
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: binary-aarch64-unknown-linux-gnu
           path: release-binaries/termflix-linux-aarch64
@@ -49,7 +49,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@master
@@ -69,7 +69,7 @@ jobs:
           cp target/x86_64-unknown-linux-gnu/release/termflix release-binaries/termflix-linux-x86_64
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: binary-x86_64-unknown-linux-gnu
           path: release-binaries/termflix-linux-x86_64
@@ -81,7 +81,7 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@master
@@ -99,7 +99,7 @@ jobs:
           cp target/x86_64-pc-windows-msvc/release/termflix.exe release-binaries/termflix-windows-x86_64.exe
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: binary-x86_64-pc-windows-msvc
           path: release-binaries/termflix-windows-x86_64.exe
@@ -111,7 +111,7 @@ jobs:
     runs-on: macos-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@master
@@ -128,7 +128,7 @@ jobs:
           cp target/x86_64-apple-darwin/release/termflix release-binaries/termflix-macos-x86_64
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: binary-x86_64-apple-darwin
           path: release-binaries/termflix-macos-x86_64
@@ -140,7 +140,7 @@ jobs:
     runs-on: macos-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@master
@@ -157,7 +157,7 @@ jobs:
           cp target/aarch64-apple-darwin/release/termflix release-binaries/termflix-macos-aarch64
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: binary-aarch64-apple-darwin
           path: release-binaries/termflix-macos-aarch64
@@ -170,7 +170,7 @@ jobs:
     timeout-minutes: 15
     needs: [build-linux-arm64, build-linux-x86_64, build-windows-x86_64, build-macos-x86_64, build-macos-arm64]
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@master
@@ -231,7 +231,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@master
@@ -245,7 +245,7 @@ jobs:
           echo "version=$version" >> $GITHUB_OUTPUT
 
       - name: Download binary artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           pattern: binary-*
           path: binaries

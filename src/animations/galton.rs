@@ -136,9 +136,7 @@ impl Animation for Galton {
         }
         self.balls.retain(|b| b.row < n_rows);
         if self.total_collected >= RESET_EVERY {
-            for c in &mut self.bins {
-                *c = 0;
-            }
+            self.bins.fill(0);
             self.total_collected = 0;
         }
 
