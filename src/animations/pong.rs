@@ -148,15 +148,17 @@ impl Animation for Pong {
             }
         }
 
-        // AI paddles: track ball with slight lag
+        // AI paddles: track ball with slight lag. Below 4 cells tall the upper
+        // bound drops under half_paddle; floor it so clamp never inverts.
         let ai_speed = 35.0;
+        let paddle_max = (h - half_paddle).max(half_paddle);
         let left_diff = self.ball_y - self.left_y;
         self.left_y += left_diff.clamp(-ai_speed * dt, ai_speed * dt);
-        self.left_y = self.left_y.clamp(half_paddle, h - half_paddle);
+        self.left_y = self.left_y.clamp(half_paddle, paddle_max);
 
         let right_diff = self.ball_y - self.right_y;
         self.right_y += right_diff.clamp(-ai_speed * dt, ai_speed * dt);
-        self.right_y = self.right_y.clamp(half_paddle, h - half_paddle);
+        self.right_y = self.right_y.clamp(half_paddle, paddle_max);
 
         // Render
         canvas.clear();

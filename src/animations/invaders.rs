@@ -133,10 +133,11 @@ impl Animation for Invaders {
             self.player_target = target.x;
         }
 
-        // Move player toward target
+        // Move player toward target. Under 6 cells wide the upper bound drops
+        // below 3.0; floor it so clamp never inverts (off-canvas clips at draw).
         let diff = self.player_target - self.player_x;
         self.player_x += diff.clamp(-30.0, 30.0) * dt;
-        self.player_x = self.player_x.clamp(3.0, w - 3.0);
+        self.player_x = self.player_x.clamp(3.0, (w - 3.0).max(3.0));
 
         // Player shoots
         self.shoot_timer += dt;

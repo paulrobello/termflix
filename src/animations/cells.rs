@@ -148,8 +148,10 @@ impl Animation for Cells {
             if cell.y > h - margin {
                 cell.y -= (cell.y - (h - margin)) * wall_force * dt;
             }
-            cell.x = cell.x.clamp(2.0, w - 2.0);
-            cell.y = cell.y.clamp(2.0, h - 2.0);
+            // Floor the upper bound at the margin so canvases under 4 cells
+            // don't invert the range; off-canvas positions clip at draw time.
+            cell.x = cell.x.clamp(2.0, (w - 2.0).max(2.0));
+            cell.y = cell.y.clamp(2.0, (h - 2.0).max(2.0));
 
             // Update organelles
             for org in &mut cell.organelles {

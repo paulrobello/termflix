@@ -70,9 +70,12 @@ impl Langton {
             2 => Direction::Down,
             _ => Direction::Left,
         };
-        // Randomize start position within central region
-        let ant_x = rng.random_range(width as i32 / 3..width as i32 * 2 / 3);
-        let ant_y = rng.random_range(height as i32 / 3..height as i32 * 2 / 3);
+        // Randomize start position within central region; the `.max(lo + 1)`
+        // keeps the range non-empty at width/height 1 (0..0 would panic).
+        let ant_x =
+            rng.random_range(width as i32 / 3..(width as i32 * 2 / 3).max(width as i32 / 3 + 1));
+        let ant_y =
+            rng.random_range(height as i32 / 3..(height as i32 * 2 / 3).max(height as i32 / 3 + 1));
         Langton {
             width,
             height,
@@ -89,12 +92,12 @@ impl Langton {
 
     fn reset(&mut self) {
         self.grid = vec![false; self.width * self.height];
-        self.ant_x = self
-            .rng
-            .random_range(self.width as i32 / 3..self.width as i32 * 2 / 3);
-        self.ant_y = self
-            .rng
-            .random_range(self.height as i32 / 3..self.height as i32 * 2 / 3);
+        self.ant_x = self.rng.random_range(
+            self.width as i32 / 3..(self.width as i32 * 2 / 3).max(self.width as i32 / 3 + 1),
+        );
+        self.ant_y = self.rng.random_range(
+            self.height as i32 / 3..(self.height as i32 * 2 / 3).max(self.height as i32 / 3 + 1),
+        );
         self.ant_dir = match self.rng.random_range(0u8..4) {
             0 => Direction::Up,
             1 => Direction::Right,

@@ -32,7 +32,8 @@ impl Animation for Aurora {
         let star_seed = 12345u64;
         for i in 0..80 {
             let sx = ((star_seed.wrapping_mul(i * 7 + 3)) % canvas.width as u64) as usize;
-            let sy = ((star_seed.wrapping_mul(i * 13 + 7)) % (canvas.height as u64 / 3)) as usize;
+            let sy =
+                ((star_seed.wrapping_mul(i * 13 + 7)) % (canvas.height as u64 / 3).max(1)) as usize;
             let twinkle = (t * 2.0 + i as f64 * 0.7).sin() * 0.5 + 0.5;
             if twinkle > 0.3 {
                 let b = (twinkle * 120.0) as u8;
