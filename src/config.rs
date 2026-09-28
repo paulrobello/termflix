@@ -152,7 +152,9 @@ pub fn default_config_string() -> String {
 # Watch a file for external control params (ndjson — one JSON object per line)
 # data_file = "/tmp/termflix.json"
 
-# Custom keybindings (key names: q, n, Right, Left, Esc, Space, Tab, etc.)
+# Custom keybindings — a set key replaces the default for that action.
+# Key names: single chars (q, n, ...) or Up/Down/Left/Right/Esc/Enter/Space/Tab.
+# b (bloom), s (smoothing), d (dither) and Ctrl+C are fixed, not remappable.
 # [keybindings]
 # next = "Right"
 # prev = "Left"

@@ -220,6 +220,24 @@ termflix --data-file /tmp/termflix.json
 | `d` | Toggle ANSI-256 dithering |
 | `h` | Toggle status bar |
 
+`b`, `s`, `d`, and `Ctrl+C` are fixed and cannot be remapped; every other action above can be via the `[keybindings]` config section (see [Custom Keybindings](#custom-keybindings)).
+
+## Custom Keybindings
+
+The `[keybindings]` section of the config file remaps six actions: `next`, `prev`, `quit`, `render`, `color`, `status`. Accepted key names are single characters (`q`, `n`, …) and the special keys `Up`, `Down`, `Left`, `Right`, `Esc`, `Enter`, `Space`, `Tab`.
+
+A configured key **replaces** the default for that action — it does not add a second key. Remapping `quit` to `x` means `q` and `Esc` no longer quit. Modifier combos (`Ctrl+q`, `Alt+x`) are not supported: the modifier is dropped and the plain key is bound.
+
+```toml
+[keybindings]
+next = "Right"
+prev = "Left"
+quit = "q"
+render = "r"
+color = "c"
+status = "h"
+```
+
 ## How It Works
 
 termflix uses a pixel-level canvas that gets rendered to terminal characters:
