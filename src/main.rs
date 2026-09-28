@@ -202,8 +202,6 @@ fn main() -> io::Result<()> {
     let cfg = config::load_config();
     let keybindings = build_keybindings(&cfg);
 
-    let data_file = cli.data_file.clone().or(cfg.data_file.clone());
-
     // --show-config: display current settings
     if cli.show_config {
         let path = config::config_path()
@@ -285,24 +283,13 @@ fn main() -> io::Result<()> {
     }
 
     // Merge: CLI flags > config file > defaults
-    let anim_name = cli
-        .animation
-        .clone()
-        .or(cfg.animation)
-        .unwrap_or_else(|| "fire".to_string());
-    let unlimited = cli.unlimited || cfg.unlimited_fps.unwrap_or(false);
-    let fps = cli.fps.or(cfg.fps).unwrap_or(24).clamp(1, 120);
-    let frame_dur = if unlimited {
-        Duration::ZERO
-    } else {
-        Duration::from_secs_f64(1.0 / fps as f64)
-    };
+    let settings = resolve_settings(&cli, &cfg);
 
     // Validate animation name before entering raw mode so errors print cleanly
-    if !animations::ANIMATION_NAMES.contains(&anim_name.as_str()) {
+    if !animations::ANIMATION_NAMES.contains(&settings.anim_name.as_str()) {
         eprintln!(
             "Unknown animation: '{}'\n\nAvailable animations:",
-            anim_name
+            settings.anim_name
         );
         for &(name, desc) in animations::ANIMATIONS {
             eprintln!("  {:<12} {}", name, desc);
@@ -349,93 +336,13 @@ fn main() -> io::Result<()> {
         execute!(stdout, EnableFocusChange)?;
     }
 
-    // Merge remaining settings: CLI > config > defaults
-    let color_mode = cli
-        .color
-        .or(cfg.color.map(ColorMode::from))
-        .unwrap_or(ColorMode::TrueColor);
-    let scale = cli.scale.or(cfg.scale).unwrap_or(1.0).clamp(0.5, 2.0);
-    let cycle = cli.cycle.or(cfg.cycle).unwrap_or(0);
-    let clean = cli.clean || cfg.clean.unwrap_or(false);
-    let color_quant = cfg.color_quant.unwrap_or(0);
-    let render_override = cli.render.or(cfg.render.map(RenderMode::from));
-
-    let default_bloom = cli
-        .bloom_intensity
-        .or(cfg.postproc.and_then(|p| p.bloom))
-        .unwrap_or(0.4)
-        .clamp(0.0, 1.0);
-    let postproc = PostProcessConfig {
-        bloom: if cli.bloom_intensity.is_some() || cfg.postproc.and_then(|p| p.bloom).is_some() {
-            default_bloom
-        } else {
-            0.0
-        },
-        bloom_threshold: cli
-            .bloom_threshold
-            .or(cfg.postproc.and_then(|p| p.bloom_threshold))
-            .unwrap_or(0.6)
-            .clamp(0.0, 1.0),
-        vignette: cli
-            .vignette
-            .or(cfg.postproc.and_then(|p| p.vignette))
-            .unwrap_or(0.0)
-            .clamp(0.0, 1.0),
-        scanlines: cli.scanlines || cfg.postproc.and_then(|p| p.scanlines).unwrap_or(false),
-    };
-
-    // Smoothing: live tau (0 = off) + the on-value the `s` key toggles to.
-    let smoothing_tau = cli
-        .smoothing
-        .or(cfg.smoothing)
-        .map(|v| v.clamp(0.0, 1.0))
-        .unwrap_or(0.0);
-    let default_smoothing_tau = cli
-        .smoothing
-        .or(cfg.smoothing)
-        .unwrap_or(0.1)
-        .clamp(0.0, 1.0);
-
-    // Colorblind-safe color assist: palette remap or daltonization (mutually exclusive).
-    // CLI > config; None when unset or name invalid.
-    let assist = ColorAssist::from_cli(
-        cli.palette.as_deref().or(cfg.palette.as_deref()),
-        cli.colorblind.as_deref().or(cfg.colorblind.as_deref()),
-    )
-    .unwrap_or(ColorAssist::None);
-    let dither = cli.dither || cfg.dither.unwrap_or(false);
-
     // Seeded RNG: a seeded live run is reproducible from startup. Transitions
     // between animations do not reseed, so reproducibility is start-of-run only.
     if let Some(seed) = cli.seed.or(cfg.seed) {
         rng::set_seed(seed);
     }
 
-    let result = run_loop(
-        &anim_name,
-        render_override,
-        color_mode,
-        color_quant,
-        unlimited,
-        frame_dur,
-        scale,
-        cycle,
-        clean,
-        cli.screensaver,
-        cli.screensaver_keys,
-        cli.record.as_deref(),
-        data_file,
-        postproc,
-        smoothing_tau,
-        default_smoothing_tau,
-        default_bloom,
-        assist,
-        dither,
-        &keybindings,
-        cli.profile,
-        cli.single_threaded,
-        cli.full_frames,
-    );
+    let result = run_loop(settings, &keybindings);
 
     // Restore terminal — disable raw mode first (doesn't write to stdout)
     let _ = terminal::disable_raw_mode();
@@ -630,32 +537,156 @@ fn spawn_animation(name: &str, width: usize, height: usize, scale: f64) -> Box<d
         .unwrap_or_else(|| panic!("animation {name:?} not found (name should be validated first)"))
 }
 
-#[allow(clippy::too_many_arguments)]
-fn run_loop(
-    initial_anim: &str,
-    explicit_render: Option<RenderMode>,
-    mut color_mode: ColorMode,
+/// Run settings resolved once at startup from the CLI > config-file > defaults
+/// merge. Passed to `run_loop` by value; run_loop owns and mutates its copy.
+struct Settings {
+    anim_name: String,
+    render_override: Option<RenderMode>,
+    color_mode: ColorMode,
     color_quant: u8,
     unlimited: bool,
     frame_dur: Duration,
-    mut scale: f64,
+    scale: f64,
     cycle: u32,
     clean: bool,
     screensaver: bool,
     screensaver_keys: bool,
-    record_path: Option<&str>,
+    record_path: Option<String>,
     data_file: Option<String>,
-    mut postproc: PostProcessConfig,
-    mut smoothing_tau: f64,
+    postproc: PostProcessConfig,
+    smoothing_tau: f64,
     default_smoothing_tau: f64,
     default_bloom: f64,
     assist: ColorAssist,
     dither: bool,
-    keybindings: &KeyBindings,
     profile: bool,
     single_threaded: bool,
     full_frames: bool,
-) -> io::Result<()> {
+}
+
+fn resolve_settings(cli: &Cli, cfg: &config::Config) -> Settings {
+    let anim_name = cli
+        .animation
+        .clone()
+        .or(cfg.animation.clone())
+        .unwrap_or_else(|| "fire".to_string());
+    let unlimited = cli.unlimited || cfg.unlimited_fps.unwrap_or(false);
+    let fps = cli.fps.or(cfg.fps).unwrap_or(24).clamp(1, 120);
+    let frame_dur = if unlimited {
+        Duration::ZERO
+    } else {
+        Duration::from_secs_f64(1.0 / fps as f64)
+    };
+
+    let color_mode = cli
+        .color
+        .or(cfg.color.map(ColorMode::from))
+        .unwrap_or(ColorMode::TrueColor);
+    let scale = cli.scale.or(cfg.scale).unwrap_or(1.0).clamp(0.5, 2.0);
+    let cycle = cli.cycle.or(cfg.cycle).unwrap_or(0);
+    let clean = cli.clean || cfg.clean.unwrap_or(false);
+    let color_quant = cfg.color_quant.unwrap_or(0);
+    let render_override = cli.render.or(cfg.render.map(RenderMode::from));
+
+    let default_bloom = cli
+        .bloom_intensity
+        .or(cfg.postproc.and_then(|p| p.bloom))
+        .unwrap_or(0.4)
+        .clamp(0.0, 1.0);
+    let postproc = PostProcessConfig {
+        bloom: if cli.bloom_intensity.is_some() || cfg.postproc.and_then(|p| p.bloom).is_some() {
+            default_bloom
+        } else {
+            0.0
+        },
+        bloom_threshold: cli
+            .bloom_threshold
+            .or(cfg.postproc.and_then(|p| p.bloom_threshold))
+            .unwrap_or(0.6)
+            .clamp(0.0, 1.0),
+        vignette: cli
+            .vignette
+            .or(cfg.postproc.and_then(|p| p.vignette))
+            .unwrap_or(0.0)
+            .clamp(0.0, 1.0),
+        scanlines: cli.scanlines || cfg.postproc.and_then(|p| p.scanlines).unwrap_or(false),
+    };
+
+    // Smoothing: live tau (0 = off) + the on-value the `s` key toggles to.
+    let smoothing_tau = cli
+        .smoothing
+        .or(cfg.smoothing)
+        .map(|v| v.clamp(0.0, 1.0))
+        .unwrap_or(0.0);
+    let default_smoothing_tau = cli
+        .smoothing
+        .or(cfg.smoothing)
+        .unwrap_or(0.1)
+        .clamp(0.0, 1.0);
+
+    // Colorblind-safe color assist: palette remap or daltonization (mutually exclusive).
+    // CLI > config; None when unset or name invalid.
+    let assist = ColorAssist::from_cli(
+        cli.palette.as_deref().or(cfg.palette.as_deref()),
+        cli.colorblind.as_deref().or(cfg.colorblind.as_deref()),
+    )
+    .unwrap_or(ColorAssist::None);
+    let dither = cli.dither || cfg.dither.unwrap_or(false);
+
+    Settings {
+        anim_name,
+        render_override,
+        color_mode,
+        color_quant,
+        unlimited,
+        frame_dur,
+        scale,
+        cycle,
+        clean,
+        screensaver: cli.screensaver,
+        screensaver_keys: cli.screensaver_keys,
+        record_path: cli.record.clone(),
+        data_file: cli.data_file.clone().or(cfg.data_file.clone()),
+        postproc,
+        smoothing_tau,
+        default_smoothing_tau,
+        default_bloom,
+        assist,
+        dither,
+        profile: cli.profile,
+        single_threaded: cli.single_threaded,
+        full_frames: cli.full_frames,
+    }
+}
+
+fn run_loop(settings: Settings, keybindings: &KeyBindings) -> io::Result<()> {
+    let Settings {
+        anim_name,
+        render_override: explicit_render,
+        mut color_mode,
+        color_quant,
+        unlimited,
+        frame_dur,
+        mut scale,
+        cycle,
+        clean,
+        screensaver,
+        screensaver_keys,
+        record_path,
+        data_file,
+        mut postproc,
+        mut smoothing_tau,
+        default_smoothing_tau,
+        default_bloom,
+        assist,
+        dither,
+        profile,
+        single_threaded,
+        full_frames,
+    } = settings;
+    // Keep the body's historical names for the two settings that changed shape.
+    let initial_anim = anim_name.as_str();
+    let record_path = record_path.as_deref();
     let (mut cols, mut rows) = terminal::size()?;
     let is_tmux = std::env::var("TMUX").is_ok();
     let mut hide_status = clean;
