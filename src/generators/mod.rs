@@ -104,6 +104,7 @@ pub struct EmitterConfig {
 pub struct ParticleSystem {
     pub particles: Vec<Particle>,
     pub config: EmitterConfig,
+    rng: rand::rngs::StdRng,
     capacity: usize,
 }
 
@@ -113,13 +114,14 @@ impl ParticleSystem {
         ParticleSystem {
             particles: Vec::with_capacity(capacity),
             config,
+            rng: crate::rng::new_rng(),
             capacity,
         }
     }
 
     /// Emit `count` particles from the emitter.
     pub fn emit(&mut self, count: usize) {
-        let mut rng = rand::rng();
+        let rng = &mut self.rng;
         for _ in 0..count {
             if self.particles.len() >= self.capacity {
                 break;
@@ -168,7 +170,7 @@ impl ParticleSystem {
         g_range: (u8, u8),
         b_range: (u8, u8),
     ) {
-        let mut rng = rand::rng();
+        let rng = &mut self.rng;
         for _ in 0..count {
             if self.particles.len() >= self.capacity {
                 break;

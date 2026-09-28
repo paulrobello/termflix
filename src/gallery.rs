@@ -16,6 +16,8 @@ pub struct GalleryConfig {
     pub wait_secs: f64,
     pub duration_secs: f64,
     pub names: Option<Vec<String>>,
+    /// RNG seed — the gallery is always seeded so captures are reproducible.
+    pub seed: u64,
 }
 
 pub fn run_gallery(config: &GalleryConfig) -> std::io::Result<()> {
@@ -72,6 +74,9 @@ fn resolve_animations(config: &GalleryConfig) -> Vec<(&'static str, &'static str
 }
 
 fn capture_animation(name: &str, config: &GalleryConfig) -> std::io::Result<()> {
+    // Reseed per animation so each capture is independent of order and filter.
+    crate::rng::set_seed(config.seed);
+
     let cols = config.cols;
     let rows = config.rows;
     let fps = 24.0;

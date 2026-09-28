@@ -8,6 +8,7 @@ mod gif;
 mod png;
 mod record;
 mod render;
+mod rng;
 // The writer thread uses raw fd + libc::write (deliberately unbuffered, to
 // bypass Stdout's LineWriter). That's unix-only; on Windows main.rs writes
 // frames inline via stdout.write_all() (see the cfg(not(unix)) branches).
@@ -149,6 +150,10 @@ struct Cli {
     #[arg(long)]
     full_frames: bool,
 
+    /// Seed the RNG for deterministic, reproducible output (gallery default: 1)
+    #[arg(long)]
+    seed: Option<u64>,
+
     /// Capture animations as PNG+GIF gallery (optional: comma-separated animation names)
     #[arg(long)]
     gallery: Option<Option<String>>,
@@ -227,6 +232,7 @@ fn main() -> io::Result<()> {
             wait_secs: cli.gallery_wait.unwrap_or(3.0),
             duration_secs: cli.gallery_duration.unwrap_or(5.0),
             names,
+            seed: cli.seed.or(cfg.seed).unwrap_or(1),
         };
         return gallery::run_gallery(&config);
     }
@@ -398,6 +404,12 @@ fn main() -> io::Result<()> {
     )
     .unwrap_or(ColorAssist::None);
     let dither = cli.dither || cfg.dither.unwrap_or(false);
+
+    // Seeded RNG: a seeded live run is reproducible from startup. Transitions
+    // between animations do not reseed, so reproducibility is start-of-run only.
+    if let Some(seed) = cli.seed.or(cfg.seed) {
+        rng::set_seed(seed);
+    }
 
     let result = run_loop(
         &anim_name,

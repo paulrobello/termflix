@@ -42,6 +42,8 @@ pub struct Config {
     pub colorblind: Option<String>,
     /// Ordered (Bayer 4x4) dithering for ANSI-256 mode (reduces banding).
     pub dither: Option<bool>,
+    /// RNG seed for deterministic output (unset = OS entropy)
+    pub seed: Option<u64>,
 }
 
 /// Render mode names for config file (kebab-case friendly)
@@ -183,6 +185,9 @@ pub fn default_config_string() -> String {
 
 # Ordered (Bayer 4x4) dithering for ANSI-256 mode (reduces banding on 256-color terminals)
 # dither = true
+
+# RNG seed for deterministic, reproducible output (unset = OS entropy)
+# seed = 42
 "#
     .to_string()
 }
@@ -210,6 +215,13 @@ mod tests {
         assert_eq!(cfg.animation.as_deref(), Some("fire"));
         assert_eq!(cfg.fps, Some(30));
         assert_eq!(cfg.scale, Some(1.5));
+        assert_eq!(cfg.seed, None);
+    }
+
+    #[test]
+    fn config_parses_seed() {
+        let cfg: Config = toml::from_str("seed = 42\n").unwrap();
+        assert_eq!(cfg.seed, Some(42));
     }
 
     #[test]
