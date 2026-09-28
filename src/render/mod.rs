@@ -4,6 +4,7 @@ pub mod cell;
 pub mod color_assist;
 pub mod encoder;
 pub mod halfblock;
+pub mod pipeline;
 
 pub use canvas::{Canvas, ColorMode, PostProcessConfig, RenderMode, smoothing_alpha};
 pub use color_assist::ColorAssist;

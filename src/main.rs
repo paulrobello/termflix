@@ -26,7 +26,10 @@ use crossterm::{
     execute, terminal,
 };
 use external::{CurrentState, ExternalParams, ParamsSource, spawn_reader};
-use render::{Canvas, ColorAssist, ColorMode, PostProcessConfig, RenderMode, smoothing_alpha};
+use render::{
+    Canvas, ColorAssist, ColorMode, PostProcessConfig, RenderMode, pipeline::FrameEffects,
+    pipeline::produce_frame, smoothing_alpha,
+};
 use std::io;
 use std::io::IsTerminal;
 use std::sync::Arc;
@@ -1355,34 +1358,32 @@ fn run_loop(settings: Settings, keybindings: &KeyBindings) -> io::Result<()> {
         // Per-animation semantic params
         state.anim.set_params(state.ext.params());
 
-        // Update animation
-        let update_start = Instant::now();
-        state
-            .anim
-            .update(&mut state.canvas, effective_dt, state.virtual_time);
-        let update_dur = update_start.elapsed();
-
-        // Temporal brightness smoothing (opt-in). Runs on raw animation output,
-        // before effects/post-process, so intentional changes stay responsive.
-        if state.smoothing_tau > 0.0 {
-            state
-                .canvas
-                .apply_smoothing(smoothing_alpha(effective_dt, state.smoothing_tau));
-        }
-
-        // Transition fade processing
+        // Transition fade processing. Advanced before the frame so its factor
+        // feeds this frame's intensity; a mid-fade respawn at factor 0.0
+        // renders black either way.
         let transition_factor = step_transition(&mut state, explicit_render);
 
         if state.needs_rebuild {
             continue;
         }
 
-        // Post-process state.canvas with intensity and hue shift
-        let intensity = state.ext.intensity().clamp(0.0, 2.0) * transition_factor;
-        let hue = state.ext.color_shift().clamp(0.0, 1.0);
-        state.canvas.apply_effects(intensity, hue);
-        state.canvas.apply_color_assist(&assist);
-        state.canvas.post_process(&state.postproc);
+        // One frame through the shared pipeline (clear → update → smoothing →
+        // effects → assist → post-process).
+        let fx = FrameEffects {
+            smoothing_alpha: (state.smoothing_tau > 0.0)
+                .then(|| smoothing_alpha(effective_dt, state.smoothing_tau)),
+            intensity: state.ext.intensity().clamp(0.0, 2.0) * transition_factor,
+            hue_shift: state.ext.color_shift().clamp(0.0, 1.0),
+            assist: &assist,
+            postproc: &state.postproc,
+        };
+        let update_dur = produce_frame(
+            state.anim.as_mut(),
+            &mut state.canvas,
+            effective_dt,
+            state.virtual_time,
+            &fx,
+        );
 
         // Render to string
         let render_start = Instant::now();

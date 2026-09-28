@@ -26,10 +26,11 @@ Run a single test: `cargo test test_name` (e.g., `cargo test test_create_returns
 ### Core Pipeline
 
 ```
-Animation::update(canvas, dt, time) → canvas.apply_effects() → canvas.post_process() → canvas.render() → libc::write()
+pipeline::produce_frame(anim, canvas, dt, t, &FrameEffects)   // clear → update → smoothing → effects → color assist → post-process
+→ canvas.render() → libc::write()
 ```
 
-Animations write to a **mode-agnostic pixel buffer** (`Canvas`) using sub-cell coordinates. The render step converts pixels to terminal characters based on the active render mode (Braille 2x4, HalfBlock 1x2, or ASCII density).
+Live loop, gallery, and encoder benchmarks all go through `src/render/pipeline.rs::produce_frame` — one place owns clearing and post-effects; animations receive a cleared canvas. Animations write to a **mode-agnostic pixel buffer** (`Canvas`) using sub-cell coordinates. The render step converts pixels to terminal characters based on the active render mode (Braille 2x4, HalfBlock 1x2, or ASCII density).
 
 ### Module Layout
 

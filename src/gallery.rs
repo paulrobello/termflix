@@ -1,7 +1,9 @@
 use crate::animations;
 use crate::gif;
 use crate::png;
-use crate::render::{Canvas, ColorMode, PostProcessConfig, RenderMode};
+use crate::render::{
+    Canvas, ColorAssist, ColorMode, PostProcessConfig, RenderMode, pipeline::produce_frame,
+};
 use std::fs;
 use std::io::BufWriter;
 use std::path::PathBuf;
@@ -109,12 +111,10 @@ fn capture_animation(name: &str, config: &GalleryConfig) -> std::io::Result<()> 
     let mut png_frame_pixels: Option<Vec<(u8, u8, u8)>> = None;
     let mut time = 0.0f64;
     let dt_ms = (dt * 1000.0) as u64;
+    let fx = crate::render::pipeline::FrameEffects::neutral(&ColorAssist::None, &postproc);
 
     for frame_i in 0..total_frames {
-        canvas.clear();
-        anim.update(&mut canvas, dt, time);
-        canvas.apply_effects(1.0, 0.0);
-        canvas.post_process(&postproc);
+        produce_frame(anim.as_mut(), &mut canvas, dt, time, &fx);
 
         // Convert canvas (brightness * RGB) to flat RGB for this frame.
         let mut frame_pixels: Vec<(u8, u8, u8)> = Vec::with_capacity(canvas.width * canvas.height);

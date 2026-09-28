@@ -66,7 +66,12 @@ pub trait Animation {
     /// Human-readable name
     fn name(&self) -> &str;
 
-    /// Advance the simulation and draw into the canvas
+    /// Advance the simulation and draw into the canvas.
+    ///
+    /// The canvas arrives cleared: [`crate::render::pipeline::produce_frame`]
+    /// clears it before calling `update`, so implementations draw on a blank
+    /// buffer (legacy impls that call `canvas.clear()` themselves are harmless
+    /// — the double clear is a no-op visually).
     fn update(&mut self, canvas: &mut Canvas, dt: f64, time: f64);
 
     /// Preferred render mode for this animation (used when no -r flag given)

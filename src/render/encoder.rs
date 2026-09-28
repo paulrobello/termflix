@@ -527,9 +527,19 @@ mod tests {
         anim.on_resize(canvas.width, canvas.height);
         let mut term = Term::new(cols, rows);
         let mut prev: Option<CellGrid> = None;
+        let postproc = crate::render::PostProcessConfig::default();
+        let fx = crate::render::pipeline::FrameEffects::neutral(
+            &crate::render::ColorAssist::None,
+            &postproc,
+        );
         for f in 0..80u32 {
-            anim.update(&mut canvas, 1.0 / 24.0, f as f64 / 24.0);
-            canvas.apply_effects(1.0, 0.0);
+            crate::render::pipeline::produce_frame(
+                anim.as_mut(),
+                &mut canvas,
+                1.0 / 24.0,
+                f as f64 / 24.0,
+                &fx,
+            );
             let grid = canvas.build_grid();
             let frame = match &prev {
                 Some(p)
@@ -608,10 +618,20 @@ mod tests {
                 animations::create(name, canvas.width, canvas.height, 1.0).expect("anim");
             anim.on_resize(canvas.width, canvas.height);
             let mut prev: Option<CellGrid> = None;
+            let postproc = crate::render::PostProcessConfig::default();
+            let fx = crate::render::pipeline::FrameEffects::neutral(
+                &crate::render::ColorAssist::None,
+                &postproc,
+            );
             let (mut fb, mut db, mut ds, mut dn) = (0u64, 0u64, 0f64, 0u64);
             for i in 0..n {
-                anim.update(&mut canvas, 1.0 / 24.0, i as f64 / 24.0);
-                canvas.apply_effects(1.0, 0.0);
+                crate::render::pipeline::produce_frame(
+                    anim.as_mut(),
+                    &mut canvas,
+                    1.0 / 24.0,
+                    i as f64 / 24.0,
+                    &fx,
+                );
                 let grid = canvas.render_cells();
                 let full = encode_full(&grid, false);
                 fb += full.len() as u64;

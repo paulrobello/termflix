@@ -245,12 +245,14 @@ sequenceDiagram
     participant ST as stdout
 
     AL->>AN: set_params(&ext_state.params)
-    AL->>AN: update(&mut canvas, effective_dt, virtual_time)
+    AL->>RN: produce_frame(anim, canvas, dt, t, &FrameEffects)
+    RN->>CV: clear()
+    RN->>AN: update(&mut canvas, effective_dt, virtual_time)
     AN->>CV: set_colored(x, y, brightness, r, g, b)
-    AL->>CV: apply_smoothing(alpha) (opt-in, --smoothing)
-    AL->>CV: apply_effects(intensity, hue_shift)
-    AL->>CV: apply_color_assist(&ColorAssist)
-    AL->>CV: post_process(&PostProcessConfig)
+    RN->>CV: apply_smoothing(alpha) (opt-in, --smoothing)
+    RN->>CV: apply_effects(intensity, hue_shift)
+    RN->>CV: apply_color_assist(&ColorAssist)
+    RN->>CV: post_process(&PostProcessConfig)
     AL->>CV: render_cells() → build_grid() → CellGrid
     CV->>EN: encode_full(grid) or encode_diff(prev, grid)
     EN-->>AL: ANSI escape String
@@ -296,7 +298,7 @@ All renderers track the previously emitted ANSI code and skip writing a new one 
 
 ### Post-Process Effects
 
-The per-frame pipeline after `update()` is: `apply_smoothing()` (opt-in) → `apply_effects()` → `apply_color_assist()` → `post_process()` → `render_cells()`/`build_grid()`. Each stage is a separate `Canvas` method, keeping all transforms fully decoupled from animation logic.
+The per-frame pipeline is `render::pipeline::produce_frame(anim, canvas, dt, t, &FrameEffects)`, shared by the live loop, the gallery and the encoder benchmarks: `clear()` → `update()` → `apply_smoothing()` (opt-in) → `apply_effects()` → `apply_color_assist()` → `post_process()`, then `render_cells()`/`build_grid()` at the call site. Each stage is a separate `Canvas` method, keeping all transforms fully decoupled from animation logic; the pipeline owns clearing, so animations receive a blank canvas.
 
 - **`apply_smoothing(alpha)`** (opt-in via `--smoothing TAU`): first-order EMA that blends each pixel's brightness toward its target using `smoothing_alpha(dt, tau)`. Brightness-only; `colors` is untouched. Eliminates per-frame flicker in high-frequency animations.
 - **`apply_effects(intensity, hue_shift)`**: global brightness multiplier and hue rotation (see below).
