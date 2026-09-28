@@ -141,6 +141,8 @@ Lines that are empty, whitespace-only, or contain invalid JSON are silently skip
 
 **scale** causes the animation to be fully rebuilt with a new particle or element count. This is more expensive than other fields because it reallocates internal animation state.
 
+> **⚠️ Note:** the ranges above are the *global* pipeline's. Eight animations (`fire`, `plasma`, `boids`, `particles`, `wave`, `sort`, `snake`, `pong`) additionally reinterpret `speed`, `intensity`, or `color_shift` with their own tighter clamps — see the table under [Semantic Overrides](#semantic-overrides).
+
 ### Render Mode Values
 
 | Value | Description |
@@ -258,6 +260,24 @@ All 60 animations inherit this default. Most animations do not need to inspect e
 ### Semantic Overrides
 
 Eight animations implement semantic overrides that give a field additional, animation-specific meaning beyond its global effect.
+
+Each override clamps the incoming value to an animation-specific range — not the global field range:
+
+| Animation | Field | Controls | Accepted range |
+|-----------|-------|----------|-----------------|
+| `fire` | `intensity` | `heat_rate` (burn temperature / decay) | 0.0 – 2.0 |
+| `plasma` | `color_shift` | `hue_bias` (palette rotation) | 0.0 – 1.0 |
+| `boids` | `intensity` | `cohes_factor` (cohesion pull) | 0.001 – 0.05 |
+| `boids` | `color_shift` | `sep_factor` (separation force) | 0.5 – 5.0 |
+| `particles` | `intensity` | `gravity` | 0.0 – 40.0 |
+| `particles` | `color_shift` | `drag` (1.0 = none, 0.9 = strong) | 0.9 – 1.0 |
+| `wave` | `intensity` | `amplitude` | 0.1 – 1.0 |
+| `wave` | `color_shift` | `frequency` | 0.05 – 0.8 |
+| `sort` | `speed` | `ops_per_frame` (sort operations per frame) | 1.0 – 20.0 |
+| `snake` | `speed` | `move_interval` (seconds between moves — **higher = slower**) | 0.02 – 0.2 |
+| `pong` | `speed` | `speed_mult` (ball/paddle velocity multiplier) | 0.2 – 3.0 |
+
+> **⚠️ Warning:** a value that is neutral for the global pipeline is **not** neutral for these animations, and the semantic effect applies on top of the global one. Sending `{"color_shift": 0.0}` — globally a no-op — while running `boids` clamps `sep_factor` to its 0.5 minimum and changes the flocking. Sending `{"speed": 1.0}` to `snake` clamps `move_interval` to 0.2 s, its slowest setting. Once sent, a semantic value persists until another value for the same field arrives; there is no way to unset it.
 
 ```mermaid
 graph TD
