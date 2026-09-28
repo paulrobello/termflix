@@ -519,6 +519,117 @@ impl LzwEncoder {
 // GIF89a writer
 // ---------------------------------------------------------------------------
 
+/// Streaming GIF89a writer shared by `export_gif` and `export_gif_pixels`.
+struct GifWriter<'a, W: Write> {
+    writer: &'a mut W,
+    encoder: LzwEncoder,
+}
+
+impl<'a, W: Write> GifWriter<'a, W> {
+    /// Writes the GIF89a header, Logical Screen Descriptor, Global Color
+    /// Table, and the NETSCAPE2.0 infinite-loop extension.
+    fn new(writer: &'a mut W, width: u16, height: u16) -> std::io::Result<Self> {
+        let palette = Palette::new();
+
+        // Build palette bytes — GIF requires power-of-2 table size, so round up to 256
+        let mut pal_bytes = [0u8; 768]; // 256 * 3
+        for (i, &(r, g, b)) in palette.entries.iter().enumerate() {
+            pal_bytes[i * 3] = r;
+            pal_bytes[i * 3 + 1] = g;
+            pal_bytes[i * 3 + 2] = b;
+        }
+
+        writer.write_all(b"GIF89a")?;
+
+        // Logical Screen Descriptor: width/height (LE16), packed byte, bg
+        // color, pixel aspect ratio. Packed = GCT flag | color resolution
+        // (8-1=7) | sort=0 | size=7 (2^(7+1)=256).
+        let packed = 0x80 | 0x07;
+        writer.write_all(&width.to_le_bytes())?;
+        writer.write_all(&height.to_le_bytes())?;
+        writer.write_all(&[packed, 0, 0])?;
+
+        // Global Color Table (256 * 3 bytes)
+        writer.write_all(&pal_bytes)?;
+
+        // NETSCAPE2.0 Application Extension (loop forever)
+        writer.write_all(&[
+            0x21, // Extension introducer
+            0xFF, // Application extension label
+            11,   // Block size
+        ])?;
+        writer.write_all(b"NETSCAPE2.0")?;
+        writer.write_all(&[
+            3, // Sub-block size
+            1, // Sub-block ID for looping
+            0, 0, // Loop count (0 = infinite)
+            0, // Block terminator
+        ])?;
+
+        Ok(GifWriter {
+            writer,
+            encoder: LzwEncoder::new(8), // min code size = 8 for 256-color palette
+        })
+    }
+
+    /// Writes one frame: Graphic Control Extension carrying `delay_cs`,
+    /// Image Descriptor, and `indices` LZW-compressed into sub-blocks.
+    fn write_frame(
+        &mut self,
+        indices: &[u8],
+        delay_cs: u16,
+        width: u16,
+        height: u16,
+    ) -> std::io::Result<()> {
+        // Graphic Control Extension
+        self.writer.write_all(&[
+            0x21, // Extension introducer
+            0xF9, // Graphic Control label
+            4,    // Block size
+            0x00, // Packed: dispose=0, no user input, no transparent
+        ])?;
+        self.writer.write_all(&delay_cs.to_le_bytes())?;
+        self.writer.write_all(&[
+            0, // Transparent color index (unused)
+            0, // Block terminator
+        ])?;
+
+        // Image Descriptor
+        self.writer.write_all(&[
+            0x2C, // Image separator
+        ])?;
+        self.writer.write_all(&0u16.to_le_bytes())?; // Left
+        self.writer.write_all(&0u16.to_le_bytes())?; // Top
+        self.writer.write_all(&width.to_le_bytes())?; // Width
+        self.writer.write_all(&height.to_le_bytes())?; // Height
+        self.writer.write_all(&[0x00])?; // Packed: no local color table
+
+        // LZW Minimum Code Size — required between Image Descriptor and the
+        // sub-block stream. For an 8-bit palette this is 8.
+        self.writer.write_all(&[8])?;
+
+        // LZW-compressed image data
+        let compressed = self.encoder.encode(indices);
+
+        // Write as sub-blocks (max 255 bytes each)
+        let mut pos = 0;
+        while pos < compressed.len() {
+            let chunk_len = (compressed.len() - pos).min(255);
+            self.writer.write_all(&[chunk_len as u8])?;
+            self.writer.write_all(&compressed[pos..pos + chunk_len])?;
+            pos += chunk_len;
+        }
+        self.writer.write_all(&[0])?; // Block terminator
+        Ok(())
+    }
+
+    /// Writes the GIF trailer and flushes.
+    fn finish(self) -> std::io::Result<()> {
+        self.writer.write_all(&[0x3B])?;
+        self.writer.flush()
+    }
+}
+
 /// Export recorded frames as an animated GIF.
 ///
 /// `term_cols` and `term_rows` are the terminal dimensions (in character cells).
@@ -532,45 +643,8 @@ pub fn export_gif<W: Write>(
     let palette = Palette::new();
     let (width, height, pixel_count) = validate_gif_dims(term_cols, term_rows)?;
 
-    // Build palette bytes — GIF requires power-of-2 table size, so round up to 256
-    let mut pal_bytes = [0u8; 768]; // 256 * 3
-    for (i, &(r, g, b)) in palette.entries.iter().enumerate() {
-        pal_bytes[i * 3] = r;
-        pal_bytes[i * 3 + 1] = g;
-        pal_bytes[i * 3 + 2] = b;
-    }
-
-    // --- GIF89a header ---
-    writer.write_all(b"GIF89a")?;
-
-    // --- Logical Screen Descriptor ---
-    // Width (LE16), Height (LE16), packed byte, bg color, pixel aspect ratio
-    let packed = 0x80 | 0x07; // GCT flag | color resolution (8-1=7) | sort=0 | size=7 (2^(7+1)=256)
-    writer.write_all(&width.to_le_bytes())?;
-    writer.write_all(&height.to_le_bytes())?;
-    writer.write_all(&[packed, 0, 0])?;
-
-    // --- Global Color Table (256 * 3 bytes) ---
-    writer.write_all(&pal_bytes)?;
-
-    // --- NETSCAPE2.0 Application Extension (loop forever) ---
-    writer.write_all(&[
-        0x21, // Extension introducer
-        0xFF, // Application extension label
-        11,   // Block size
-    ])?;
-    writer.write_all(b"NETSCAPE2.0")?;
-    writer.write_all(&[
-        3, // Sub-block size
-        1, // Sub-block ID for looping
-        0, 0, // Loop count (0 = infinite)
-        0, // Block terminator
-    ])?;
-
-    // --- Encode frames ---
-    let mut encoder = LzwEncoder::new(8); // min code size = 8 for 256-color palette
+    let mut gif = GifWriter::new(writer, width, height)?;
     let mut prev_indices: Vec<u8> = Vec::new();
-    let mut frame_count: usize = 0;
     let mut pending_delay_cs: u16 = 0;
 
     for (fi, frame) in frames.iter().enumerate() {
@@ -592,91 +666,31 @@ pub fn export_gif<W: Write>(
             }
         }
 
-        // Frame deduplication: skip identical consecutive frames, accumulate delay
-        if indices == prev_indices {
-            // Compute what the delay for this frame would be
-            let delay_cs = if fi + 1 < frames.len() {
-                let delta_ms = frames[fi + 1]
-                    .timestamp_ms
-                    .saturating_sub(frame.timestamp_ms);
-                (delta_ms / 10).clamp(2, 65535) as u16
-            } else {
-                2 // Minimum 2 centiseconds for last frame
-            };
-            pending_delay_cs = pending_delay_cs.saturating_add(delay_cs);
-            continue;
-        }
-
-        // Write the previous accumulated frame (if any was deferred)
-        // Actually, we write the *current* frame with accumulated delay from previous skipped frames.
-        // The delay for this frame includes any time accumulated from skipped duplicates.
-
-        // Calculate delay: time from this frame to the next unique frame (or end)
+        // Frame deduplication: skip identical consecutive frames, accumulate delay.
+        // The delay for a written frame includes any time accumulated from the
+        // skipped duplicates before it.
         let delay_cs = if fi + 1 < frames.len() {
-            // Find next frame that will actually be written (or just use next timestamp)
             let delta_ms = frames[fi + 1]
                 .timestamp_ms
                 .saturating_sub(frame.timestamp_ms);
             (delta_ms / 10).clamp(2, 65535) as u16
         } else {
-            2
+            2 // Minimum 2 centiseconds for last frame
         };
 
-        // Add any pending delay from skipped frames
+        if indices == prev_indices {
+            pending_delay_cs = pending_delay_cs.saturating_add(delay_cs);
+            continue;
+        }
+
         let total_delay = pending_delay_cs.saturating_add(delay_cs);
         pending_delay_cs = 0;
 
-        // Graphic Control Extension
-        writer.write_all(&[
-            0x21, // Extension introducer
-            0xF9, // Graphic Control label
-            4,    // Block size
-            0x00, // Packed: dispose=0, no user input, no transparent
-        ])?;
-        writer.write_all(&total_delay.to_le_bytes())?;
-        writer.write_all(&[
-            0, // Transparent color index (unused)
-            0, // Block terminator
-        ])?;
-
-        // Image Descriptor
-        writer.write_all(&[
-            0x2C, // Image separator
-        ])?;
-        writer.write_all(&0u16.to_le_bytes())?; // Left
-        writer.write_all(&0u16.to_le_bytes())?; // Top
-        writer.write_all(&width.to_le_bytes())?; // Width
-        writer.write_all(&height.to_le_bytes())?; // Height
-        writer.write_all(&[0x00])?; // Packed: no local color table
-
-        // LZW Minimum Code Size — required between Image Descriptor and the
-        // sub-block stream. For an 8-bit palette this is 8.
-        writer.write_all(&[8])?;
-
-        // LZW-compressed image data
-        let compressed = encoder.encode(&indices);
-
-        // Write as sub-blocks (max 255 bytes each)
-        let mut pos = 0;
-        while pos < compressed.len() {
-            let chunk_len = (compressed.len() - pos).min(255);
-            writer.write_all(&[chunk_len as u8])?;
-            writer.write_all(&compressed[pos..pos + chunk_len])?;
-            pos += chunk_len;
-        }
-        writer.write_all(&[0])?; // Block terminator
-
+        gif.write_frame(&indices, total_delay, width, height)?;
         prev_indices = indices;
-        frame_count += 1;
     }
 
-    // --- GIF Trailer ---
-    writer.write_all(&[0x3B])?;
-
-    let _ = frame_count; // Used for tracking; caller reports count
-    writer.flush()?;
-
-    Ok(())
+    gif.finish()
 }
 
 // ---------------------------------------------------------------------------
@@ -726,25 +740,7 @@ pub fn export_gif_pixels<W: Write>(
         .and_then(|c| c.checked_mul(scale))
         .ok_or_else(|| invalid_gif_dims(width, height))?;
 
-    let mut pal_bytes = [0u8; 768];
-    for (i, &(r, g, b)) in palette.entries.iter().enumerate() {
-        pal_bytes[i * 3] = r;
-        pal_bytes[i * 3 + 1] = g;
-        pal_bytes[i * 3 + 2] = b;
-    }
-
-    writer.write_all(b"GIF89a")?;
-    let packed = 0x80 | 0x07;
-    writer.write_all(&out_w.to_le_bytes())?;
-    writer.write_all(&out_h.to_le_bytes())?;
-    writer.write_all(&[packed, 0, 0])?;
-    writer.write_all(&pal_bytes)?;
-
-    writer.write_all(&[0x21, 0xFF, 11])?;
-    writer.write_all(b"NETSCAPE2.0")?;
-    writer.write_all(&[3, 1, 0, 0, 0])?;
-
-    let mut encoder = LzwEncoder::new(8);
+    let mut gif = GifWriter::new(writer, out_w, out_h)?;
     let mut prev_native: Vec<u8> = Vec::new();
     let mut pending_delay_cs: u16 = 0;
 
@@ -806,37 +802,11 @@ pub fn export_gif_pixels<W: Write>(
             out
         };
 
-        writer.write_all(&[0x21, 0xF9, 4, 0x00])?;
-        writer.write_all(&total_delay.to_le_bytes())?;
-        writer.write_all(&[0, 0])?;
-
-        writer.write_all(&[0x2C])?;
-        writer.write_all(&0u16.to_le_bytes())?;
-        writer.write_all(&0u16.to_le_bytes())?;
-        writer.write_all(&out_w.to_le_bytes())?;
-        writer.write_all(&out_h.to_le_bytes())?;
-        writer.write_all(&[0x00])?;
-
-        // LZW Minimum Code Size — required between Image Descriptor and the
-        // sub-block stream. For an 8-bit palette this is 8.
-        writer.write_all(&[8])?;
-
-        let compressed = encoder.encode(&scaled);
-        let mut pos = 0;
-        while pos < compressed.len() {
-            let chunk_len = (compressed.len() - pos).min(255);
-            writer.write_all(&[chunk_len as u8])?;
-            writer.write_all(&compressed[pos..pos + chunk_len])?;
-            pos += chunk_len;
-        }
-        writer.write_all(&[0])?;
-
+        gif.write_frame(&scaled, total_delay, out_w, out_h)?;
         prev_native = native;
     }
 
-    writer.write_all(&[0x3B])?;
-    writer.flush()?;
-    Ok(())
+    gif.finish()
 }
 
 // ---------------------------------------------------------------------------
