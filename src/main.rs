@@ -622,6 +622,14 @@ fn start_transition(transition: &mut TransitionState, next_anim_index: usize) {
     };
 }
 
+/// Spawn an animation by name. The caller has already validated the name
+/// against ANIMATION_NAMES (CLI arg, arrow keys, cycle timer, external
+/// control), so an unknown name here is a programming error, not user input.
+fn spawn_animation(name: &str, width: usize, height: usize, scale: f64) -> Box<dyn Animation> {
+    animations::create(name, width, height, scale)
+        .unwrap_or_else(|| panic!("animation {name:?} not found (name should be validated first)"))
+}
+
 #[allow(clippy::too_many_arguments)]
 fn run_loop(
     initial_anim: &str,
@@ -669,15 +677,12 @@ fn run_loop(
         color_mode,
     );
     let mut anim: Box<dyn Animation> =
-        animations::create(initial_anim, temp_canvas.width, temp_canvas.height, scale)
-            .expect("animation name validated before calling create");
+        spawn_animation(initial_anim, temp_canvas.width, temp_canvas.height, scale);
     let mut render_mode = explicit_render.unwrap_or_else(|| anim.preferred_render());
     let mut canvas = Canvas::new(cols as usize, display_rows, render_mode, color_mode);
     canvas.color_quant = color_quant;
     canvas.dither = dither;
-    anim = animations::create(initial_anim, canvas.width, canvas.height, scale)
-        .expect("animation name validated before calling create");
-    anim.on_resize(canvas.width, canvas.height);
+    anim = spawn_animation(initial_anim, canvas.width, canvas.height, scale);
 
     let mut anim_index = animations::ANIMATION_NAMES
         .iter()
@@ -862,14 +867,12 @@ fn run_loop(
                 canvas = Canvas::new(cols as usize, display_rows, render_mode, color_mode);
                 canvas.color_quant = color_quant;
                 canvas.dither = dither;
-                anim = animations::create(
+                anim = spawn_animation(
                     animations::ANIMATION_NAMES[anim_index],
                     canvas.width,
                     canvas.height,
                     scale,
-                )
-                .expect("animation name validated before calling create");
-                anim.on_resize(canvas.width, canvas.height);
+                );
                 // No clear screen — next frame overwrites everything.
                 // Clearing here with a blocking flush can lock up in tmux
                 // when the output buffer is full from the previous frame.
@@ -914,14 +917,12 @@ fn run_loop(
         // Handle scale change from external params
         if let Some(new_scale) = ext_state.take_scale_change() {
             scale = new_scale.clamp(0.5, 2.0);
-            anim = animations::create(
+            anim = spawn_animation(
                 animations::ANIMATION_NAMES[anim_index],
                 canvas.width,
                 canvas.height,
                 scale,
-            )
-            .expect("animation name validated before calling create");
-            anim.on_resize(canvas.width, canvas.height);
+            );
             prev_grid = None;
         }
 
@@ -974,14 +975,12 @@ fn run_loop(
             } => {
                 let factor = *remaining as f64 / TRANSITION_FRAMES as f64;
                 if *remaining == 0 {
-                    anim = animations::create(
+                    anim = spawn_animation(
                         animations::ANIMATION_NAMES[*next_anim_index],
                         canvas.width,
                         canvas.height,
                         scale,
-                    )
-                    .expect("animation name validated before calling create");
-                    anim.on_resize(canvas.width, canvas.height);
+                    );
                     if explicit_render.is_none() {
                         render_mode = anim.preferred_render();
                         needs_rebuild = true;
