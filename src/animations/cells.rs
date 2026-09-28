@@ -33,12 +33,12 @@ pub struct Cells {
     cells: Vec<Cell>,
     max_cells: usize,
     fluid_time: f64,
-    rng: rand::rngs::ThreadRng,
+    rng: rand::rngs::StdRng,
 }
 
 impl Cells {
     pub fn new(width: usize, height: usize, scale: f64) -> Self {
-        let mut rng = rand::rng();
+        let mut rng = crate::rng::new_rng();
         let initial = 5;
         let cells = (0..initial)
             .map(|_| make_cell(&mut rng, width, height))
@@ -50,7 +50,7 @@ impl Cells {
             cells,
             max_cells: (35.0 * scale) as usize,
             fluid_time: 0.0,
-            rng: rand::rng(),
+            rng: crate::rng::new_rng(),
         }
     }
 }

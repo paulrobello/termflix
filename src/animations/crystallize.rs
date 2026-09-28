@@ -12,7 +12,7 @@ pub struct Crystallize {
     growth_timer: f64,
     steps_per_frame: usize,
     color_cycle: f64,
-    rng: rand::rngs::ThreadRng,
+    rng: rand::rngs::StdRng,
 }
 
 impl Crystallize {
@@ -26,7 +26,7 @@ impl Crystallize {
         }
 
         let walker_count = (200.0 * scale) as usize;
-        let mut rng = rand::rng();
+        let mut rng = crate::rng::new_rng();
         let walkers = (0..walker_count)
             .map(|_| {
                 let angle = rng.random_range(0.0..std::f64::consts::TAU);
@@ -45,7 +45,7 @@ impl Crystallize {
             growth_timer: 0.0,
             steps_per_frame: (50.0 * scale) as usize,
             color_cycle: 0.0,
-            rng: rand::rng(),
+            rng: crate::rng::new_rng(),
         }
     }
 }

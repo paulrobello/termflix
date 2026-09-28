@@ -9,7 +9,7 @@ pub struct Fire {
     buffer: Vec<f64>,
     /// Heat rate: controls how hot the bottom row burns (0.0 = cold, 1.0 = normal, 2.0 = intense)
     heat_rate: f64,
-    rng: rand::rngs::ThreadRng,
+    rng: rand::rngs::StdRng,
 }
 
 impl Fire {
@@ -27,7 +27,7 @@ impl Fire {
             height,
             buffer,
             heat_rate: 0.8,
-            rng: rand::rng(),
+            rng: crate::rng::new_rng(),
         }
     }
 }

@@ -19,12 +19,12 @@ pub struct FlowField {
     noise: Perlin,
     trail: Vec<f64>,
     trail_colors: Vec<(u8, u8, u8)>,
-    rng: rand::rngs::ThreadRng,
+    rng: rand::rngs::StdRng,
 }
 
 impl FlowField {
     pub fn new(width: usize, height: usize, scale: f64) -> Self {
-        let mut rng = rand::rng();
+        let mut rng = crate::rng::new_rng();
         let num_particles = ((width * height) as f64 / 60.0 * scale) as usize;
         let particles = (0..num_particles)
             .map(|_| {
@@ -48,7 +48,7 @@ impl FlowField {
             noise: Perlin::new(rng.random_range(0..u32::MAX)),
             trail: vec![0.0; size],
             trail_colors: vec![(0, 0, 0); size],
-            rng: rand::rng(),
+            rng: crate::rng::new_rng(),
         }
     }
 }

@@ -9,7 +9,7 @@ pub struct Campfire {
     height: usize,
     fire_buf: Vec<f64>,
     embers: ParticleSystem,
-    rng: rand::rngs::ThreadRng,
+    rng: rand::rngs::StdRng,
 }
 
 impl Campfire {
@@ -59,7 +59,7 @@ impl Campfire {
             height,
             fire_buf: vec![0.0; width * height],
             embers: ParticleSystem::new(ember_config, (500.0 * scale) as usize),
-            rng: rand::rng(),
+            rng: crate::rng::new_rng(),
         }
     }
 }

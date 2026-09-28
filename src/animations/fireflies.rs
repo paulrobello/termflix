@@ -17,12 +17,12 @@ pub struct Fireflies {
     width: usize,
     height: usize,
     flies: Vec<Firefly>,
-    rng: rand::rngs::ThreadRng,
+    rng: rand::rngs::StdRng,
 }
 
 impl Fireflies {
     pub fn new(width: usize, height: usize, scale: f64) -> Self {
-        let mut rng = rand::rng();
+        let mut rng = crate::rng::new_rng();
         let count = ((width * height) as f64 / 200.0 * scale) as usize;
         let flies = (0..count.max(10))
             .map(|_| Firefly {
@@ -40,7 +40,7 @@ impl Fireflies {
             width,
             height,
             flies,
-            rng: rand::rng(),
+            rng: crate::rng::new_rng(),
         }
     }
 }

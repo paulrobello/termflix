@@ -76,7 +76,7 @@ pub struct Boids {
 
 impl Boids {
     pub fn new(width: usize, height: usize, scale: f64) -> Self {
-        let mut rng = rand::rng();
+        let mut rng = crate::rng::new_rng();
         let count = (((width * height) as f64 / 150.0 * scale) as usize).clamp(20, 300);
         let boids = (0..count)
             .map(|_| {

@@ -32,7 +32,7 @@ pub struct FlappyBird {
     pipe_spacing: f64,
     gap_size: f64,
 
-    rng: rand::rngs::ThreadRng,
+    rng: rand::rngs::StdRng,
 }
 
 impl FlappyBird {
@@ -52,7 +52,7 @@ impl FlappyBird {
             pipe_speed: 0.0,
             pipe_spacing: 0.0,
             gap_size: 0.0,
-            rng: rand::rng(),
+            rng: crate::rng::new_rng(),
         };
         fb.tune_params();
         fb

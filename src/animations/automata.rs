@@ -91,7 +91,7 @@ pub struct Automata {
     cycle_duration: f64,
     /// Generation counter for current ruleset
     generation: u64,
-    rng: rand::rngs::ThreadRng,
+    rng: rand::rngs::StdRng,
 }
 
 /// Map cell age to a warm color: red -> orange -> yellow -> white.
@@ -120,7 +120,7 @@ impl Automata {
             cycle_timer: 0.0,
             cycle_duration: 17.0,
             generation: 0,
-            rng: rand::rng(),
+            rng: crate::rng::new_rng(),
         };
         automata.seed_grid();
         automata
