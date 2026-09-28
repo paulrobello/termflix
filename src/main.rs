@@ -670,19 +670,13 @@ fn run_loop(
     } else {
         (rows as usize).saturating_sub(1)
     };
-    let temp_canvas = Canvas::new(
-        cols as usize,
-        display_rows,
-        RenderMode::HalfBlock,
-        color_mode,
-    );
-    let mut anim: Box<dyn Animation> =
-        spawn_animation(initial_anim, temp_canvas.width, temp_canvas.height, scale);
-    let mut render_mode = explicit_render.unwrap_or_else(|| anim.preferred_render());
+    let mut render_mode =
+        explicit_render.unwrap_or_else(|| animations::preferred_render(initial_anim));
     let mut canvas = Canvas::new(cols as usize, display_rows, render_mode, color_mode);
     canvas.color_quant = color_quant;
     canvas.dither = dither;
-    anim = spawn_animation(initial_anim, canvas.width, canvas.height, scale);
+    let mut anim: Box<dyn Animation> =
+        spawn_animation(initial_anim, canvas.width, canvas.height, scale);
 
     let mut anim_index = animations::ANIMATION_NAMES
         .iter()

@@ -110,6 +110,18 @@ macro_rules! declare_animations {
     }
 }
 
+/// Preferred render mode for a named animation, without constructing it.
+/// Covers only the impls that override the trait default (HalfBlock);
+/// kept in sync with the impls by `test_registry_preferred_render_matches_impls`.
+pub fn preferred_render(name: &str) -> RenderMode {
+    match name {
+        "crystallize" | "dragon" | "flow" | "life" | "lightning" | "mandelbrot" | "particles"
+        | "sierpinski" | "starfield" => RenderMode::Braille,
+        "dna" | "garden" | "hackerman" | "matrix" => RenderMode::Ascii,
+        _ => RenderMode::HalfBlock,
+    }
+}
+
 declare_animations! {
     ("fire", fire::Fire, "Doom-style fire effect with heat propagation"),
     ("matrix", matrix::Matrix, "Matrix digital rain with trailing drops"),
@@ -202,6 +214,18 @@ mod tests {
             assert_eq!(
                 name, anim_name,
                 "ANIMATION_NAMES and ANIMATIONS are out of sync at {name}"
+            );
+        }
+    }
+
+    #[test]
+    fn test_registry_preferred_render_matches_impls() {
+        for &name in ANIMATION_NAMES {
+            let anim = create(name, 80, 24, 1.0).unwrap();
+            assert_eq!(
+                preferred_render(name),
+                anim.preferred_render(),
+                "{name}: registry preferred_render drifted from the Animation impl"
             );
         }
     }
