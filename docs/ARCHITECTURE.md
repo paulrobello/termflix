@@ -316,7 +316,7 @@ The per-frame pipeline after `update()` is: `apply_smoothing()` (opt-in) → `ap
 | Vignette | `vignette` (0.0–1.0) | Edge darkening that attenuates brightness based on distance from the canvas center, using a quadratic falloff. |
 | Scanlines | `scanlines` (bool) | CRT-style effect that darkens every other row by 30%. |
 
-These effects are configured via CLI flags (`--bloom-intensity`, `--bloom-threshold`, `--vignette`, `--scanlines`) or the `[postproc]` section in the config file. Bloom is enabled by default at 0.4 intensity with a 0.6 threshold.
+These effects are configured via CLI flags (`--bloom-intensity`, `--bloom-threshold`, `--vignette`, `--scanlines`) or the `[postproc]` section in the config file. Bloom is **off** by default (`bloom: 0.0`); it only turns on when set via `--bloom-intensity` or `postproc.bloom`. The `b` key toggles bloom at runtime — on to the configured intensity, or 0.4 when none is configured — and the `s` key toggles temporal smoothing the same way (on to the configured `smoothing`, or 0.1). The bloom threshold defaults to 0.6 either way.
 
 ### Color Assist
 
@@ -530,7 +530,7 @@ All `Config` struct fields are `Option<T>` and deserialized from TOML. A missing
 | `dither` | bool | `false` | 4×4 Bayer ordered dithering in ANSI-256 mode |
 | `data_file` | string | — | Path to ndjson external control file |
 | `keybindings` | table | — | Custom keybindings (maps action names to key names) |
-| `postproc.bloom` | float | `0.4` | Bloom/glow intensity (0.0–1.0) |
+| `postproc.bloom` | float | — (off) | Bloom/glow intensity (0.0–1.0); unset means bloom stays off until the `b` key toggles it on (at 0.4 when no value is configured) |
 | `postproc.bloom_threshold` | float | `0.6` | Brightness threshold to trigger bloom (0.0–1.0) |
 | `postproc.vignette` | float | `0.0` | Edge darkening (0.0–1.0) |
 | `postproc.scanlines` | bool | `false` | CRT scanline effect |
