@@ -5,10 +5,6 @@ use rand::RngExt;
 
 /// A single cellular automaton ruleset defined in B/S notation.
 struct Ruleset {
-    #[allow(dead_code)]
-    name: &'static str,
-    #[allow(dead_code)]
-    notation: &'static str,
     /// Birth rules: neighbor counts that birth a dead cell
     birth: [bool; 9],
     /// Survival rules: neighbor counts that keep a live cell alive
@@ -16,12 +12,7 @@ struct Ruleset {
 }
 
 impl Ruleset {
-    const fn new(
-        name: &'static str,
-        notation: &'static str,
-        birth_counts: &[u8],
-        survival_counts: &[u8],
-    ) -> Self {
+    const fn new(birth_counts: &[u8], survival_counts: &[u8]) -> Self {
         let mut birth = [false; 9];
         let mut survival = [false; 9];
         let mut i = 0;
@@ -34,12 +25,7 @@ impl Ruleset {
             survival[survival_counts[i] as usize] = true;
             i += 1;
         }
-        Ruleset {
-            name,
-            notation,
-            birth,
-            survival,
-        }
+        Ruleset { birth, survival }
     }
 
     fn next_state(&self, alive: bool, neighbors: u8) -> bool {
@@ -53,17 +39,12 @@ impl Ruleset {
 }
 
 const RULESETS: &[Ruleset] = &[
-    Ruleset::new("Conway's Life", "B3/S23", &[3], &[2, 3]),
-    Ruleset::new("Highlife", "B36/S23", &[3, 6], &[2, 3]),
-    Ruleset::new(
-        "Day & Night",
-        "B3678/S34678",
-        &[3, 6, 7, 8],
-        &[3, 4, 6, 7, 8],
-    ),
-    Ruleset::new("Seeds", "B2/S", &[2], &[]),
-    Ruleset::new("Diamoeba", "B35678/S5678", &[3, 5, 6, 7, 8], &[5, 6, 7, 8]),
-    Ruleset::new("Replicator", "B1357/S1357", &[1, 3, 5, 7], &[1, 3, 5, 7]),
+    Ruleset::new(&[3], &[2, 3]),                   // Conway's Life B3/S23
+    Ruleset::new(&[3, 6], &[2, 3]),                // Highlife B36/S23
+    Ruleset::new(&[3, 6, 7, 8], &[3, 4, 6, 7, 8]), // Day & Night B3678/S34678
+    Ruleset::new(&[2], &[]),                       // Seeds B2/S
+    Ruleset::new(&[3, 5, 6, 7, 8], &[5, 6, 7, 8]), // Diamoeba B35678/S5678
+    Ruleset::new(&[1, 3, 5, 7], &[1, 3, 5, 7]),    // Replicator B1357/S1357
 ];
 
 /// Maximum cell age before color stops shifting (caps gradient lookup).

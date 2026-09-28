@@ -71,12 +71,6 @@ impl Recorder {
     pub fn frame_count(&self) -> usize {
         self.frames.len()
     }
-
-    /// Access the recorded frames.
-    #[allow(dead_code)]
-    pub fn frames(&self) -> &[Frame] {
-        &self.frames
-    }
 }
 
 /// Plays back a recorded .asciianim file.

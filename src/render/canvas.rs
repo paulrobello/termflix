@@ -112,7 +112,7 @@ impl Canvas {
 
     /// Set a pixel (sub-cell coordinates). Bounds-checked.
     #[inline]
-    #[allow(dead_code)]
+    #[cfg(test)]
     pub fn set(&mut self, x: usize, y: usize, brightness: f64) {
         if x < self.width && y < self.height {
             self.pixels[y * self.width + x] = brightness;

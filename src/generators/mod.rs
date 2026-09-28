@@ -238,16 +238,4 @@ impl ParticleSystem {
             }
         }
     }
-
-    /// Number of active particles.
-    #[allow(dead_code)]
-    pub fn count(&self) -> usize {
-        self.particles.len()
-    }
-
-    /// Clear all particles.
-    #[allow(dead_code)]
-    pub fn clear(&mut self) {
-        self.particles.clear();
-    }
 }

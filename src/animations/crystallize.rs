@@ -51,30 +51,6 @@ impl Crystallize {
 }
 
 impl Crystallize {
-    #[allow(dead_code)]
-    fn has_neighbor(&self, x: usize, y: usize) -> bool {
-        let w = self.width;
-        let h = self.height;
-        for dy in -1i32..=1 {
-            for dx in -1i32..=1 {
-                if dx == 0 && dy == 0 {
-                    continue;
-                }
-                let nx = x as i32 + dx;
-                let ny = y as i32 + dy;
-                if nx >= 0
-                    && nx < w as i32
-                    && ny >= 0
-                    && ny < h as i32
-                    && self.grid[ny as usize * w + nx as usize] > 0
-                {
-                    return true;
-                }
-            }
-        }
-        false
-    }
-
     fn crystal_filled(&self) -> f64 {
         let total = self.width * self.height;
         if total == 0 {
