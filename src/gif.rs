@@ -308,9 +308,11 @@ impl Palette {
         let mut best_idx: u8 = 0;
         let mut best_dist: u32 = u32::MAX;
         for (i, &(pr, pg, pb)) in self.entries.iter().enumerate() {
-            let dr = (r as i32 - pr as i32) as u32;
-            let dg = (g as i32 - pg as i32) as u32;
-            let db = (b as i32 - pb as i32) as u32;
+            // Absolute channel differences; the i32->u32 cast on a negative
+            // difference would wrap to ~4e9 and overflow when squared.
+            let dr = (r as i32 - pr as i32).unsigned_abs();
+            let dg = (g as i32 - pg as i32).unsigned_abs();
+            let db = (b as i32 - pb as i32).unsigned_abs();
             let dist = dr * dr + dg * dg + db * db;
             if dist < best_dist {
                 best_dist = dist;
@@ -839,6 +841,24 @@ mod tests {
     fn test_palette_nearest_white() {
         let palette = Palette::new();
         let idx = palette.find_nearest(255, 255, 255);
+        let (r, g, b) = palette.entries[idx as usize];
+        assert_eq!((r, g, b), (255, 255, 255));
+    }
+
+    #[test]
+    fn test_palette_nearest_off_palette_color_no_overflow() {
+        // Off-palette color whose channels sit below many palette entries:
+        // the distance loop must handle negative channel differences.
+        let palette = Palette::new();
+        let _ = palette.find_nearest(10, 200, 30);
+    }
+
+    #[test]
+    fn test_palette_nearest_prefers_closest_entry() {
+        let palette = Palette::new();
+        // (250, 250, 250) is 3x5 away from white (255,255,255) and much
+        // farther from gray ramp entries; nearest must resolve to white.
+        let idx = palette.find_nearest(250, 250, 250);
         let (r, g, b) = palette.entries[idx as usize];
         assert_eq!((r, g, b), (255, 255, 255));
     }
