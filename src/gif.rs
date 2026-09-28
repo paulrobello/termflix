@@ -6,6 +6,36 @@
 
 use std::io::Write;
 
+/// Upper bounds on recording-derived dimensions accepted by the GIF exporters.
+/// GIF dimension fields are u16; these tighter limits also cap the per-frame
+/// pixel buffers, so a crafted recording cannot request gigabytes of cells.
+pub const MAX_GIF_COLS: usize = 2048;
+pub const MAX_GIF_ROWS: usize = 2048;
+
+fn invalid_gif_dims(cols: usize, rows: usize) -> std::io::Error {
+    std::io::Error::new(
+        std::io::ErrorKind::InvalidInput,
+        format!("GIF dimensions {cols}x{rows} out of range (max {MAX_GIF_COLS}x{MAX_GIF_ROWS})"),
+    )
+}
+
+/// Validate recording-derived dimensions: nonzero, within the GIF size budget,
+/// and exactly representable as u16.
+fn validate_gif_dims(cols: usize, rows: usize) -> std::io::Result<(u16, u16, usize)> {
+    if cols == 0 || rows == 0 {
+        return Err(invalid_gif_dims(cols, rows));
+    }
+    let width = u16::try_from(cols).map_err(|_| invalid_gif_dims(cols, rows))?;
+    let height = u16::try_from(rows).map_err(|_| invalid_gif_dims(cols, rows))?;
+    let pixel_count = cols
+        .checked_mul(rows)
+        .ok_or_else(|| invalid_gif_dims(cols, rows))?;
+    if pixel_count > MAX_GIF_COLS * MAX_GIF_ROWS {
+        return Err(invalid_gif_dims(cols, rows));
+    }
+    Ok((width, height, pixel_count))
+}
+
 // ---------------------------------------------------------------------------
 // Virtual terminal — decodes ANSI sequences produced by termflix's renderer
 // ---------------------------------------------------------------------------
@@ -500,9 +530,7 @@ pub fn export_gif<W: Write>(
     term_rows: usize,
 ) -> std::io::Result<()> {
     let palette = Palette::new();
-    let width = term_cols as u16;
-    let height = term_rows as u16;
-    let pixel_count = term_cols * term_rows;
+    let (width, height, pixel_count) = validate_gif_dims(term_cols, term_rows)?;
 
     // Build palette bytes — GIF requires power-of-2 table size, so round up to 256
     let mut pal_bytes = [0u8; 768]; // 256 * 3
@@ -678,10 +706,25 @@ pub fn export_gif_pixels<W: Write>(
 ) -> std::io::Result<()> {
     assert!(scale >= 1, "scale must be >= 1");
     let palette = Palette::new();
-    let out_w = (width * scale) as u16;
-    let out_h = (height * scale) as u16;
-    let native_count = width * height;
-    let scaled_count = width * scale * height * scale;
+    let out_w = u16::try_from(
+        width
+            .checked_mul(scale)
+            .ok_or_else(|| invalid_gif_dims(width, height))?,
+    )
+    .map_err(|_| invalid_gif_dims(width, height))?;
+    let out_h = u16::try_from(
+        height
+            .checked_mul(scale)
+            .ok_or_else(|| invalid_gif_dims(width, height))?,
+    )
+    .map_err(|_| invalid_gif_dims(width, height))?;
+    let native_count = width
+        .checked_mul(height)
+        .ok_or_else(|| invalid_gif_dims(width, height))?;
+    let scaled_count = native_count
+        .checked_mul(scale)
+        .and_then(|c| c.checked_mul(scale))
+        .ok_or_else(|| invalid_gif_dims(width, height))?;
 
     let mut pal_bytes = [0u8; 768];
     for (i, &(r, g, b)) in palette.entries.iter().enumerate() {
@@ -1110,5 +1153,43 @@ mod tests {
         // Count image separators (0x2C)
         let image_count = buf.iter().filter(|&&b| b == 0x2C).count();
         assert_eq!(image_count, 1);
+    }
+}
+
+#[cfg(test)]
+mod sec001_tests {
+    use super::*;
+
+    #[test]
+    fn export_gif_rejects_oversize_dims() {
+        let mut buf = Vec::new();
+        let frames = [crate::record::Frame {
+            timestamp_ms: 0,
+            content: String::new(),
+        }];
+        let err = export_gif(&mut buf, &frames, 70_000, 70_000).unwrap_err();
+        assert_eq!(err.kind(), std::io::ErrorKind::InvalidInput);
+    }
+
+    #[test]
+    fn export_gif_rejects_zero_dims() {
+        let mut buf = Vec::new();
+        let frames = [crate::record::Frame {
+            timestamp_ms: 0,
+            content: String::new(),
+        }];
+        let err = export_gif(&mut buf, &frames, 0, 0).unwrap_err();
+        assert_eq!(err.kind(), std::io::ErrorKind::InvalidInput);
+    }
+
+    #[test]
+    fn export_gif_accepts_max_dims() {
+        let mut buf = Vec::new();
+        let frames = [crate::record::Frame {
+            timestamp_ms: 0,
+            content: String::new(),
+        }];
+        export_gif(&mut buf, &frames, MAX_GIF_COLS, MAX_GIF_ROWS).unwrap();
+        assert!(buf.starts_with(b"GIF89a"));
     }
 }

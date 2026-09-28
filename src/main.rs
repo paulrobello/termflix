@@ -1204,10 +1204,10 @@ fn detect_recording_size(frames: &[record::Frame]) -> (usize, usize) {
                     let parts: Vec<&str> = s.split(';').collect();
                     if parts.len() >= 2 {
                         if let Ok(r) = parts[0].parse::<usize>() {
-                            max_row = max_row.max(r);
+                            max_row = max_row.max(r.min(gif::MAX_GIF_ROWS));
                         }
                         if let Ok(c) = parts[1].parse::<usize>() {
-                            max_col = max_col.max(c);
+                            max_col = max_col.max(c.min(gif::MAX_GIF_COLS));
                         }
                     }
                 }
@@ -1324,5 +1324,41 @@ fn build_keybindings(cfg: &config::Config) -> KeyBindings {
             .and_then(|s| parse_key_binding(s))
             .map(|(c, _)| vec![c])
             .unwrap_or(defaults.status),
+    }
+}
+
+#[cfg(test)]
+mod detect_size_tests {
+    use super::*;
+
+    fn frame(content: &str) -> record::Frame {
+        record::Frame {
+            timestamp_ms: 0,
+            content: content.to_string(),
+        }
+    }
+
+    #[test]
+    fn clamps_oversized_cursor_moves() {
+        let frames = [frame("\x1b[70000;70000H")];
+        assert_eq!(
+            detect_recording_size(&frames),
+            (gif::MAX_GIF_COLS, gif::MAX_GIF_ROWS)
+        );
+    }
+
+    #[test]
+    fn clamps_u32_wrap_cursor_moves() {
+        let frames = [frame("\x1b[4294967296;4294967296H")];
+        assert_eq!(
+            detect_recording_size(&frames),
+            (gif::MAX_GIF_COLS, gif::MAX_GIF_ROWS)
+        );
+    }
+
+    #[test]
+    fn keeps_normal_cursor_moves() {
+        let frames = [frame("\x1b[10;120H")];
+        assert_eq!(detect_recording_size(&frames), (120, 24));
     }
 }
