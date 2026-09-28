@@ -136,10 +136,10 @@ pub struct Garden {
     height: usize,
     scale: f64,
     bloom_timer: Option<f64>, // Some(t) = seconds since all plants fully bloomed
-    rng: rand::rngs::ThreadRng,
+    rng: rand::rngs::StdRng,
 }
 
-fn gen_plants(rng: &mut rand::rngs::ThreadRng, width: usize, scale: f64) -> Vec<Plant> {
+fn gen_plants(rng: &mut impl rand::RngExt, width: usize, scale: f64) -> Vec<Plant> {
     let num_plants = ((width as f64 / 8.0) * scale).clamp(3.0, 20.0) as usize;
     let slots = (num_plants + 1) as f64;
     (0..num_plants)
@@ -175,7 +175,7 @@ fn gen_plants(rng: &mut rand::rngs::ThreadRng, width: usize, scale: f64) -> Vec<
 
 impl Garden {
     pub fn new(width: usize, height: usize, scale: f64) -> Self {
-        let mut rng = rand::rng();
+        let mut rng = crate::rng::new_rng();
 
         let plants = gen_plants(&mut rng, width, scale);
 
@@ -200,7 +200,7 @@ impl Garden {
             height,
             scale,
             bloom_timer: None,
-            rng: rand::rng(),
+            rng: crate::rng::new_rng(),
         }
     }
 }

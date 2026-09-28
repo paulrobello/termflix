@@ -11,7 +11,7 @@ pub struct Fountain {
     splashes: ParticleSystem,
     mist: ParticleSystem,
     emit_accum: f64,
-    rng: rand::rngs::ThreadRng,
+    rng: rand::rngs::StdRng,
 }
 
 impl Fountain {
@@ -122,7 +122,7 @@ impl Fountain {
             splashes: ParticleSystem::new(splash_config, (2000.0 * scale) as usize),
             mist: ParticleSystem::new(mist_config, (500.0 * scale) as usize),
             emit_accum: 0.0,
-            rng: rand::rng(),
+            rng: crate::rng::new_rng(),
         }
     }
 }

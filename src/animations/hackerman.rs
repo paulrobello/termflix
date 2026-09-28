@@ -45,7 +45,7 @@ pub struct Hackerman {
     bytes_count: u64,
     threats_count: u32,
     uptime_secs: f64,
-    rng: rand::rngs::ThreadRng,
+    rng: rand::rngs::StdRng,
 }
 
 const LOG_MSGS: &[&str] = &[
@@ -99,7 +99,7 @@ fn rand_word(rng: &mut impl rand::RngExt) -> String {
 
 impl Hackerman {
     pub fn new(width: usize, height: usize, _scale: f64) -> Self {
-        let mut rng = rand::rng();
+        let mut rng = crate::rng::new_rng();
         let node_names = [
             "GATEWAY", "FIREWALL", "DB-01", "APP-SRV", "DNS", "PROXY", "TARGET", "C2",
         ];
@@ -148,7 +148,7 @@ impl Hackerman {
             bytes_count: 1_284_019,
             threats_count: 3,
             uptime_secs: 3847.0,
-            rng: rand::rng(),
+            rng: crate::rng::new_rng(),
         }
     }
 }

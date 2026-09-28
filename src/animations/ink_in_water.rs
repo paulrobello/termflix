@@ -34,6 +34,7 @@ pub struct InkInWater {
     noise: Perlin,
     puff_timer: f64,
     step_timer: f64,
+    rng: rand::rngs::StdRng,
 }
 
 impl InkInWater {
@@ -47,9 +48,10 @@ impl InkInWater {
             density: vec![0.0; n],
             color: vec![(0.0, 0.0, 0.0); n],
             particles: Vec::new(),
-            noise: Perlin::new(rand::rng().random_range(0..u32::MAX)),
+            noise: Perlin::new(crate::rng::new_rng().random_range(0..u32::MAX)),
             puff_timer: 0.0,
             step_timer: 0.0,
+            rng: crate::rng::new_rng(),
         };
         for _ in 0..3 {
             ink.spawn_puff();
@@ -59,7 +61,7 @@ impl InkInWater {
 
     /// Spawn a single colored ink puff at a random location.
     fn spawn_puff(&mut self) {
-        let mut rng = rand::rng();
+        let rng = &mut self.rng;
         let cx = rng.random_range(self.width as f64 * 0.25..self.width as f64 * 0.75);
         let cy = rng.random_range(self.height as f64 * 0.25..self.height as f64 * 0.75);
         let hue = rng.random_range(0.0..1.0);

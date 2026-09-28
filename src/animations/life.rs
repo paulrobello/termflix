@@ -16,13 +16,13 @@ pub struct GameOfLife {
     // Track previous state hash for oscillator detection
     prev_hash: u64,
     hash_stable_count: u32,
-    rng: rand::rngs::ThreadRng,
+    rng: rand::rngs::StdRng,
 }
 
 impl GameOfLife {
     #[allow(unused_variables)]
     pub fn new(width: usize, height: usize, _scale: f64) -> Self {
-        let mut rng = rand::rng();
+        let mut rng = crate::rng::new_rng();
         let size = width * height;
         let density = rng.random_range(0.2..0.5); // vary initial density
         let cells: Vec<bool> = (0..size)
@@ -40,7 +40,7 @@ impl GameOfLife {
             stable_count: 0,
             prev_hash: 0,
             hash_stable_count: 0,
-            rng: rand::rng(),
+            rng: crate::rng::new_rng(),
         }
     }
 

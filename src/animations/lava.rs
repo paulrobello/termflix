@@ -15,12 +15,12 @@ pub struct Lava {
     width: usize,
     height: usize,
     blobs: Vec<Blob>,
-    rng: rand::rngs::ThreadRng,
+    rng: rand::rngs::StdRng,
 }
 
 impl Lava {
     pub fn new(width: usize, height: usize, scale: f64) -> Self {
-        let mut rng = rand::rng();
+        let mut rng = crate::rng::new_rng();
         let count = (8.0 * scale) as usize;
         let w = width as f64;
         let h = height as f64;
@@ -37,7 +37,7 @@ impl Lava {
             width,
             height,
             blobs,
-            rng: rand::rng(),
+            rng: crate::rng::new_rng(),
         }
     }
 }

@@ -30,7 +30,7 @@ pub struct Invaders {
     shoot_timer: f64,
     alien_shoot_timer: f64,
     wave: usize,
-    rng: rand::rngs::ThreadRng,
+    rng: rand::rngs::StdRng,
 }
 
 impl Invaders {
@@ -48,7 +48,7 @@ impl Invaders {
             shoot_timer: 0.0,
             alien_shoot_timer: 0.0,
             wave: 0,
-            rng: rand::rng(),
+            rng: crate::rng::new_rng(),
         };
         inv.spawn_wave();
         inv

@@ -31,6 +31,7 @@ pub struct Galton {
     n_rows: i32,
     spawn_timer: f64,
     total_collected: usize,
+    rng: rand::rngs::StdRng,
 }
 
 impl Galton {
@@ -43,6 +44,7 @@ impl Galton {
             n_rows: 0,
             spawn_timer: 0.0,
             total_collected: 0,
+            rng: crate::rng::new_rng(),
         }
     }
 
@@ -85,7 +87,7 @@ impl Animation for Galton {
         self.n_rows = n_rows;
 
         canvas.clear();
-        let mut rng = rand::rng();
+        let rng = &mut self.rng;
 
         // Spawn new balls from the hopper.
         self.spawn_timer += dt;
