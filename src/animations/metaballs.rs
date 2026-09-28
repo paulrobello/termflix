@@ -17,12 +17,12 @@ pub struct Metaballs {
     width: usize,
     height: usize,
     balls: Vec<Ball>,
-    rng: rand::rngs::ThreadRng,
+    rng: rand::rngs::StdRng,
 }
 
 impl Metaballs {
     pub fn new(width: usize, height: usize, scale: f64) -> Self {
-        let mut rng = rand::rng();
+        let mut rng = crate::rng::new_rng();
         let count = ((4.0 + 2.0 * scale).clamp(4.0, 6.0)) as usize;
         let w = width as f64;
         let h = height as f64;
@@ -44,7 +44,7 @@ impl Metaballs {
             width,
             height,
             balls,
-            rng: rand::rng(),
+            rng: crate::rng::new_rng(),
         }
     }
 }

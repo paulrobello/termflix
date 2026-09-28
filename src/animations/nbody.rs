@@ -31,6 +31,7 @@ pub struct NBody {
     width: usize,
     height: usize,
     bodies: Vec<Body>,
+    rng: rand::rngs::StdRng,
 }
 
 impl NBody {
@@ -39,13 +40,14 @@ impl NBody {
             width,
             height,
             bodies: Vec::new(),
+            rng: crate::rng::new_rng(),
         };
         sim.spawn_initial_bodies();
         sim
     }
 
     fn spawn_initial_bodies(&mut self) {
-        let mut rng = rand::rng();
+        let rng = &mut self.rng;
         let count = rng.random_range(5..=8) as usize;
         let cx = self.width as f64 * 0.5;
         let cy = self.height as f64 * 0.5;
@@ -79,7 +81,7 @@ impl NBody {
     }
 
     fn spawn_body(&mut self) {
-        let mut rng = rand::rng();
+        let rng = &mut self.rng;
         let angle = rng.random_range(0.0..std::f64::consts::TAU);
         // Below 15 cells the 0.4 factor undercuts the 5.0 minimum; keep the
         // range non-empty so tiny canvases don't panic on respawn.

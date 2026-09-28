@@ -15,12 +15,12 @@ pub struct Pong {
     right_score: u32,
     serve_timer: f64,
     speed_mult: f64,
-    rng: rand::rngs::ThreadRng,
+    rng: rand::rngs::StdRng,
 }
 
 impl Pong {
     pub fn new(width: usize, height: usize, _scale: f64) -> Self {
-        let mut rng = rand::rng();
+        let mut rng = crate::rng::new_rng();
         let w = width as f64;
         let h = height as f64;
         let dir: f64 = if rng.random_range(0u8..2) == 0 {
@@ -40,7 +40,7 @@ impl Pong {
             right_score: 0,
             serve_timer: 0.0,
             speed_mult: 1.0,
-            rng: rand::rng(),
+            rng: crate::rng::new_rng(),
         }
     }
 

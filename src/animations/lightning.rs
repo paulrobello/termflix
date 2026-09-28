@@ -15,7 +15,7 @@ pub struct Lightning {
     bolts: Vec<Bolt>,
     spawn_timer: f64,
     flash: f64,
-    rng: rand::rngs::ThreadRng,
+    rng: rand::rngs::StdRng,
 }
 
 impl Lightning {
@@ -27,7 +27,7 @@ impl Lightning {
             bolts: Vec::new(),
             spawn_timer: 0.0,
             flash: 0.0,
-            rng: rand::rng(),
+            rng: crate::rng::new_rng(),
         }
     }
 
@@ -64,7 +64,7 @@ impl Lightning {
         depth: u32,
         _width: usize,
         height: usize,
-        rng: &mut rand::rngs::ThreadRng,
+        rng: &mut impl rand::RngExt,
     ) {
         if depth > 5 || y > target_y {
             return;

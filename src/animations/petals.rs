@@ -21,12 +21,12 @@ pub struct Petals {
     wind: f64,
     wind_target: f64,
     wind_timer: f64,
-    rng: rand::rngs::ThreadRng,
+    rng: rand::rngs::StdRng,
 }
 
 impl Petals {
     pub fn new(width: usize, height: usize, scale: f64) -> Self {
-        let mut rng = rand::rng();
+        let mut rng = crate::rng::new_rng();
         let count = ((width * height) as f64 / 150.0 * scale) as usize;
         let petals = (0..count)
             .map(|_| Petal {
@@ -47,7 +47,7 @@ impl Petals {
             wind: 2.0,
             wind_target: 2.0,
             wind_timer: 0.0,
-            rng: rand::rng(),
+            rng: crate::rng::new_rng(),
         }
     }
 }

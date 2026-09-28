@@ -1,6 +1,5 @@
 use super::Animation;
 use crate::render::Canvas;
-use rand::RngExt;
 
 struct Drop {
     x: usize,
@@ -23,7 +22,7 @@ struct Layer {
 impl Layer {
     #[allow(clippy::too_many_arguments)]
     fn create_drops(
-        rng: &mut rand::rngs::ThreadRng,
+        rng: &mut impl rand::RngExt,
         count: usize,
         width: usize,
         height: usize,
@@ -46,7 +45,7 @@ impl Layer {
 /// A uniformly-random glyph for the digital rain, drawn from hiragana (U+3041–U+3096),
 /// katakana (U+30A1–U+30FA), ASCII `A–Z` / `a–z`, and digits `0–9`. Kana dominate by range
 /// size, with Latin/digits sprinkled in for the classic mixed Matrix-code look.
-fn random_glyph(rng: &mut rand::rngs::ThreadRng) -> char {
+fn random_glyph(rng: &mut impl rand::RngExt) -> char {
     const RANGES: &[(u32, u32)] = &[
         (0x3041, 0x3096), // hiragana (86)
         (0x30A1, 0x30FA), // katakana (90)
@@ -69,7 +68,7 @@ fn random_glyph(rng: &mut rand::rngs::ThreadRng) -> char {
 fn draw_layer(
     canvas: &mut Canvas,
     layer: &mut Layer,
-    rng: &mut rand::rngs::ThreadRng,
+    rng: &mut impl rand::RngExt,
     width: usize,
     height: usize,
     dt: f64,
@@ -132,12 +131,12 @@ pub struct Matrix {
     far_len: (usize, usize),
     mid_len: (usize, usize),
     near_len: (usize, usize),
-    rng: rand::rngs::ThreadRng,
+    rng: rand::rngs::StdRng,
 }
 
 impl Matrix {
     pub fn new(width: usize, height: usize, scale: f64) -> Self {
-        let mut rng = rand::rng();
+        let mut rng = crate::rng::new_rng();
 
         let far_count = ((width as f64 * 0.8) * scale) as usize;
         let mid_count = ((width as f64 * 0.5) * scale) as usize;
@@ -198,7 +197,7 @@ impl Matrix {
             far_len,
             mid_len,
             near_len,
-            rng: rand::rng(),
+            rng: crate::rng::new_rng(),
         }
     }
 }

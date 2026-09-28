@@ -39,7 +39,7 @@ pub struct Maze {
     solve_head: usize,
     display_timer: f64,
     steps_per_frame: usize,
-    rng: rand::rngs::ThreadRng,
+    rng: rand::rngs::StdRng,
 }
 
 impl Maze {
@@ -58,7 +58,7 @@ impl Maze {
             solve_head: 0,
             display_timer: 0.0,
             steps_per_frame: 3,
-            rng: rand::rng(),
+            rng: crate::rng::new_rng(),
         };
         maze.build_grid();
         maze

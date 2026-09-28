@@ -36,6 +36,7 @@ pub struct Physarum {
     grid_back: Vec<f64>,
     agents: Vec<Agent>,
     step_timer: f64,
+    rng: rand::rngs::StdRng,
 }
 
 impl Physarum {
@@ -48,6 +49,7 @@ impl Physarum {
             grid_back: Vec::new(),
             agents: Vec::new(),
             step_timer: 0.0,
+            rng: crate::rng::new_rng(),
         };
         p.init(width.max(1), height.max(1));
         p
@@ -62,7 +64,7 @@ impl Physarum {
         self.grid_back = vec![0.0; n];
 
         let count = ((n as f64 / 30.0) * self.scale.max(0.25)).clamp(400.0, 5000.0) as usize;
-        let mut rng = rand::rng();
+        let rng = &mut self.rng;
         self.agents.clear();
         self.agents.reserve(count);
         let cx = width as f64 * 0.5;
@@ -94,7 +96,7 @@ impl Physarum {
         let height = self.height;
         let wf = width as f64;
         let hf = height as f64;
-        let mut rng = rand::rng();
+        let rng = &mut self.rng;
 
         // Sense + steer + move (read grid field, mutate agents field — disjoint).
         for a in &mut self.agents {

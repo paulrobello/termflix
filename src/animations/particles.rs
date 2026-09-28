@@ -11,6 +11,7 @@ pub struct Particles {
     spawn_timer: f64,
     gravity: f64,
     drag: f64,
+    rng: rand::rngs::StdRng,
 }
 
 impl Particles {
@@ -49,6 +50,7 @@ impl Particles {
             spawn_timer: 0.0,
             gravity: 15.0,
             drag: 0.99,
+            rng: crate::rng::new_rng(),
         }
     }
 }
@@ -84,7 +86,7 @@ impl Animation for Particles {
         self.spawn_timer += dt;
         if self.spawn_timer > 0.8 {
             self.spawn_timer = 0.0;
-            let mut rng = rand::rng();
+            let rng = &mut self.rng;
             let cx = rng.random_range(self.width as f64 * 0.2..self.width as f64 * 0.8);
             let cy = rng.random_range(self.height as f64 * 0.2..self.height as f64 * 0.6);
             let count = rng.random_range(30..80);
