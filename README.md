@@ -103,7 +103,7 @@ curl -sL https://raw.githubusercontent.com/paulrobello/termflix/main/install.sh 
 Installs the latest release binary to `/usr/local/bin`. Custom install location:
 
 ```bash
-INSTALL_DIR=~/.local/bin curl -sL https://raw.githubusercontent.com/paulrobello/termflix/main/install.sh | bash
+curl -sL https://raw.githubusercontent.com/paulrobello/termflix/main/install.sh | INSTALL_DIR=~/.local/bin bash
 ```
 
 ### From crates.io
