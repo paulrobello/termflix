@@ -1,6 +1,7 @@
 use super::cell::{Cell, CellGrid};
 use super::color_assist::{ColorAssist, daltonize, luminance};
 use crossterm::style::Color;
+use std::fmt::Write;
 
 /// 4×4 Bayer ordered-dither thresholds (values 0..=15).
 const BAYER_4X4: [[u8; 4]; 4] = [[0, 8, 2, 10], [12, 4, 14, 6], [3, 11, 1, 9], [15, 7, 13, 5]];
@@ -432,27 +433,31 @@ fn rotate_hue(rgb: (u8, u8, u8), shift: f64) -> (u8, u8, u8) {
     )
 }
 
-pub fn color_to_fg(color: Color) -> String {
+pub fn push_color_fg(out: &mut String, color: Color) {
     match color {
-        Color::Rgb { r, g, b } => format!("38;2;{};{};{}", r, g, b),
-        Color::AnsiValue(v) => format!("38;5;{}", v),
-        Color::Black => "30".into(),
-        Color::DarkRed => "31".into(),
-        Color::DarkGreen => "32".into(),
-        Color::DarkYellow => "33".into(),
-        Color::DarkBlue => "34".into(),
-        Color::DarkMagenta => "35".into(),
-        Color::DarkCyan => "36".into(),
-        Color::Grey => "37".into(),
-        Color::DarkGrey => "90".into(),
-        Color::Red => "91".into(),
-        Color::Green => "92".into(),
-        Color::Yellow => "93".into(),
-        Color::Blue => "94".into(),
-        Color::Magenta => "95".into(),
-        Color::Cyan => "96".into(),
-        Color::White => "97".into(),
-        _ => "37".into(),
+        Color::Rgb { r, g, b } => {
+            let _ = write!(out, "38;2;{};{};{}", r, g, b);
+        }
+        Color::AnsiValue(v) => {
+            let _ = write!(out, "38;5;{}", v);
+        }
+        Color::Black => out.push_str("30"),
+        Color::DarkRed => out.push_str("31"),
+        Color::DarkGreen => out.push_str("32"),
+        Color::DarkYellow => out.push_str("33"),
+        Color::DarkBlue => out.push_str("34"),
+        Color::DarkMagenta => out.push_str("35"),
+        Color::DarkCyan => out.push_str("36"),
+        Color::Grey => out.push_str("37"),
+        Color::DarkGrey => out.push_str("90"),
+        Color::Red => out.push_str("91"),
+        Color::Green => out.push_str("92"),
+        Color::Yellow => out.push_str("93"),
+        Color::Blue => out.push_str("94"),
+        Color::Magenta => out.push_str("95"),
+        Color::Cyan => out.push_str("96"),
+        Color::White => out.push_str("97"),
+        _ => out.push_str("37"),
     }
 }
 

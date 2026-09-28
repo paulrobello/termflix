@@ -1,32 +1,37 @@
-use crate::render::canvas::color_to_fg;
+use crate::render::canvas::push_color_fg;
 use crate::render::cell::{Cell, CellGrid};
 use crossterm::style::Color;
+use std::fmt::Write;
 use unicode_width::UnicodeWidthChar;
 
 /// Dirty ratio at or above which a full redraw is cheaper than a scattered diff.
 pub const FULL_REDRAW_THRESHOLD: f64 = 0.6;
 
-fn color_to_bg(color: Color) -> String {
+fn push_color_bg(out: &mut String, color: Color) {
     match color {
-        Color::Rgb { r, g, b } => format!("48;2;{};{};{}", r, g, b),
-        Color::AnsiValue(v) => format!("48;5;{}", v),
-        Color::Black => "40".into(),
-        Color::DarkRed => "41".into(),
-        Color::DarkGreen => "42".into(),
-        Color::DarkYellow => "43".into(),
-        Color::DarkBlue => "44".into(),
-        Color::DarkMagenta => "45".into(),
-        Color::DarkCyan => "46".into(),
-        Color::Grey => "47".into(),
-        Color::DarkGrey => "100".into(),
-        Color::Red => "101".into(),
-        Color::Green => "102".into(),
-        Color::Yellow => "103".into(),
-        Color::Blue => "104".into(),
-        Color::Magenta => "105".into(),
-        Color::Cyan => "106".into(),
-        Color::White => "107".into(),
-        _ => "40".into(),
+        Color::Rgb { r, g, b } => {
+            let _ = write!(out, "48;2;{};{};{}", r, g, b);
+        }
+        Color::AnsiValue(v) => {
+            let _ = write!(out, "48;5;{}", v);
+        }
+        Color::Black => out.push_str("40"),
+        Color::DarkRed => out.push_str("41"),
+        Color::DarkGreen => out.push_str("42"),
+        Color::DarkYellow => out.push_str("43"),
+        Color::DarkBlue => out.push_str("44"),
+        Color::DarkMagenta => out.push_str("45"),
+        Color::DarkCyan => out.push_str("46"),
+        Color::Grey => out.push_str("47"),
+        Color::DarkGrey => out.push_str("100"),
+        Color::Red => out.push_str("101"),
+        Color::Green => out.push_str("102"),
+        Color::Yellow => out.push_str("103"),
+        Color::Blue => out.push_str("104"),
+        Color::Magenta => out.push_str("105"),
+        Color::Cyan => out.push_str("106"),
+        Color::White => out.push_str("107"),
+        _ => out.push_str("40"),
     }
 }
 
@@ -46,28 +51,28 @@ fn write_color_transition(
         (None, None) => out.push_str("\x1b[0m"),
         (Some(f), None) => {
             out.push_str("\x1b[");
-            out.push_str(&color_to_fg(f));
+            push_color_fg(out, f);
             out.push('m');
         }
         (None, Some(b)) => {
             out.push_str("\x1b[");
-            out.push_str(&color_to_bg(b));
+            push_color_bg(out, b);
             out.push('m');
         }
         (Some(f), Some(b)) => {
             if fg_changed && bg_changed {
                 out.push_str("\x1b[");
-                out.push_str(&color_to_fg(f));
+                push_color_fg(out, f);
                 out.push(';');
-                out.push_str(&color_to_bg(b));
+                push_color_bg(out, b);
                 out.push('m');
             } else if fg_changed {
                 out.push_str("\x1b[");
-                out.push_str(&color_to_fg(f));
+                push_color_fg(out, f);
                 out.push('m');
             } else {
                 out.push_str("\x1b[");
-                out.push_str(&color_to_bg(b));
+                push_color_bg(out, b);
                 out.push('m');
             }
         }
