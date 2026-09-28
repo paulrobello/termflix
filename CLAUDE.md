@@ -21,7 +21,7 @@ Run a single test: `cargo test test_name` (e.g., `cargo test test_create_returns
 
 ## Architecture
 
-**Pure synchronous Rust** (edition 2024, requires Rust 1.85+). No async runtime. One optional background thread for external control file watching.
+**Pure synchronous Rust** (edition 2024, requires Rust 1.88+, per Cargo.toml rust-version). No async runtime. One optional background thread for external control file watching.
 
 ### Core Pipeline
 

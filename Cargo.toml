@@ -2,6 +2,7 @@
 name = "termflix"
 version = "0.8.0"
 edition = "2024"
+rust-version = "1.88"
 description = "Terminal animation player with 60 procedurally generated animations, multiple render modes, and true color support"
 license = "MIT"
 repository = "https://github.com/paulrobello/termflix"
@@ -10,6 +11,9 @@ readme = "README.md"
 keywords = ["terminal", "animation", "ascii-art", "braille", "tui"]
 categories = ["command-line-utilities", "visualization"]
 authors = ["Paul Robello <probello@gmail.com>"]
+# Ship only crate-relevant files; keeps CLAUDE.md, docs/, install.sh, and
+# scratch notes out of the published .crate tarball.
+include = ["src/**", "Cargo.toml", "Cargo.lock", "README.md", "LICENSE", "CHANGELOG.md"]
 
 [dependencies]
 crossterm = "0.29.0"

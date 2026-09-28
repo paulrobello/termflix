@@ -114,7 +114,7 @@ cargo install termflix
 
 ### From Source
 
-Requires Rust 1.85+ (edition 2024):
+Requires Rust 1.88+ (edition 2024, per Cargo.toml rust-version):
 
 ```bash
 git clone https://github.com/paulrobello/termflix
