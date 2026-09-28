@@ -673,6 +673,9 @@ struct LoopState {
     scale: f64,
     postproc: PostProcessConfig,
     smoothing_tau: f64,
+    /// The "on" values the `b` and `s` keys toggle back to.
+    default_bloom: f64,
+    default_smoothing_tau: f64,
     canvas: Canvas,
     anim: Box<dyn Animation>,
     anim_index: usize,
@@ -689,6 +692,132 @@ struct LoopState {
     frame_count: u64,
     actual_fps: f64,
     fps_update: Instant,
+}
+
+/// Result of one keypress in the main loop.
+#[derive(Debug)]
+enum LoopAction {
+    Continue,
+    Quit,
+    /// Advance to this index in ANIMATION_NAMES (arrow keys / `n` / `p`).
+    Switch(usize),
+}
+
+/// Apply one keypress. Toggles mutate `state` directly; quit and animation
+/// switches come back as the returned action so the loop can do its terminal
+/// save/teardown bookkeeping in one place.
+fn handle_key(
+    state: &mut LoopState,
+    code: KeyCode,
+    modifiers: KeyModifiers,
+    bindings: &KeyBindings,
+    screensaver: bool,
+    screensaver_keys: bool,
+) -> LoopAction {
+    // Ctrl+C always quits
+    if code == KeyCode::Char('c') && modifiers.contains(KeyModifiers::CONTROL) {
+        return LoopAction::Quit;
+    }
+    // Plain screensaver: any key dismisses.
+    if screensaver && !screensaver_keys {
+        return LoopAction::Quit;
+    }
+    match code {
+        kc if bindings.quit.contains(&kc) => LoopAction::Quit,
+        kc if bindings.next.contains(&kc) => {
+            LoopAction::Switch((state.anim_index + 1) % animations::ANIMATION_NAMES.len())
+        }
+        kc if bindings.prev.contains(&kc) => LoopAction::Switch(if state.anim_index == 0 {
+            animations::ANIMATION_NAMES.len() - 1
+        } else {
+            state.anim_index - 1
+        }),
+        kc if bindings.render.contains(&kc) => {
+            let idx = RENDER_MODES
+                .iter()
+                .position(|&m| m == state.render_mode)
+                .unwrap_or(0);
+            state.render_mode = RENDER_MODES[(idx + 1) % RENDER_MODES.len()];
+            state.needs_rebuild = true;
+            LoopAction::Continue
+        }
+        kc if bindings.color.contains(&kc) => {
+            let idx = COLOR_MODES
+                .iter()
+                .position(|&m| m == state.color_mode)
+                .unwrap_or(0);
+            state.color_mode = COLOR_MODES[(idx + 1) % COLOR_MODES.len()];
+            state.needs_rebuild = true;
+            LoopAction::Continue
+        }
+        kc if bindings.status.contains(&kc) => {
+            state.hide_status = !state.hide_status;
+            state.needs_rebuild = true;
+            LoopAction::Continue
+        }
+        KeyCode::Char('b') => {
+            state.postproc.bloom = if state.postproc.bloom > 0.0 {
+                0.0
+            } else {
+                state.default_bloom
+            };
+            LoopAction::Continue
+        }
+        KeyCode::Char('s') => {
+            state.smoothing_tau = if state.smoothing_tau > 0.0 {
+                0.0
+            } else {
+                state.default_smoothing_tau
+            };
+            LoopAction::Continue
+        }
+        KeyCode::Char('d') => {
+            state.dither = !state.dither;
+            state.canvas.dither = state.dither;
+            LoopAction::Continue
+        }
+        // Screensaver with keybindings active: any unbound key still dismisses.
+        // (Plain screensaver already exited above; reaching here means keys are on.)
+        _ if screensaver => LoopAction::Quit,
+        _ => LoopAction::Continue,
+    }
+}
+
+/// Rebuild canvas+animation at the current terminal size. This is the single
+/// place the MIN_TERM_* floor, `color_quant` and `dither` are applied (QA-002);
+/// below the floor the previous canvas is kept untouched.
+fn rebuild_canvas(state: &mut LoopState, color_quant: u8) -> io::Result<()> {
+    // Get the CURRENT size (may have changed since event)
+    let (cur_cols, cur_rows) = terminal::size()?;
+    if cur_cols >= MIN_TERM_COLS && cur_rows >= MIN_TERM_ROWS {
+        state.cols = cur_cols;
+        state.rows = cur_rows;
+        let display_rows = if state.hide_status {
+            state.rows as usize
+        } else {
+            (state.rows as usize).saturating_sub(1)
+        };
+        state.canvas = Canvas::new(
+            state.cols as usize,
+            display_rows,
+            state.render_mode,
+            state.color_mode,
+        );
+        state.canvas.color_quant = color_quant;
+        state.canvas.dither = state.dither;
+        state.anim = spawn_animation(
+            animations::ANIMATION_NAMES[state.anim_index],
+            state.canvas.width,
+            state.canvas.height,
+            state.scale,
+        );
+        // No clear screen — next frame overwrites everything.
+        // Clearing here with a blocking flush can lock up in tmux
+        // when the output buffer is full from the previous frame.
+    }
+    state.prev_grid = None;
+    state.needs_rebuild = false;
+    Ok(())
 }
 
 fn run_loop(settings: Settings, keybindings: &KeyBindings) -> io::Result<()> {
@@ -722,40 +851,39 @@ fn run_loop(settings: Settings, keybindings: &KeyBindings) -> io::Result<()> {
     let is_tmux = std::env::var("TMUX").is_ok();
 
     let mut state = {
-        let (cols, rows) = terminal::size()?;
-        let render_mode =
-            explicit_render.unwrap_or_else(|| animations::preferred_render(initial_anim));
-        let display_rows = if clean {
-            rows as usize
-        } else {
-            (rows as usize).saturating_sub(1)
-        };
-        let mut canvas = Canvas::new(cols as usize, display_rows, render_mode, color_mode);
-        canvas.color_quant = color_quant;
-        canvas.dither = dither;
+        // Placeholder pair at the minimum size, immediately replaced by the
+        // rebuild below — startup goes through the same path as every resize.
+        let canvas = Canvas::new(
+            MIN_TERM_COLS as usize,
+            MIN_TERM_ROWS as usize,
+            explicit_render.unwrap_or_else(|| animations::preferred_render(initial_anim)),
+            color_mode,
+        );
         let anim: Box<dyn Animation> =
             spawn_animation(initial_anim, canvas.width, canvas.height, scale);
-        let anim_index = animations::ANIMATION_NAMES
-            .iter()
-            .position(|&n| n == initial_anim)
-            .unwrap_or(0);
         LoopState {
-            cols,
-            rows,
+            cols: MIN_TERM_COLS,
+            rows: MIN_TERM_ROWS,
             hide_status: clean,
             dither,
-            render_mode,
+            render_mode: explicit_render
+                .unwrap_or_else(|| animations::preferred_render(initial_anim)),
             color_mode,
             scale,
             postproc,
             smoothing_tau,
+            default_bloom,
+            default_smoothing_tau,
             canvas,
             anim,
-            anim_index,
+            anim_index: animations::ANIMATION_NAMES
+                .iter()
+                .position(|&n| n == initial_anim)
+                .unwrap_or(0),
             transition: TransitionState::None,
             cycle_start: Instant::now(),
             prev_grid: None,
-            needs_rebuild: false,
+            needs_rebuild: true,
             resize_cooldown: Instant::now(),
             adaptive_frame_dur: frame_dur,
             write_time_ema: 0.0,
@@ -764,6 +892,7 @@ fn run_loop(settings: Settings, keybindings: &KeyBindings) -> io::Result<()> {
             fps_update: Instant::now(),
         }
     };
+    rebuild_canvas(&mut state, color_quant)?;
 
     let mut last_frame = Instant::now();
     let mut recorder = record_path.map(|_| record::Recorder::new());
@@ -816,17 +945,15 @@ fn run_loop(settings: Settings, keybindings: &KeyBindings) -> io::Result<()> {
                         modifiers,
                         ..
                     }) => {
-                        // Ctrl+C always quits
-                        if code == KeyCode::Char('c') && modifiers.contains(KeyModifiers::CONTROL) {
-                            quit.store(true, Ordering::Release);
-                            break 'outer Ok(());
-                        }
-                        if screensaver && !screensaver_keys {
-                            quit.store(true, Ordering::Release);
-                            break 'outer Ok(());
-                        }
-                        match code {
-                            kc if keybindings.quit.contains(&kc) => {
+                        match handle_key(
+                            &mut state,
+                            code,
+                            modifiers,
+                            keybindings,
+                            screensaver,
+                            screensaver_keys,
+                        ) {
+                            LoopAction::Quit => {
                                 if let (Some(rec), Some(path)) = (recorder.take(), record_path) {
                                     let mut stdout = io::stdout();
                                     execute!(stdout, cursor::Show, terminal::LeaveAlternateScreen)?;
@@ -839,67 +966,12 @@ fn run_loop(settings: Settings, keybindings: &KeyBindings) -> io::Result<()> {
                                 quit.store(true, Ordering::Release);
                                 break 'outer Ok(());
                             }
-                            kc if keybindings.next.contains(&kc) => {
-                                state.anim_index =
-                                    (state.anim_index + 1) % animations::ANIMATION_NAMES.len();
+                            LoopAction::Switch(idx) => {
+                                state.anim_index = idx;
                                 start_transition(&mut state.transition, state.anim_index);
                                 state.cycle_start = Instant::now();
                             }
-                            kc if keybindings.prev.contains(&kc) => {
-                                state.anim_index = if state.anim_index == 0 {
-                                    animations::ANIMATION_NAMES.len() - 1
-                                } else {
-                                    state.anim_index - 1
-                                };
-                                start_transition(&mut state.transition, state.anim_index);
-                                state.cycle_start = Instant::now();
-                            }
-                            kc if keybindings.render.contains(&kc) => {
-                                let idx = RENDER_MODES
-                                    .iter()
-                                    .position(|&m| m == state.render_mode)
-                                    .unwrap_or(0);
-                                state.render_mode = RENDER_MODES[(idx + 1) % RENDER_MODES.len()];
-                                state.needs_rebuild = true;
-                            }
-                            kc if keybindings.color.contains(&kc) => {
-                                let idx = COLOR_MODES
-                                    .iter()
-                                    .position(|&m| m == state.color_mode)
-                                    .unwrap_or(0);
-                                state.color_mode = COLOR_MODES[(idx + 1) % COLOR_MODES.len()];
-                                state.needs_rebuild = true;
-                            }
-                            kc if keybindings.status.contains(&kc) => {
-                                state.hide_status = !state.hide_status;
-                                state.needs_rebuild = true;
-                            }
-                            KeyCode::Char('b') => {
-                                state.postproc.bloom = if state.postproc.bloom > 0.0 {
-                                    0.0
-                                } else {
-                                    default_bloom
-                                };
-                            }
-                            KeyCode::Char('s') => {
-                                state.smoothing_tau = if state.smoothing_tau > 0.0 {
-                                    0.0
-                                } else {
-                                    default_smoothing_tau
-                                };
-                            }
-                            KeyCode::Char('d') => {
-                                state.dither = !state.dither;
-                                state.canvas.dither = state.dither;
-                            }
-                            // Screensaver with keybindings active: any unbound key still dismisses.
-                            // (Plain screensaver already exited above; reaching here means keys are on.)
-                            _ => {
-                                if screensaver {
-                                    quit.store(true, Ordering::Release);
-                                    break 'outer Ok(());
-                                }
-                            }
+                            LoopAction::Continue => {}
                         }
                     }
                     Event::FocusGained if screensaver && !screensaver_keys => {
@@ -923,36 +995,7 @@ fn run_loop(settings: Settings, keybindings: &KeyBindings) -> io::Result<()> {
 
         // Rebuild state.canvas
         if state.needs_rebuild {
-            // Get the CURRENT size (may have changed since event)
-            let (cur_cols, cur_rows) = terminal::size()?;
-            if cur_cols >= MIN_TERM_COLS && cur_rows >= MIN_TERM_ROWS {
-                state.cols = cur_cols;
-                state.rows = cur_rows;
-                let display_rows = if state.hide_status {
-                    state.rows as usize
-                } else {
-                    (state.rows as usize).saturating_sub(1)
-                };
-                state.canvas = Canvas::new(
-                    state.cols as usize,
-                    display_rows,
-                    state.render_mode,
-                    state.color_mode,
-                );
-                state.canvas.color_quant = color_quant;
-                state.canvas.dither = state.dither;
-                state.anim = spawn_animation(
-                    animations::ANIMATION_NAMES[state.anim_index],
-                    state.canvas.width,
-                    state.canvas.height,
-                    state.scale,
-                );
-                // No clear screen — next frame overwrites everything.
-                // Clearing here with a blocking flush can lock up in tmux
-                // when the output buffer is full from the previous frame.
-            }
-            state.prev_grid = None;
-            state.needs_rebuild = false;
+            rebuild_canvas(&mut state, color_quant)?;
             last_frame = Instant::now();
             continue; // Skip this frame, render fresh next iteration
         }
@@ -1472,5 +1515,250 @@ mod detect_size_tests {
             frame("\x1b[30;60H"),
         ];
         assert_eq!(detect_recording_size(&frames), (100, 50));
+    }
+}
+
+#[cfg(test)]
+mod loop_tests {
+    use super::*;
+
+    fn test_state() -> LoopState {
+        let canvas = Canvas::new(20, 10, RenderMode::HalfBlock, ColorMode::TrueColor);
+        LoopState {
+            cols: 20,
+            rows: 11,
+            hide_status: false,
+            dither: false,
+            render_mode: RenderMode::HalfBlock,
+            color_mode: ColorMode::TrueColor,
+            scale: 1.0,
+            postproc: PostProcessConfig::default(),
+            smoothing_tau: 0.0,
+            default_bloom: 0.4,
+            default_smoothing_tau: 0.1,
+            canvas,
+            anim: spawn_animation("fire", 20, 10, 1.0),
+            anim_index: 0,
+            transition: TransitionState::None,
+            cycle_start: Instant::now(),
+            prev_grid: None,
+            needs_rebuild: false,
+            resize_cooldown: Instant::now(),
+            adaptive_frame_dur: Duration::ZERO,
+            write_time_ema: 0.0,
+            frame_count: 0,
+            actual_fps: 0.0,
+            fps_update: Instant::now(),
+        }
+    }
+
+    #[test]
+    fn quit_key_and_ctrl_c_return_quit() {
+        let mut state = test_state();
+        assert!(matches!(
+            handle_key(
+                &mut state,
+                KeyCode::Char('q'),
+                KeyModifiers::NONE,
+                &KeyBindings::defaults(),
+                false,
+                false
+            ),
+            LoopAction::Quit
+        ));
+        assert!(matches!(
+            handle_key(
+                &mut state,
+                KeyCode::Char('c'),
+                KeyModifiers::CONTROL,
+                &KeyBindings::defaults(),
+                false,
+                false
+            ),
+            LoopAction::Quit
+        ));
+    }
+
+    #[test]
+    fn next_wraps_and_prev_wraps_backward() {
+        let mut state = test_state();
+        let kb = KeyBindings::defaults();
+        // prev at index 0 wraps to the last animation
+        match handle_key(
+            &mut state,
+            KeyCode::Left,
+            KeyModifiers::NONE,
+            &kb,
+            false,
+            false,
+        ) {
+            LoopAction::Switch(idx) => {
+                assert_eq!(idx, animations::ANIMATION_NAMES.len() - 1);
+                state.anim_index = idx;
+            }
+            other => panic!("expected Switch, got {other:?}"),
+        }
+        // next wraps back around to 0
+        match handle_key(
+            &mut state,
+            KeyCode::Right,
+            KeyModifiers::NONE,
+            &kb,
+            false,
+            false,
+        ) {
+            LoopAction::Switch(idx) => assert_eq!(idx, 0),
+            other => panic!("expected Switch, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn render_and_status_keys_flag_rebuild() {
+        let mut state = test_state();
+        let kb = KeyBindings::defaults();
+        assert!(matches!(
+            handle_key(
+                &mut state,
+                KeyCode::Char('r'),
+                KeyModifiers::NONE,
+                &kb,
+                false,
+                false
+            ),
+            LoopAction::Continue
+        ));
+        assert!(state.needs_rebuild);
+        assert_ne!(state.render_mode, RenderMode::HalfBlock);
+
+        state.needs_rebuild = false;
+        handle_key(
+            &mut state,
+            KeyCode::Char('h'),
+            KeyModifiers::NONE,
+            &kb,
+            false,
+            false,
+        );
+        assert!(state.needs_rebuild);
+        assert!(state.hide_status);
+    }
+
+    #[test]
+    fn toggles_flip_between_off_and_defaults() {
+        let mut state = test_state();
+        let kb = KeyBindings::defaults();
+        // b: 0.0 -> default_bloom
+        handle_key(
+            &mut state,
+            KeyCode::Char('b'),
+            KeyModifiers::NONE,
+            &kb,
+            false,
+            false,
+        );
+        assert_eq!(state.postproc.bloom, 0.4);
+        // b again: back to 0
+        handle_key(
+            &mut state,
+            KeyCode::Char('b'),
+            KeyModifiers::NONE,
+            &kb,
+            false,
+            false,
+        );
+        assert_eq!(state.postproc.bloom, 0.0);
+        // s: 0.0 -> default_smoothing_tau
+        handle_key(
+            &mut state,
+            KeyCode::Char('s'),
+            KeyModifiers::NONE,
+            &kb,
+            false,
+            false,
+        );
+        assert_eq!(state.smoothing_tau, 0.1);
+        // d: flips both the flag and the live canvas
+        handle_key(
+            &mut state,
+            KeyCode::Char('d'),
+            KeyModifiers::NONE,
+            &kb,
+            false,
+            false,
+        );
+        assert!(state.dither);
+        assert!(state.canvas.dither);
+    }
+
+    #[test]
+    fn screensaver_any_key_dismisses() {
+        let mut state = test_state();
+        // Plain screensaver (keys disabled): unbound key quits.
+        assert!(matches!(
+            handle_key(
+                &mut state,
+                KeyCode::Char('z'),
+                KeyModifiers::NONE,
+                &KeyBindings::defaults(),
+                true,
+                false
+            ),
+            LoopAction::Quit
+        ));
+        // Screensaver with keys on: unbound key still quits, bound key acts.
+        assert!(matches!(
+            handle_key(
+                &mut state,
+                KeyCode::Char('z'),
+                KeyModifiers::NONE,
+                &KeyBindings::defaults(),
+                true,
+                true
+            ),
+            LoopAction::Quit
+        ));
+        assert!(matches!(
+            handle_key(
+                &mut state,
+                KeyCode::Char('b'),
+                KeyModifiers::NONE,
+                &KeyBindings::defaults(),
+                true,
+                true
+            ),
+            LoopAction::Continue
+        ));
+    }
+
+    #[test]
+    fn unbound_key_is_inert_outside_screensaver() {
+        let mut state = test_state();
+        let before = state.clone_values();
+        assert!(matches!(
+            handle_key(
+                &mut state,
+                KeyCode::Char('z'),
+                KeyModifiers::NONE,
+                &KeyBindings::defaults(),
+                false,
+                false
+            ),
+            LoopAction::Continue
+        ));
+        assert_eq!(state.clone_values(), before);
+    }
+
+    impl LoopState {
+        fn clone_values(&self) -> (bool, bool, RenderMode, ColorMode, f64, f64, bool) {
+            (
+                self.hide_status,
+                self.dither,
+                self.render_mode,
+                self.color_mode,
+                self.postproc.bloom,
+                self.smoothing_tau,
+                self.needs_rebuild,
+            )
+        }
     }
 }
