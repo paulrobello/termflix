@@ -39,6 +39,7 @@ Animations write to a **mode-agnostic pixel buffer** (`Canvas`) using sub-cell c
 - `src/render/canvas.rs` — `Canvas` struct (pixel/color buffers), post-processing (bloom, vignette, scanlines)
 - `src/render/braille.rs` / `halfblock.rs` — Render mode implementations
 - `src/generators/mod.rs` — Shared `ParticleSystem`, `ColorGradient`, `EmitterConfig`
+- `src/color.rs` — Shared `hsv_to_rgb` (hue wraps via `rem_euclid(1.0)`)
 - `src/config.rs` — TOML config loading (`dirs::config_dir()/termflix/config.toml`, per-OS)
 - `src/external.rs` — ndjson external control (stdin or file watcher)
 - `src/record.rs` — Frame recording/playback (`.asciianim` format)

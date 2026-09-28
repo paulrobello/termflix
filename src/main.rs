@@ -1,4 +1,5 @@
 mod animations;
+mod color;
 mod config;
 mod external;
 mod gallery;

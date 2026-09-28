@@ -1,4 +1,5 @@
 use super::Animation;
+use crate::color::hsv_to_rgb;
 use crate::render::Canvas;
 
 const SIGMA: f64 = 10.0;
@@ -115,24 +116,4 @@ fn setpix(canvas: &mut Canvas, x: i64, y: i64, bright: f64, r: u8, g: u8, b: u8)
             canvas.set_colored(xu, yu, bright, r, g, b);
         }
     }
-}
-
-fn hsv_to_rgb(h: f64, s: f64, v: f64) -> (u8, u8, u8) {
-    let h = h.rem_euclid(1.0);
-    let c = v * s;
-    let x = c * (1.0 - ((h * 6.0) % 2.0 - 1.0).abs());
-    let m = v - c;
-    let (r, g, b) = match (h * 6.0) as u32 {
-        0 => (c, x, 0.0),
-        1 => (x, c, 0.0),
-        2 => (0.0, c, x),
-        3 => (0.0, x, c),
-        4 => (x, 0.0, c),
-        _ => (c, 0.0, x),
-    };
-    (
-        ((r + m) * 255.0) as u8,
-        ((g + m) * 255.0) as u8,
-        ((b + m) * 255.0) as u8,
-    )
 }
