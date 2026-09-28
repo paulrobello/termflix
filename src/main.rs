@@ -1204,7 +1204,7 @@ fn run_loop(settings: Settings, keybindings: &KeyBindings) -> io::Result<()> {
                 ColorAssist::Daltonize(d) => format!(" | cb:{}", d.name()),
             };
             let status = format!(
-                " {} | {:?} | {:?} | {}{} | bloom:{} | smooth:{} | state.dither:{}{assist_str} | [←/→] state.anim  [b] bloom  [s] smooth  [d] state.dither  [r] render  [c] color  [h] hide  [q] quit ",
+                " {} | {:?} | {:?} | {}{} | bloom:{} | smooth:{} | dither:{}{assist_str} | [←/→] anim  [b] bloom  [s] smooth  [d] dither  [r] render  [c] color  [h] hide  [q] quit ",
                 state.anim.name(),
                 state.render_mode,
                 state.color_mode,
