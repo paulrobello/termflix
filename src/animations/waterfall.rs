@@ -18,7 +18,7 @@ pub struct Waterfall {
     mist: ParticleSystem,
     fall_x: f64,
     fall_width: f64,
-    rng: rand::rngs::ThreadRng,
+    rng: rand::rngs::StdRng,
 }
 
 impl Waterfall {
@@ -26,7 +26,7 @@ impl Waterfall {
         let fall_x = width as f64 * 0.5;
         let fall_width = (width as f64 * 0.25).max(8.0);
         let count = ((width * height) as f64 / 40.0 * scale) as usize;
-        let mut rng = rand::rng();
+        let mut rng = crate::rng::new_rng();
 
         let drops = (0..count)
             .map(|_| WaterDrop {
@@ -78,7 +78,7 @@ impl Waterfall {
             mist: ParticleSystem::new(mist_config, (1500.0 * scale) as usize),
             fall_x,
             fall_width,
-            rng: rand::rng(),
+            rng: crate::rng::new_rng(),
         }
     }
 }

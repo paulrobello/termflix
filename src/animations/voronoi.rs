@@ -16,7 +16,7 @@ pub struct Voronoi {
     width: usize,
     height: usize,
     seeds: Vec<Seed>,
-    rng: rand::rngs::ThreadRng,
+    rng: rand::rngs::StdRng,
     last_relax_time: f64,
 }
 
@@ -26,7 +26,7 @@ impl Voronoi {
             width,
             height,
             seeds: Vec::new(),
-            rng: rand::rng(),
+            rng: crate::rng::new_rng(),
             last_relax_time: 0.0,
         };
         voronoi.init_seeds(scale);

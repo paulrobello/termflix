@@ -11,17 +11,17 @@ struct Star {
 /// 3D starfield with depth parallax
 pub struct Starfield {
     stars: Vec<Star>,
-    rng: rand::rngs::ThreadRng,
+    rng: rand::rngs::StdRng,
 }
 
 impl Starfield {
     pub fn new(width: usize, height: usize, scale: f64) -> Self {
-        let mut rng = rand::rng();
+        let mut rng = crate::rng::new_rng();
         let num_stars = ((width * height) as f64 / 30.0 * scale) as usize;
         let stars = (0..num_stars).map(|_| new_star(&mut rng, false)).collect();
         Starfield {
             stars,
-            rng: rand::rng(),
+            rng: crate::rng::new_rng(),
         }
     }
 }

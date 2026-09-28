@@ -134,7 +134,7 @@ pub struct Tetris {
     ai_target: Option<Placement>,
     ai_move_timer: f64,
     game_over_timer: f64,
-    rng: rand::rngs::ThreadRng,
+    rng: rand::rngs::StdRng,
 }
 
 impl Tetris {
@@ -152,7 +152,7 @@ impl Tetris {
             2
         };
 
-        let mut rng = rand::rng();
+        let mut rng = crate::rng::new_rng();
         let next_piece = rng.random_piece();
 
         let mut tetris = Tetris {
@@ -513,7 +513,7 @@ trait RandomPiece {
     fn random_piece(&mut self) -> Piece;
 }
 
-impl RandomPiece for rand::rngs::ThreadRng {
+impl RandomPiece for rand::rngs::StdRng {
     fn random_piece(&mut self) -> Piece {
         let pieces = Piece::all();
         let idx = self.random_range(0usize..7);

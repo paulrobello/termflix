@@ -42,7 +42,7 @@ impl SolarSystem {
     #[allow(unused_variables)]
     pub fn new(width: usize, height: usize, scale: f64) -> Self {
         let _ = (width, height, scale);
-        let mut rng = rand::rng();
+        let mut rng = crate::rng::new_rng();
 
         let defs: [PlanetDef; 8] = [
             (0.085, 2.0, 1, 170, 170, 170, 0, false), // Mercury

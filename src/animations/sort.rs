@@ -39,7 +39,7 @@ pub struct Sort {
     sorted: bool,
     pause_timer: f64,
     ops_per_frame: usize,
-    rng: rand::rngs::ThreadRng,
+    rng: rand::rngs::StdRng,
 }
 
 #[derive(Clone, Copy)]
@@ -51,7 +51,7 @@ enum SortOp {
 impl Sort {
     pub fn new(width: usize, _height: usize, _scale: f64) -> Self {
         let size = (width / 2).clamp(16, 200);
-        let mut rng = rand::rng();
+        let mut rng = crate::rng::new_rng();
         let data: Vec<f64> = (0..size).map(|_| rng.random_range(0.05..1.0)).collect();
 
         let mut sort = Sort {
@@ -63,7 +63,7 @@ impl Sort {
             sorted: false,
             pause_timer: 0.0,
             ops_per_frame: 3,
-            rng: rand::rng(),
+            rng: crate::rng::new_rng(),
         };
         sort.generate_ops();
         sort

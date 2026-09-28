@@ -11,7 +11,7 @@ pub struct Visualizer {
     beat_timer: f64,
     beat_interval: f64,
     energy: f64,
-    rng: rand::rngs::ThreadRng,
+    rng: rand::rngs::StdRng,
 }
 
 impl Visualizer {
@@ -25,7 +25,7 @@ impl Visualizer {
             beat_timer: 0.0,
             beat_interval: 0.5,
             energy: 0.5,
-            rng: rand::rng(),
+            rng: crate::rng::new_rng(),
         }
     }
 }
