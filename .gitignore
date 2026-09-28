@@ -27,3 +27,8 @@ ideas.md
 docs/superpowers
 .superpowers/
 .#*
+
+# Grind loop (per-machine, never committed)
+.grind.local.json
+.grind-logs/
+.exit-grind
