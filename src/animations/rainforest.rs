@@ -589,7 +589,8 @@ impl Animation for Rainforest {
             let dir: f64 = if self.rng.random_bool(0.5) { 1.0 } else { -1.0 };
             self.birds.push(Bird {
                 x: if dir > 0.0 { -3.0 } else { fw + 3.0 },
-                y: self.rng.random_range(1.0..fh * 0.4),
+                // Floor the bound so canvases under 3 rows don't empty the range.
+                y: self.rng.random_range(1.0..(fh * 0.4).max(1.5)),
                 vx: dir * self.rng.random_range(8.0..18.0),
                 vy: self.rng.random_range(-1.0..1.0),
                 color_idx: self.rng.random_range(0..4),

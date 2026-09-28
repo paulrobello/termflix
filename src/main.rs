@@ -325,6 +325,16 @@ fn main() -> io::Result<()> {
         default_hook(info);
     }));
 
+    // Refuse terminals below the render floor before entering raw mode, so the
+    // message prints on a normal cooked terminal and no restore is needed.
+    let (startup_cols, startup_rows) = terminal::size()?;
+    if startup_cols < MIN_TERM_COLS || startup_rows < MIN_TERM_ROWS {
+        eprintln!(
+            "terminal too small: termflix needs at least {MIN_TERM_COLS}x{MIN_TERM_ROWS}, got {startup_cols}x{startup_rows}"
+        );
+        std::process::exit(1);
+    }
+
     terminal::enable_raw_mode()?;
     let mut stdout = io::stdout();
     execute!(stdout, terminal::EnterAlternateScreen, cursor::Hide)?;
@@ -487,6 +497,13 @@ const COLOR_MODES: [ColorMode; 4] = [
 ];
 
 const TRANSITION_FRAMES: u8 = 8;
+
+/// Minimum terminal size the renderer supports. Startup refuses to run below
+/// this floor and the resize path refuses to shrink below it; animations are
+/// additionally hardened to survive smaller pixel canvases (render-mode scaling
+/// and gallery panes can go below the terminal floor).
+const MIN_TERM_COLS: u16 = 10;
+const MIN_TERM_ROWS: u16 = 5;
 
 struct FrameProfile {
     update_us: Vec<f64>,
@@ -818,7 +835,7 @@ fn run_loop(
         if needs_rebuild {
             // Get the CURRENT size (may have changed since event)
             let (cur_cols, cur_rows) = terminal::size()?;
-            if cur_cols >= 10 && cur_rows >= 5 {
+            if cur_cols >= MIN_TERM_COLS && cur_rows >= MIN_TERM_ROWS {
                 cols = cur_cols;
                 rows = cur_rows;
                 let display_rows = if hide_status {

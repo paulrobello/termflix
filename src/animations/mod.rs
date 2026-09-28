@@ -213,7 +213,7 @@ mod tests {
 
     #[test]
     fn every_animation_survives_all_sizes() {
-        const SIZES: &[(usize, usize)] = &[(10, 5), (10, 8), (80, 24), (300, 100)];
+        const SIZES: &[(usize, usize)] = &[(1, 1), (2, 2), (10, 5), (10, 8), (80, 24), (300, 100)];
         const MODES: &[crate::render::RenderMode] = &[
             crate::render::RenderMode::Braille,
             crate::render::RenderMode::HalfBlock,
@@ -246,6 +246,48 @@ mod tests {
                             "{name} at {cols}x{rows} produced pixel {p} outside [0,1]"
                         );
                     }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn every_animation_survives_shrink_while_running() {
+        const MODES: &[crate::render::RenderMode] = &[
+            crate::render::RenderMode::Braille,
+            crate::render::RenderMode::HalfBlock,
+            crate::render::RenderMode::Ascii,
+        ];
+
+        for &name in ANIMATION_NAMES {
+            for &mode in MODES {
+                // Start at a healthy size and let state accumulate.
+                let mut canvas =
+                    crate::render::Canvas::new(80, 24, mode, crate::render::ColorMode::TrueColor);
+                let Some(mut anim) = create(name, canvas.width, canvas.height, 1.0) else {
+                    panic!("create({name:?}) returned None");
+                };
+                for step in 0..10 {
+                    anim.update(&mut canvas, 1.0 / 60.0, f64::from(step) / 60.0);
+                }
+
+                // Shrink the live instance, as a terminal resize would.
+                let mut small =
+                    crate::render::Canvas::new(2, 2, mode, crate::render::ColorMode::TrueColor);
+                anim.on_resize(small.width, small.height);
+                for step in 0..10 {
+                    anim.update(&mut small, 1.0 / 60.0, f64::from(step) / 60.0);
+                }
+
+                // Grow back and keep running.
+                let mut big =
+                    crate::render::Canvas::new(80, 24, mode, crate::render::ColorMode::TrueColor);
+                anim.on_resize(big.width, big.height);
+                for step in 0..10 {
+                    anim.update(&mut big, 1.0 / 60.0, f64::from(step) / 60.0);
+                }
+                for &p in &big.pixels {
+                    assert!(p.is_finite() && (0.0..=1.0).contains(&p));
                 }
             }
         }
