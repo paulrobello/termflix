@@ -96,14 +96,6 @@ impl ActivePiece {
     fn cells(&self) -> &'static [(i32, i32)] {
         piece_cells(self.piece, self.rotation)
     }
-
-    #[allow(dead_code)]
-    fn abs_cells(&self) -> Vec<(i32, i32)> {
-        self.cells()
-            .iter()
-            .map(|&(cx, cy)| (self.col + cx, self.row + cy))
-            .collect()
-    }
 }
 
 /// Best placement found by AI
@@ -122,8 +114,6 @@ pub struct Tetris {
     board: Vec<Option<Piece>>,
     current: Option<ActivePiece>,
     next_piece: Piece,
-    #[allow(dead_code)]
-    move_timer: f64,
     move_interval: f64,
     drop_timer: f64,
     drop_interval: f64,
@@ -163,7 +153,6 @@ impl Tetris {
             board: vec![None; board_cols * board_rows],
             current: None,
             next_piece,
-            move_timer: 0.0,
             move_interval: 0.04,
             drop_timer: 0.0,
             drop_interval: 0.15,
@@ -232,14 +221,6 @@ impl Tetris {
             }
         }
         true
-    }
-
-    #[allow(dead_code)]
-    fn board_get(&self, col: i32, row: i32) -> Option<Piece> {
-        if col < 0 || col >= self.board_cols as i32 || row < 0 || row >= self.board_rows as i32 {
-            return Some(Piece::I); // treat out-of-bounds as filled
-        }
-        self.board[row as usize * self.board_cols + col as usize]
     }
 
     fn board_set(&mut self, col: i32, row: i32, piece: Piece) {

@@ -8,10 +8,6 @@ use rand::RngExt;
 /// Simulation runs on a downsampled grid (1/4 canvas dimensions) for performance,
 /// then is upscaled during rendering.
 pub struct ReactionDiffusion {
-    #[allow(dead_code)]
-    canvas_width: usize,
-    #[allow(dead_code)]
-    canvas_height: usize,
     sim_width: usize,
     sim_height: usize,
     /// Substrate concentration (starts at 1.0 everywhere)
@@ -50,8 +46,6 @@ impl ReactionDiffusion {
         let size = sim_w * sim_h;
 
         let mut rd = ReactionDiffusion {
-            canvas_width: width,
-            canvas_height: height,
             sim_width: sim_w,
             sim_height: sim_h,
             u: vec![1.0; size],

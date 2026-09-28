@@ -84,6 +84,7 @@ pub trait Animation {
     /// Returns a list of supported external control parameters.
     /// Each entry is `(param_name, min_value, max_value)`.
     /// The empty slice default means the animation has no tunable parameters.
+    /// Runtime caller arrives with ENH-005 (named external parameters).
     #[allow(dead_code)]
     fn supported_params(&self) -> &'static [(&'static str, f64, f64)] {
         &[]
