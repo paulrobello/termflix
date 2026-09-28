@@ -1,4 +1,4 @@
-use super::Animation;
+use super::{Animation, ParamSpec};
 use crate::render::Canvas;
 use rand::RngExt;
 
@@ -64,13 +64,33 @@ impl Animation for Pong {
     }
 
     fn set_params(&mut self, params: &crate::external::ExternalParams) {
+        // Deprecated global-field overloads; suppressed once named params are used.
+
         if let Some(speed) = params.speed {
             self.speed_mult = speed.clamp(0.2, 3.0);
         }
     }
 
-    fn supported_params(&self) -> &'static [(&'static str, f64, f64)] {
-        &[("speed", 0.2, 3.0)]
+    fn param_specs(&self) -> &'static [ParamSpec] {
+        &[ParamSpec {
+            name: "speed",
+            min: 0.2,
+            max: 3.0,
+            default: 1.0,
+            help: "ball speed multiplier",
+        }]
+    }
+
+    fn set_param(&mut self, name: &str, value01: f64) {
+        let spec = self
+            .param_specs()
+            .iter()
+            .find(|s| s.name == name)
+            .expect("caller validates name against param_specs");
+        let v = spec.lerp(value01);
+        if name == "speed" {
+            self.speed_mult = v;
+        }
     }
 
     fn update(&mut self, canvas: &mut Canvas, dt: f64, _time: f64) {

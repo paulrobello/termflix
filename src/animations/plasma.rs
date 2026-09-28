@@ -1,4 +1,4 @@
-use super::Animation;
+use super::{Animation, ParamSpec};
 use crate::render::Canvas;
 
 /// Classic plasma effect using overlapping sine waves
@@ -20,13 +20,33 @@ impl Animation for Plasma {
     }
 
     fn set_params(&mut self, params: &crate::external::ExternalParams) {
+        // Deprecated global-field overloads; suppressed once named params are used.
+
         if let Some(cs) = params.color_shift {
             self.hue_bias = cs.clamp(0.0, 1.0);
         }
     }
 
-    fn supported_params(&self) -> &'static [(&'static str, f64, f64)] {
-        &[("color_shift", 0.0, 1.0)]
+    fn param_specs(&self) -> &'static [ParamSpec] {
+        &[ParamSpec {
+            name: "hue_bias",
+            min: 0.0,
+            max: 1.0,
+            default: 0.0,
+            help: "hue rotation of the plasma palette",
+        }]
+    }
+
+    fn set_param(&mut self, name: &str, value01: f64) {
+        let spec = self
+            .param_specs()
+            .iter()
+            .find(|s| s.name == name)
+            .expect("caller validates name against param_specs");
+        let v = spec.lerp(value01);
+        if name == "hue_bias" {
+            self.hue_bias = v;
+        }
     }
 
     fn update(&mut self, canvas: &mut Canvas, _dt: f64, time: f64) {

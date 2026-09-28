@@ -1,4 +1,4 @@
-use super::Animation;
+use super::{Animation, ParamSpec};
 use crate::generators::{ColorGradient, ColorStop, EmitterConfig, ParticleSystem};
 use crate::render::Canvas;
 use rand::RngExt;
@@ -70,6 +70,8 @@ impl Animation for Particles {
     }
 
     fn set_params(&mut self, params: &crate::external::ExternalParams) {
+        // Deprecated global-field overloads; suppressed once named params are used.
+
         if let Some(intensity) = params.intensity {
             self.gravity = intensity.clamp(0.0, 40.0);
         }
@@ -78,8 +80,37 @@ impl Animation for Particles {
         }
     }
 
-    fn supported_params(&self) -> &'static [(&'static str, f64, f64)] {
-        &[("intensity", 0.0, 40.0), ("color_shift", 0.9, 1.0)]
+    fn param_specs(&self) -> &'static [ParamSpec] {
+        &[
+            ParamSpec {
+                name: "gravity",
+                min: 0.0,
+                max: 40.0,
+                default: 15.0,
+                help: "downward acceleration on particles",
+            },
+            ParamSpec {
+                name: "drag",
+                min: 0.9,
+                max: 1.0,
+                default: 0.99,
+                help: "velocity retention per frame (higher = less drag)",
+            },
+        ]
+    }
+
+    fn set_param(&mut self, name: &str, value01: f64) {
+        let spec = self
+            .param_specs()
+            .iter()
+            .find(|s| s.name == name)
+            .expect("caller validates name against param_specs");
+        let v = spec.lerp(value01);
+        match name {
+            "gravity" => self.gravity = v,
+            "drag" => self.drag = v,
+            _ => {}
+        }
     }
 
     fn update(&mut self, canvas: &mut Canvas, dt: f64, _time: f64) {

@@ -59,6 +59,10 @@ struct Cli {
     #[arg(short, long)]
     list: Option<Option<String>>,
 
+    /// List per-animation external parameters and exit (optional: one animation)
+    #[arg(long)]
+    list_params: Option<Option<String>>,
+
     /// Cycle through all animations (seconds per animation, 0 = disabled)
     #[arg(long)]
     cycle: Option<u32>,
@@ -280,6 +284,42 @@ fn main() -> io::Result<()> {
         }
         let player = record::Player::load(play_path)?;
         return player.play();
+    }
+
+    if let Some(target) = cli.list_params {
+        let names: Vec<&str> = match target.as_deref() {
+            Some(name) if animations::ANIMATION_NAMES.contains(&name) => vec![name],
+            Some(name) => {
+                eprintln!("Unknown animation: '{name}'\n\nAvailable animations:");
+                for &(name, desc) in animations::ANIMATIONS {
+                    eprintln!("  {:<12} {}", name, desc);
+                }
+                std::process::exit(1);
+            }
+            None => animations::ANIMATION_NAMES.to_vec(),
+        };
+        let (cols, rows) = (80usize, 24usize);
+        for name in names {
+            let anim = animations::create(name, cols, rows, 1.0)
+                .unwrap_or_else(|| panic!("unknown animation {name}"));
+            let specs = anim.param_specs();
+            if specs.is_empty() {
+                println!("{name}: no parameters");
+                continue;
+            }
+            println!("{name}:");
+            for s in specs {
+                println!(
+                    "  {:<16} {:<18} (default {}) — {}",
+                    s.name,
+                    format!("{}..={}", trim_f64(s.min), trim_f64(s.max)),
+                    trim_f64(s.default),
+                    s.help
+                );
+            }
+        }
+        println!("\nSet via external control: {{\"params\": {{\"<name>\": 0.0..1.0}}}}");
+        return Ok(());
     }
 
     if let Some(filter) = cli.list {
@@ -1375,8 +1415,16 @@ fn run_loop(settings: Settings, keybindings: &KeyBindings) -> io::Result<()> {
         let effective_dt = (dt * speed).min(0.5);
         state.virtual_time += effective_dt;
 
-        // Per-animation semantic params
-        state.anim.set_params(state.ext.params());
+        // Per-animation semantic params: the deprecated global-field overloads
+        // (suppressed once named params are in use), then any pending named
+        // parameters, applied once against the animation's declared specs.
+        state.anim.set_params(&state.ext.legacy_overloads());
+        for (name, value01) in state.ext.take_named_params() {
+            let specs = state.anim.param_specs();
+            if specs.iter().any(|s| s.name == name) {
+                state.anim.set_param(&name, value01);
+            }
+        }
 
         // Transition fade processing. Advanced before the frame so its factor
         // feeds this frame's intensity; a mid-fade respawn at factor 0.0
@@ -1518,6 +1566,13 @@ fn parse_render_mode(s: &str) -> Option<RenderMode> {
         "ascii" => Some(RenderMode::Ascii),
         _ => None,
     }
+}
+
+/// Format a parameter bound without trailing zeros (0.05, not 0.050000…).
+fn trim_f64(v: f64) -> String {
+    let s = format!("{v:.4}");
+    let s = s.trim_end_matches('0').trim_end_matches('.');
+    s.to_string()
 }
 
 fn parse_color_mode(s: &str) -> Option<ColorMode> {

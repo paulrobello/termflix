@@ -1,4 +1,4 @@
-use super::Animation;
+use super::{Animation, ParamSpec};
 use crate::render::Canvas;
 use rand::RngExt;
 
@@ -151,13 +151,33 @@ impl Animation for Snake {
     }
 
     fn set_params(&mut self, params: &crate::external::ExternalParams) {
+        // Deprecated global-field overloads; suppressed once named params are used.
+
         if let Some(speed) = params.speed {
             self.move_interval = speed.clamp(0.02, 0.2);
         }
     }
 
-    fn supported_params(&self) -> &'static [(&'static str, f64, f64)] {
-        &[("speed", 0.02, 0.2)]
+    fn param_specs(&self) -> &'static [ParamSpec] {
+        &[ParamSpec {
+            name: "move_interval",
+            min: 0.02,
+            max: 0.2,
+            default: 0.08,
+            help: "seconds between snake moves (higher = slower)",
+        }]
+    }
+
+    fn set_param(&mut self, name: &str, value01: f64) {
+        let spec = self
+            .param_specs()
+            .iter()
+            .find(|s| s.name == name)
+            .expect("caller validates name against param_specs");
+        let v = spec.lerp(value01);
+        if name == "move_interval" {
+            self.move_interval = v;
+        }
     }
 
     fn update(&mut self, canvas: &mut Canvas, dt: f64, _time: f64) {

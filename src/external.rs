@@ -7,6 +7,10 @@ pub struct ExternalParams {
     pub scale: Option<f64>,
     pub render: Option<String>,
     pub color: Option<String>,
+    /// Animation-specific parameters by name (`{"params": {"cohesion": 0.5}}`).
+    /// Values are normalized to 0..1 against the animation's declared range.
+    #[serde(default)]
+    pub params: std::collections::BTreeMap<String, f64>,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -19,6 +23,11 @@ pub struct CurrentState {
     pub intensity: Option<f64>,
     pub color_shift: Option<f64>,
     pub params: ExternalParams,
+    named_pending: std::collections::BTreeMap<String, f64>,
+    /// Once any named parameter arrives, the deprecated global-field overloads
+    /// (speed/intensity/color_shift doubling as per-animation knobs) stop being
+    /// forwarded, so the two paths cannot fight over the same field.
+    named_ever_seen: bool,
 }
 
 impl CurrentState {
@@ -44,6 +53,10 @@ impl CurrentState {
         if let Some(v) = p.color_shift {
             self.color_shift = Some(v);
         }
+        if !p.params.is_empty() {
+            self.named_ever_seen = true;
+            self.named_pending.extend(p.params);
+        }
 
         // Keep self.params in sync with accumulated state
         self.params.animation = self.animation_pending.clone();
@@ -53,6 +66,7 @@ impl CurrentState {
         self.params.speed = self.speed;
         self.params.intensity = self.intensity;
         self.params.color_shift = self.color_shift;
+        self.params.params.clear();
     }
 
     pub fn take_animation_change(&mut self) -> Option<String> {
@@ -87,6 +101,24 @@ impl CurrentState {
         v
     }
 
+    /// Drain pending named parameters. `run_loop` applies each drained value
+    /// once, via the animation's `set_param`.
+    pub fn take_named_params(&mut self) -> std::collections::BTreeMap<String, f64> {
+        std::mem::take(&mut self.named_pending)
+    }
+
+    /// The parameter set to forward to the deprecated global-field overload
+    /// path (`set_params`). Once any named parameter has been received, the
+    /// globals stop doubling as per-animation knobs, so the two paths cannot
+    /// fight over the same internal field.
+    pub fn legacy_overloads(&self) -> ExternalParams {
+        if self.named_ever_seen {
+            ExternalParams::default()
+        } else {
+            self.params.clone()
+        }
+    }
+
     pub fn speed(&self) -> f64 {
         self.speed.unwrap_or(1.0)
     }
@@ -97,10 +129,6 @@ impl CurrentState {
 
     pub fn color_shift(&self) -> f64 {
         self.color_shift.unwrap_or(0.0)
-    }
-
-    pub fn params(&self) -> &ExternalParams {
-        &self.params
     }
 }
 
@@ -228,5 +256,50 @@ mod tests {
         assert_eq!(change.as_deref(), Some("fire"));
         // Second take returns None
         assert!(state.take_animation_change().is_none());
+    }
+
+    #[test]
+    fn named_params_merge_and_drain_once() {
+        let mut state = CurrentState::default();
+        let mut incoming = ExternalParams::default();
+        incoming.params.insert("cohesion".to_string(), 0.5);
+        state.merge(incoming);
+        let drained = state.take_named_params();
+        assert_eq!(drained.get("cohesion"), Some(&0.5));
+        // Drain is one-shot: the next frame gets nothing.
+        assert!(state.take_named_params().is_empty());
+    }
+
+    #[test]
+    fn named_params_deserialize_from_json() {
+        let p: ExternalParams =
+            serde_json::from_str(r#"{"params": {"cohesion": 0.5, "drag": 1.0}}"#).unwrap();
+        assert_eq!(p.params.get("cohesion"), Some(&0.5));
+        assert_eq!(p.params.get("drag"), Some(&1.0));
+    }
+
+    #[test]
+    fn old_json_without_params_still_valid() {
+        let p: ExternalParams = serde_json::from_str(r#"{"intensity": 1.0}"#).unwrap();
+        assert_eq!(p.intensity, Some(1.0));
+        assert!(p.params.is_empty());
+    }
+
+    #[test]
+    fn legacy_overloads_suppressed_after_named_params() {
+        let mut state = CurrentState::default();
+        state.merge(ExternalParams {
+            intensity: Some(1.0),
+            ..Default::default()
+        });
+        // Before any named param: globals flow through untouched.
+        assert_eq!(state.legacy_overloads().intensity, Some(1.0));
+
+        let mut incoming = ExternalParams::default();
+        incoming.params.insert("cohesion".to_string(), 0.2);
+        state.merge(incoming);
+        // After a named param: the deprecated overload path goes quiet.
+        assert_eq!(state.legacy_overloads().intensity, None);
+        assert!(state.legacy_overloads().speed.is_none());
     }
 }

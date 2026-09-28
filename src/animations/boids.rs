@@ -1,4 +1,4 @@
-use super::Animation;
+use super::{Animation, ParamSpec};
 use crate::color::hsv_to_rgb;
 use crate::render::Canvas;
 use rand::RngExt;
@@ -115,6 +115,7 @@ impl Animation for Boids {
     }
 
     fn set_params(&mut self, params: &crate::external::ExternalParams) {
+        // Deprecated global-field overloads; suppressed once named params are used.
         if let Some(intensity) = params.intensity {
             self.cohes_factor = intensity.clamp(0.001, 0.05);
         }
@@ -123,8 +124,37 @@ impl Animation for Boids {
         }
     }
 
-    fn supported_params(&self) -> &'static [(&'static str, f64, f64)] {
-        &[("intensity", 0.001, 0.05), ("color_shift", 0.5, 5.0)]
+    fn param_specs(&self) -> &'static [ParamSpec] {
+        &[
+            ParamSpec {
+                name: "cohesion",
+                min: 0.001,
+                max: 0.05,
+                default: 0.005,
+                help: "strength of attraction toward the flock center",
+            },
+            ParamSpec {
+                name: "separation",
+                min: 0.5,
+                max: 5.0,
+                default: 2.0,
+                help: "strength of repulsion from nearby boids",
+            },
+        ]
+    }
+
+    fn set_param(&mut self, name: &str, value01: f64) {
+        let spec = self
+            .param_specs()
+            .iter()
+            .find(|s| s.name == name)
+            .expect("caller validates name against param_specs");
+        let v = spec.lerp(value01);
+        match name {
+            "cohesion" => self.cohes_factor = v,
+            "separation" => self.sep_factor = v,
+            _ => {}
+        }
     }
 
     fn update(&mut self, canvas: &mut Canvas, dt: f64, _time: f64) {
@@ -263,5 +293,34 @@ impl Animation for Boids {
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn set_param_maps_normalized_cohesion_and_separation() {
+        let mut b = Boids::new(80, 24, 1.0);
+        assert_eq!(b.cohes_factor, 0.005); // constructor default
+        b.set_param("cohesion", 1.0);
+        assert!((b.cohes_factor - 0.05).abs() < 1e-9);
+        b.set_param("cohesion", 0.0);
+        assert!((b.cohes_factor - 0.001).abs() < 1e-9);
+        b.set_param("separation", 0.5);
+        assert!((b.sep_factor - 2.75).abs() < 1e-9);
+    }
+
+    #[test]
+    fn legacy_intensity_overload_still_pins_like_today() {
+        let mut b = Boids::new(80, 24, 1.0);
+        let p = crate::external::ExternalParams {
+            intensity: Some(1.0),
+            ..Default::default()
+        };
+        b.set_params(&p);
+        // Today's behavior: neutral 1.0 clamps to the 0.05 maximum.
+        assert!((b.cohes_factor - 0.05).abs() < 1e-9);
     }
 }

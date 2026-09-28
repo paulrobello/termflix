@@ -1,4 +1,4 @@
-use super::Animation;
+use super::{Animation, ParamSpec};
 use crate::render::Canvas;
 
 /// Sine wave interference pattern
@@ -23,6 +23,8 @@ impl Animation for Wave {
     }
 
     fn set_params(&mut self, params: &crate::external::ExternalParams) {
+        // Deprecated global-field overloads; suppressed once named params are used.
+
         if let Some(intensity) = params.intensity {
             self.amplitude = intensity.clamp(0.1, 1.0);
         }
@@ -31,8 +33,37 @@ impl Animation for Wave {
         }
     }
 
-    fn supported_params(&self) -> &'static [(&'static str, f64, f64)] {
-        &[("intensity", 0.1, 1.0), ("color_shift", 0.05, 0.8)]
+    fn param_specs(&self) -> &'static [ParamSpec] {
+        &[
+            ParamSpec {
+                name: "amplitude",
+                min: 0.1,
+                max: 1.0,
+                default: 0.5,
+                help: "wave height",
+            },
+            ParamSpec {
+                name: "frequency",
+                min: 0.05,
+                max: 0.8,
+                default: 0.3,
+                help: "wave spatial frequency",
+            },
+        ]
+    }
+
+    fn set_param(&mut self, name: &str, value01: f64) {
+        let spec = self
+            .param_specs()
+            .iter()
+            .find(|s| s.name == name)
+            .expect("caller validates name against param_specs");
+        let v = spec.lerp(value01);
+        match name {
+            "amplitude" => self.amplitude = v,
+            "frequency" => self.frequency = v,
+            _ => {}
+        }
     }
 
     fn update(&mut self, canvas: &mut Canvas, _dt: f64, time: f64) {

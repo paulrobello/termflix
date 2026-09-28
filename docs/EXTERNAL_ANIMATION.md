@@ -141,7 +141,7 @@ Lines that are empty, whitespace-only, or contain invalid JSON are silently skip
 
 **scale** causes the animation to be fully rebuilt with a new particle or element count. This is more expensive than other fields because it reallocates internal animation state.
 
-> **⚠️ Note:** the ranges above are the *global* pipeline's. Eight animations (`fire`, `plasma`, `boids`, `particles`, `wave`, `sort`, `snake`, `pong`) additionally reinterpret `speed`, `intensity`, or `color_shift` with their own tighter clamps — see the table under [Semantic Overrides](#semantic-overrides).
+> **⚠️ Note:** the ranges above are the *global* pipeline's. Eight animations (`fire`, `plasma`, `boids`, `particles`, `wave`, `sort`, `snake`, `pong`) additionally accepted `speed`, `intensity`, or `color_shift` as deprecated per-animation overloads — the supported mechanism now is [named parameters](#named-parameters-params).
 
 ### Render Mode Values
 
@@ -255,133 +255,62 @@ Every animation implements the `Animation` trait defined in `src/animations/mod.
 fn set_params(&mut self, _params: &crate::external::ExternalParams) {}
 ```
 
-All 60 animations inherit this default. Most animations do not need to inspect external params because `speed`, `intensity`, and `color_shift` are handled globally by the main loop and canvas post-processing. Only animations that want to respond to a parameter **semantically** — wiring it to an internal simulation variable — need to override `set_params`.
+All 60 animations inherit this default. Most animations do not need to inspect external params because `speed`, `intensity`, and `color_shift` are handled globally by the main loop and canvas post-processing. Animations that want a **semantic** knob — wiring an external value to an internal simulation variable — declare [`param_specs`](#named-parameters-params) instead; `set_params` remains only as the deprecated global-field overload path.
 
-### Semantic Overrides
+### Named Parameters (`params`)
 
-Eight animations implement semantic overrides that give a field additional, animation-specific meaning beyond its global effect.
+Eight animations accept animation-specific parameters by name. Send them under the `params` key; each value is **normalized 0.0–1.0** and mapped onto the animation's declared range, so every knob shares one documented scale:
 
-Each override clamps the incoming value to an animation-specific range — not the global field range:
+```json
+{ "params": { "cohesion": 0.8 } }
+```
 
-| Animation | Field | Controls | Accepted range |
-|-----------|-------|----------|-----------------|
-| `fire` | `intensity` | `heat_rate` (burn temperature / decay) | 0.0 – 2.0 |
-| `plasma` | `color_shift` | `hue_bias` (palette rotation) | 0.0 – 1.0 |
-| `boids` | `intensity` | `cohes_factor` (cohesion pull) | 0.001 – 0.05 |
-| `boids` | `color_shift` | `sep_factor` (separation force) | 0.5 – 5.0 |
+| Animation | Parameter | Range (0.0 – 1.0 maps to) | Default | Controls |
+|-----------|-----------|---------------------------|---------|----------|
+| `boids` | `cohesion` | 0.001 – 0.05 | 0.005 | pull toward the flock center |
+| `boids` | `separation` | 0.5 – 5.0 | 2.0 | repulsion from nearby boids |
+| `fire` | `heat` | 0.0 – 2.0 | 0.8 | burn temperature / flame height |
+| `particles` | `gravity` | 0.0 – 40.0 | 15.0 | downward pull |
+| `particles` | `drag` | 0.9 – 1.0 | 0.99 | air resistance (1.0 = none) |
+| `plasma` | `hue_bias` | 0.0 – 1.0 | 0.0 | palette hue rotation |
+| `pong` | `speed` | 0.2 – 3.0 | 1.0 | ball/paddle velocity multiplier |
+| `snake` | `move_interval` | 0.02 – 0.2 | 0.08 | seconds between moves (higher = slower) |
+| `sort` | `ops_per_frame` | 1 – 20 | 3 | sort operations per frame |
+| `wave` | `amplitude` | 0.1 – 1.0 | 0.5 | wave height |
+| `wave` | `frequency` | 0.05 – 0.8 | 0.3 | wave spatial frequency |
+
+Discover the list (with ranges, defaults, and help text) from the binary:
+
+```bash
+termflix --list-params boids     # one animation
+termflix --list-params           # all animations
+```
+
+A named parameter is applied once, when its message arrives. Unknown names (or names the running animation has not declared) are ignored. Switching animations resets nothing — parameters apply to whichever animation declares them.
+
+### Deprecated: Global-Field Overloads
+
+> **⚠️ Deprecated:** historically, the eight animations above reinterpreted the *global* `speed` / `intensity` / `color_shift` fields as per-animation knobs with incompatible ranges — so a value that is neutral for the global pipeline was not neutral for the animation (sending `{"color_shift": 0.0}` — globally a no-op — clamped `boids`' separation to its 0.5 minimum; sending `{"speed": 1.0}` to `snake` clamped its move interval to the slowest 0.2 s). This behavior is kept for one release for existing scripts, but it turns **off permanently** the first time any `params` message arrives, and will be removed in the next minor version. Migrate scripts to the named parameters above.
+
+For reference while it still works, the deprecated mappings are:
+
+| Animation | Global field | Mapped to | Accepted range |
+|-----------|--------------|-----------|----------------|
+| `fire` | `intensity` | `heat_rate` | 0.0 – 2.0 |
+| `plasma` | `color_shift` | `hue_bias` | 0.0 – 1.0 |
+| `boids` | `intensity` | `cohesion` (pull toward flock center) | 0.001 – 0.05 |
+| `boids` | `color_shift` | `separation` (repulsion from neighbors) | 0.5 – 5.0 |
 | `particles` | `intensity` | `gravity` | 0.0 – 40.0 |
 | `particles` | `color_shift` | `drag` (1.0 = none, 0.9 = strong) | 0.9 – 1.0 |
 | `wave` | `intensity` | `amplitude` | 0.1 – 1.0 |
 | `wave` | `color_shift` | `frequency` | 0.05 – 0.8 |
-| `sort` | `speed` | `ops_per_frame` (sort operations per frame) | 1.0 – 20.0 |
-| `snake` | `speed` | `move_interval` (seconds between moves — **higher = slower**) | 0.02 – 0.2 |
-| `pong` | `speed` | `speed_mult` (ball/paddle velocity multiplier) | 0.2 – 3.0 |
+| `sort` | `speed` | `ops_per_frame` | 1.0 – 20.0 |
+| `snake` | `speed` | `move_interval` (seconds; **higher = slower**) | 0.02 – 0.2 |
+| `pong` | `speed` | `speed_mult` | 0.2 – 3.0 |
 
-> **⚠️ Warning:** a value that is neutral for the global pipeline is **not** neutral for these animations, and the semantic effect applies on top of the global one. Sending `{"color_shift": 0.0}` — globally a no-op — while running `boids` clamps `sep_factor` to its 0.5 minimum and changes the flocking. Sending `{"speed": 1.0}` to `snake` clamps `move_interval` to 0.2 s, its slowest setting. Once sent, a semantic value persists until another value for the same field arrives; there is no way to unset it.
+The global meaning of the field (time multiplier, brightness, hue) still applies on top while the overload is active.
 
-```mermaid
-graph TD
-    subgraph "Global effects (all animations)"
-        GI["intensity → canvas brightness scale\napply_effects() post-processes every pixel"]
-        GCS["color_shift → global hue rotation\napply_effects() rotates all colors"]
-        GS["speed → virtual time multiplier\ndt * speed each frame"]
-    end
-
-    subgraph "fire (src/animations/fire.rs)"
-        FI["intensity → heat_rate\nControls bottom-row burn temperature\nand vertical decay rate\n(higher = taller flames)"]
-    end
-
-    subgraph "plasma (src/animations/plasma.rs)"
-        PCS["color_shift → hue_bias\nRotates plasma palette independently\nof the global hue shift"]
-    end
-
-    subgraph "boids (src/animations/boids.rs)"
-        BI["intensity → cohes_factor\nFlock cohesion strength\n(0.001–0.05)"]
-        BCS["color_shift → sep_factor\nSeparation force\n(0.5–5.0)"]
-    end
-
-    subgraph "particles (src/animations/particles.rs)"
-        PI["intensity → gravity\nParticle gravity pull\n(0.0–40.0)"]
-        PCS2["color_shift → drag\nAir resistance\n(0.9–1.0)"]
-    end
-
-    subgraph "wave (src/animations/wave.rs)"
-        WI["intensity → amplitude\nWave height\n(0.1–1.0)"]
-        WCS["color_shift → frequency\nWave frequency\n(0.05–0.8)"]
-    end
-
-    subgraph "sort, snake, pong (speed override)"
-        SSI["speed → ops_per_frame / move_interval / speed_mult\nControls simulation pace"]
-    end
-
-    GI -.->|"also drives"| FI
-    GI -.->|"also drives"| BI
-    GI -.->|"also drives"| PI
-    GI -.->|"also drives"| WI
-    GCS -.->|"also drives"| PCS
-    GCS -.->|"also drives"| BCS
-    GCS -.->|"also drives"| PCS2
-    GCS -.->|"also drives"| WCS
-    GS -.->|"also drives"| SSI
-
-    style GI fill:#37474f,stroke:#78909c,stroke-width:2px,color:#ffffff
-    style GCS fill:#37474f,stroke:#78909c,stroke-width:2px,color:#ffffff
-    style GS fill:#37474f,stroke:#78909c,stroke-width:2px,color:#ffffff
-    style FI fill:#e65100,stroke:#ff9800,stroke-width:3px,color:#ffffff
-    style PCS fill:#880e4f,stroke:#c2185b,stroke-width:2px,color:#ffffff
-    style BI fill:#1b5e20,stroke:#4caf50,stroke-width:2px,color:#ffffff
-    style BCS fill:#1b5e20,stroke:#4caf50,stroke-width:2px,color:#ffffff
-    style PI fill:#0d47a1,stroke:#2196f3,stroke-width:2px,color:#ffffff
-    style PCS2 fill:#0d47a1,stroke:#2196f3,stroke-width:2px,color:#ffffff
-    style WI fill:#1a237e,stroke:#3f51b5,stroke-width:2px,color:#ffffff
-    style WCS fill:#1a237e,stroke:#3f51b5,stroke-width:2px,color:#ffffff
-    style SSI fill:#ff6f00,stroke:#ffa726,stroke-width:2px,color:#ffffff
-```
-
-**fire — `intensity` maps to `heat_rate`**
-
-When you send `intensity` while running the fire animation, the value is wired directly to the fire's internal `heat_rate`. A higher `heat_rate` makes the bottom row burn hotter and slows the vertical decay, producing taller flames. A lower value produces cooler, shorter flames. The global canvas brightness effect still applies on top of this.
-
-```rust
-fn set_params(&mut self, params: &crate::external::ExternalParams) {
-    if let Some(intensity) = params.intensity {
-        self.heat_rate = intensity.clamp(0.0, 2.0);
-    }
-}
-```
-
-**plasma — `color_shift` maps to `hue_bias`**
-
-When you send `color_shift` while running the plasma animation, the value is wired to `hue_bias`, which rotates the plasma's internal color palette. This is independent of the global hue rotation applied by `apply_effects`. The result is that plasma responds to `color_shift` twice: once in its internal sine-wave color calculation (semantic) and once in the post-processing pass (global).
-
-```rust
-fn set_params(&mut self, params: &crate::external::ExternalParams) {
-    if let Some(cs) = params.color_shift {
-        self.hue_bias = cs.clamp(0.0, 1.0);
-    }
-}
-```
-
-**boids — `intensity` maps to `cohes_factor`, `color_shift` maps to `sep_factor`**
-
-The boids flocking simulation wires `intensity` to the cohesion factor (how strongly boids pull toward the flock center, range 0.001–0.05) and `color_shift` to the separation factor (how strongly boids repel from nearby neighbors, range 0.5–5.0). Higher cohesion creates tighter flocks; higher separation creates more spaced-out formations.
-
-**particles — `intensity` maps to `gravity`, `color_shift` maps to `drag`**
-
-The fireworks particle system wires `intensity` to gravity (range 0.0–40.0, where 0 is weightless and 40 pulls particles down fast) and `color_shift` to the drag coefficient (range 0.9–1.0, where 1.0 is no drag and 0.9 applies strong air resistance).
-
-**wave — `intensity` maps to `amplitude`, `color_shift` maps to `frequency`**
-
-The sine wave interference pattern wires `intensity` to wave amplitude (range 0.1–1.0) and `color_shift` to wave frequency (range 0.05–0.8). This gives direct control over the wave shape in addition to the global brightness and hue effects.
-
-**sort, snake, pong — `speed` maps to simulation pace**
-
-Three game/simulation animations override `speed` with animation-specific meaning:
-- **sort**: `speed` controls `ops_per_frame` (range 1–20), the number of sorting operations performed per frame.
-- **snake**: `speed` controls `move_interval` (range 0.02–0.2 seconds), the delay between snake moves.
-- **pong**: `speed` controls `speed_mult` (range 0.2–3.0), a multiplier on ball and paddle velocity.
-
-> **✅ Tip:** To add semantic behavior to a new animation, override `set_params` in its `impl Animation` block. The method receives the full `ExternalParams` struct, so you can respond to any combination of fields.
+> **✅ Tip:** To add semantic behavior to a new animation, declare `param_specs` (name, range, default, help text) and map values in `set_param` using `ParamSpec::lerp`; `--list-params` picks it up automatically. The `param_specs_are_valid` test rejects empty ranges, out-of-range defaults, and duplicate names.
 
 ---
 
@@ -445,6 +374,14 @@ echo '{"render":"braille","speed":1.5}' | termflix fire
 ```bash
 echo '{"animation":"plasma","speed":2.0,"intensity":1.2,"color_shift":0.1}' | termflix
 ```
+
+**Set animation-specific parameters by name:**
+
+```bash
+echo '{"animation":"boids","params":{"cohesion":0.8,"separation":0.3}}' | termflix
+```
+
+Named values are normalized 0.0–1.0 against the animation's declared range (`termflix --list-params boids` prints them).
 
 ### File-Based Control
 

@@ -1,4 +1,4 @@
-use super::Animation;
+use super::{Animation, ParamSpec};
 use crate::color::hsv_to_rgb;
 use crate::render::Canvas;
 use rand::RngExt;
@@ -217,13 +217,33 @@ impl Animation for Sort {
     }
 
     fn set_params(&mut self, params: &crate::external::ExternalParams) {
+        // Deprecated global-field overloads; suppressed once named params are used.
+
         if let Some(speed) = params.speed {
             self.ops_per_frame = speed.clamp(1.0, 20.0) as usize;
         }
     }
 
-    fn supported_params(&self) -> &'static [(&'static str, f64, f64)] {
-        &[("speed", 1.0, 20.0)]
+    fn param_specs(&self) -> &'static [ParamSpec] {
+        &[ParamSpec {
+            name: "ops_per_frame",
+            min: 1.0,
+            max: 20.0,
+            default: 3.0,
+            help: "compare/swap operations per frame (higher = faster sort)",
+        }]
+    }
+
+    fn set_param(&mut self, name: &str, value01: f64) {
+        let spec = self
+            .param_specs()
+            .iter()
+            .find(|s| s.name == name)
+            .expect("caller validates name against param_specs");
+        let v = spec.lerp(value01);
+        if name == "ops_per_frame" {
+            self.ops_per_frame = v as usize;
+        }
     }
 
     fn update(&mut self, canvas: &mut Canvas, dt: f64, _time: f64) {

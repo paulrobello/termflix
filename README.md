@@ -228,6 +228,9 @@ termflix --data-file /tmp/termflix.json
 # Or pipe NDJSON on stdin — active whenever no --data-file is set and stdin is not a TTY
 echo '{"animation": "plasma", "intensity": 0.8}' | termflix plasma
 
+# Animation-specific parameters by name (values normalized 0..1; --list-params prints them)
+echo '{"animation": "boids", "params": {"cohesion": 0.8}}' | termflix boids
+
 # Deterministic, reproducible output (same seed = same frames; gallery always seeds)
 termflix fire --seed 42
 ```
@@ -254,6 +257,7 @@ All flags from `termflix --help`. Short forms exist where shown.
 | `--screensaver` | Exit on first keypress or focus loss |
 | `--screensaver-keys` | Keep hotkeys active in screensaver mode; any unbound key still dismisses |
 | `--data-file <PATH>` | Watch an NDJSON file for external control params |
+| `--list-params [<ANIM>]` | List per-animation external parameters with ranges and defaults |
 | `--seed <N>` | RNG seed for deterministic, reproducible output |
 | `--bloom-intensity <V>` | Bloom/glow intensity (0.0-1.0) |
 | `--bloom-threshold <V>` | Bloom brightness threshold (0.0-1.0, default 0.6) |

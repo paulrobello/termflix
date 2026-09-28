@@ -1,4 +1,4 @@
-use super::Animation;
+use super::{Animation, ParamSpec};
 use crate::render::Canvas;
 use rand::RngExt;
 
@@ -38,13 +38,33 @@ impl Animation for Fire {
     }
 
     fn set_params(&mut self, params: &crate::external::ExternalParams) {
+        // Deprecated global-field overloads; suppressed once named params are used.
+
         if let Some(intensity) = params.intensity {
             self.heat_rate = intensity.clamp(0.0, 2.0);
         }
     }
 
-    fn supported_params(&self) -> &'static [(&'static str, f64, f64)] {
-        &[("intensity", 0.0, 2.0)]
+    fn param_specs(&self) -> &'static [ParamSpec] {
+        &[ParamSpec {
+            name: "heat",
+            min: 0.0,
+            max: 2.0,
+            default: 0.8,
+            help: "heat injection rate at the fire's base",
+        }]
+    }
+
+    fn set_param(&mut self, name: &str, value01: f64) {
+        let spec = self
+            .param_specs()
+            .iter()
+            .find(|s| s.name == name)
+            .expect("caller validates name against param_specs");
+        let v = spec.lerp(value01);
+        if name == "heat" {
+            self.heat_rate = v;
+        }
     }
 
     fn on_resize(&mut self, width: usize, height: usize) {

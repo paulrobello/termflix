@@ -63,6 +63,23 @@ pub mod wave;
 
 use crate::render::{Canvas, RenderMode};
 
+/// A named external-control parameter: its range and default, with a
+/// one-line help text for `--list-params`.
+pub struct ParamSpec {
+    pub name: &'static str,
+    pub min: f64,
+    pub max: f64,
+    pub default: f64,
+    pub help: &'static str,
+}
+
+impl ParamSpec {
+    /// Map a normalized 0..1 external value onto this spec's range.
+    pub fn lerp(&self, value01: f64) -> f64 {
+        self.min + value01.clamp(0.0, 1.0) * (self.max - self.min)
+    }
+}
+
 /// Every animation implements this trait
 pub trait Animation {
     /// Human-readable name
@@ -88,14 +105,16 @@ pub trait Animation {
     /// Override to update stored dimensions and rebuild size-dependent state.
     fn on_resize(&mut self, _width: usize, _height: usize) {}
 
-    /// Returns a list of supported external control parameters.
-    /// Each entry is `(param_name, min_value, max_value)`.
+    /// The named parameters this animation accepts (see [`ParamSpec`]).
     /// The empty slice default means the animation has no tunable parameters.
-    /// Runtime caller arrives with ENH-005 (named external parameters).
-    #[allow(dead_code)]
-    fn supported_params(&self) -> &'static [(&'static str, f64, f64)] {
+    fn param_specs(&self) -> &'static [ParamSpec] {
         &[]
     }
+
+    /// Apply one named parameter. `value01` is normalized 0..1; map it with
+    /// [`ParamSpec::lerp`] against the matching spec. Unknown names are
+    /// ignored by the caller before this is invoked.
+    fn set_param(&mut self, _name: &str, _value01: f64) {}
 }
 
 macro_rules! declare_animations {
@@ -326,77 +345,54 @@ mod tests {
     }
 
     #[test]
-    fn test_fire_supported_params_includes_intensity() {
-        let anim = create("fire", 80, 24, 1.0).unwrap();
-        let params = anim.supported_params();
-        assert!(!params.is_empty(), "fire should have supported params");
-        assert!(params.iter().any(|&(name, _, _)| name == "intensity"));
+    fn param_specs_are_valid() {
+        for &name in ANIMATION_NAMES {
+            let anim = create(name, 80, 24, 1.0).unwrap();
+            let specs = anim.param_specs();
+            for (i, s) in specs.iter().enumerate() {
+                assert!(
+                    s.min < s.max,
+                    "{name} param '{}' has min {} >= max {}",
+                    s.name,
+                    s.min,
+                    s.max
+                );
+                assert!(
+                    s.default >= s.min && s.default <= s.max,
+                    "{name} param '{}' default {} outside {}..{}",
+                    s.name,
+                    s.default,
+                    s.min,
+                    s.max
+                );
+                assert!(
+                    !s.help.is_empty(),
+                    "{name} param '{}' missing help text",
+                    s.name
+                );
+                // Names unique within the animation.
+                assert!(
+                    !specs[..i].iter().any(|o| o.name == s.name),
+                    "{name} has duplicate param '{}'",
+                    s.name
+                );
+            }
+        }
     }
 
     #[test]
-    fn test_plasma_supported_params_includes_color_shift() {
-        let anim = create("plasma", 80, 24, 1.0).unwrap();
-        let params = anim.supported_params();
-        assert!(!params.is_empty(), "plasma should have supported params");
-        assert!(params.iter().any(|&(name, _, _)| name == "color_shift"));
-    }
-
-    #[test]
-    fn test_unknown_animation_has_empty_params() {
-        // Most animations have no declared params — verify default returns empty
-        let anim = create("matrix", 80, 24, 1.0).unwrap();
-        let params = anim.supported_params();
-        assert!(params.is_empty(), "matrix should have no declared params");
-    }
-
-    #[test]
-    fn test_boids_supported_params() {
-        let anim = create("boids", 80, 24, 1.0).unwrap();
-        let params = anim.supported_params();
-        assert!(!params.is_empty());
-        assert!(params.iter().any(|&(name, _, _)| name == "intensity"));
-        assert!(params.iter().any(|&(name, _, _)| name == "color_shift"));
-    }
-
-    #[test]
-    fn test_particles_supported_params() {
-        let anim = create("particles", 80, 24, 1.0).unwrap();
-        let params = anim.supported_params();
-        assert!(!params.is_empty());
-        assert!(params.iter().any(|&(name, _, _)| name == "intensity"));
-    }
-
-    #[test]
-    fn test_wave_supported_params() {
-        let anim = create("wave", 80, 24, 1.0).unwrap();
-        let params = anim.supported_params();
-        assert!(!params.is_empty());
-        assert!(params.iter().any(|&(name, _, _)| name == "intensity"));
-        assert!(params.iter().any(|&(name, _, _)| name == "color_shift"));
-    }
-
-    #[test]
-    fn test_sort_supported_params() {
-        let anim = create("sort", 80, 24, 1.0).unwrap();
-        let params = anim.supported_params();
-        assert!(!params.is_empty());
-        assert!(params.iter().any(|&(name, _, _)| name == "speed"));
-    }
-
-    #[test]
-    fn test_snake_supported_params() {
-        let anim = create("snake", 80, 24, 1.0).unwrap();
-        let params = anim.supported_params();
-        assert!(!params.is_empty());
-        assert!(params.iter().any(|&(name, _, _)| name == "speed"));
-    }
-
-    #[test]
-    fn test_pong_supported_params() {
-        let anim = create("pong", 80, 24, 1.0).unwrap();
-        let params = anim.supported_params();
-        assert!(!params.is_empty());
-        assert!(params.iter().any(|&(name, _, _)| name == "speed"));
+    fn param_specs_set_param_maps_normalized_value() {
+        let mut anim = create("boids", 80, 24, 1.0).unwrap();
+        let specs = anim.param_specs();
+        let cohesion = specs.iter().find(|s| s.name == "cohesion").unwrap();
+        assert_eq!(cohesion.min, 0.001);
+        assert_eq!(cohesion.max, 0.05);
+        anim.set_param("cohesion", 1.0);
+        // set_param is trait-dispatched; the effect is verified in boids' own
+        // unit test. Here: normalized mapping arithmetic holds.
+        assert_eq!(cohesion.lerp(0.0), 0.001);
+        assert_eq!(cohesion.lerp(1.0), 0.05);
+        assert!((cohesion.lerp(0.5) - 0.0255).abs() < 1e-9);
     }
 
     #[test]
