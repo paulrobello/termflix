@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Added
+- **Deterministic seeded RNG (`--seed`)** — All 60 animations now draw randomness from one seedable RNG source instead of thread-local entropy, so `--seed N` (or `seed = N` in the config file) produces byte-identical frames run to run — enabling reproducible bug reports ("seed 42, frame 300") and stable gallery diffs. `--gallery` is always seeded (default seed 1, overridable with `--seed`) so captures are reproducible. Unseeded behavior is unchanged (OS entropy). Verified by a new `every_animation_is_deterministic_with_seed` test covering all animations.
+
 ## [0.8.0] - 2026-06-18
 
 ### Added

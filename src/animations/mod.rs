@@ -366,4 +366,51 @@ mod tests {
         assert!(!params.is_empty());
         assert!(params.iter().any(|&(name, _, _)| name == "speed"));
     }
+
+    #[test]
+    fn every_animation_is_deterministic_with_seed() {
+        use std::collections::hash_map::DefaultHasher;
+        use std::hash::{Hash, Hasher};
+
+        // Two seeded runs of 20 updates at 40x12 must hash identically
+        // (pixel bit patterns + colors). Collects every offender so one
+        // non-deterministic animation doesn't hide the rest.
+        let run = |name: &str| -> u64 {
+            crate::rng::set_seed(42);
+            let mut canvas = crate::render::Canvas::new(
+                40,
+                12,
+                crate::render::RenderMode::HalfBlock,
+                crate::render::ColorMode::TrueColor,
+            );
+            let Some(mut anim) = create(name, canvas.width, canvas.height, 1.0) else {
+                panic!("create({name:?}) returned None");
+            };
+            anim.on_resize(canvas.width, canvas.height);
+            let mut hasher = DefaultHasher::new();
+            for step in 0..20 {
+                canvas.clear();
+                anim.update(&mut canvas, 1.0 / 24.0, step as f64 / 24.0);
+                canvas.apply_effects(1.0, 0.0);
+                for p in &canvas.pixels {
+                    p.to_bits().hash(&mut hasher);
+                }
+                for c in &canvas.colors {
+                    c.hash(&mut hasher);
+                }
+            }
+            hasher.finish()
+        };
+
+        let mut nondeterministic: Vec<&str> = Vec::new();
+        for &name in ANIMATION_NAMES {
+            if run(name) != run(name) {
+                nondeterministic.push(name);
+            }
+        }
+        assert!(
+            nondeterministic.is_empty(),
+            "non-deterministic with seed 42: {nondeterministic:?}"
+        );
+    }
 }

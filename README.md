@@ -205,6 +205,9 @@ termflix plasma --single-threaded
 
 # Drive parameters from an external NDJSON file (one JSON object per line)
 termflix --data-file /tmp/termflix.json
+
+# Deterministic, reproducible output (same seed = same frames; gallery always seeds)
+termflix fire --seed 42
 ```
 
 ## Hotkeys
@@ -336,6 +339,9 @@ unlimited_fps = false
 
 # External control via an NDJSON file (one JSON object per line)
 # data_file = "/tmp/termflix.json"
+
+# RNG seed for deterministic, reproducible output (unset = OS entropy)
+# seed = 42
 
 # Post-processing effects
 # [postproc]

@@ -1,6 +1,7 @@
 //! Seedable RNG source for animations (thread-local).
 //!
-//! Unseeded behavior matches `rand::rng()` (OS entropy). After [`set_seed`],
+//! Unseeded behavior uses OS entropy, like the thread-local RNG the rand
+//! crate provides. After [`set_seed`],
 //! every [`new_rng`] call on this thread returns a distinct but reproducible
 //! `StdRng` stream, so seeded runs produce byte-identical frames run to run.
 use rand::{SeedableRng, rngs::StdRng};
