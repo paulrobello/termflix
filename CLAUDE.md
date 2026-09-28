@@ -19,6 +19,8 @@ cloning — without it `core.hooksPath` points at `.git/hooks` and the hook neve
 
 Run a single test: `cargo test test_name` (e.g., `cargo test test_create_returns_some`)
 
+Golden-frame tests hash every animation's deterministic output against `src/animations/golden_hashes.txt`. An intentional visual change requires regenerating the goldens and reviewing their diff like any other code change: `TERMFLIX_UPDATE_GOLDEN=1 cargo test golden`
+
 ## Architecture
 
 **Pure synchronous Rust** (edition 2024, requires Rust 1.88+, per Cargo.toml rust-version). No async runtime. One optional background thread for external control file watching.

@@ -17,6 +17,8 @@ pub mod fountain;
 pub mod galton;
 pub mod garden;
 pub mod globe;
+#[cfg(test)]
+mod golden;
 pub mod hackerman;
 pub mod ink_in_water;
 pub mod invaders;
