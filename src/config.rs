@@ -93,7 +93,7 @@ pub struct PostProcConfig {
     pub scanlines: Option<bool>,
 }
 
-/// Get the config file path: ~/.config/termflix/config.toml
+/// Get the config file path: dirs::config_dir()/termflix/config.toml (per-OS)
 pub fn config_path() -> Option<PathBuf> {
     dirs::config_dir().map(|d| d.join("termflix").join("config.toml"))
 }

@@ -114,7 +114,7 @@ graph TD
 ```
 src/
 ├── main.rs            — CLI parsing (clap), startup, run_loop event loop
-├── config.rs          — Config struct, TOML config (~/.config/termflix/config.toml)
+├── config.rs          — Config struct, TOML config (dirs::config_dir()/termflix/config.toml, per-OS)
 ├── external.rs        — External control: ExternalParams, CurrentState, spawn_reader
 ├── record.rs          — Recording (Recorder) and playback (Player), .asciianim format
 ├── gif.rs             — Hand-written GIF89a encoder with LZW compression
@@ -498,7 +498,7 @@ termflix uses a three-tier priority system where each level can override the one
 ```mermaid
 flowchart LR
     CLI["CLI Flags\n--fps --render --color\n--scale --cycle --smoothing\n--palette --colorblind --dither etc."]
-    CFG["~/.config/termflix/config.toml\nTOML file (all keys optional)"]
+    CFG["<config_dir>/termflix/config.toml\nTOML file (all keys optional)"]
     DEF["Compiled defaults\nfps=24 color=TrueColor\nanim=fire scale=1.0"]
 
     DEF -->|fallback| CFG

@@ -82,7 +82,7 @@ struct Cli {
     #[arg(long)]
     clean: bool,
 
-    /// Generate default config file at ~/.config/termflix/config.toml
+    /// Generate default config file at the OS config dir (see --show-config)
     #[arg(long)]
     init_config: bool,
 

@@ -369,7 +369,13 @@ Three game/simulation animations override `speed` with animation-specific meanin
 
 The `data_file` path can be set in the config file so you do not need to pass `--data-file` on every launch.
 
-Config file location: `~/.config/termflix/config.toml`
+Config file location (per-OS, via `dirs::config_dir()`):
+
+- **macOS**: `~/Library/Application Support/termflix/config.toml`
+- **Linux**: `~/.config/termflix/config.toml`
+- **Windows**: `%APPDATA%\termflix\config.toml`
+
+Run `termflix --show-config` to print the resolved path.
 
 Generate the default config template with:
 

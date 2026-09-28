@@ -25,7 +25,7 @@ The classic **matrix** rain animation also got a depth-layer rework — three la
 
 ## Post-processing effects
 
-Configurable via CLI flags or the `[postproc]` section of `~/.config/termflix/config.toml`. Applied to the canvas pixel buffer after `update()` and before `render()`, fully decoupled from animation logic.
+Configurable via CLI flags or the `[postproc]` section of the config file (`termflix --show-config` prints its per-OS path). Applied to the canvas pixel buffer after `update()` and before `render()`, fully decoupled from animation logic.
 
 - `--bloom-intensity` + `--bloom-threshold` — pixels above the brightness threshold spread a soft glow into their 8 neighbors. On by default at 0.4 / 0.6. Toggle live with the `b` key.
 - `--vignette` — quadratic-falloff edge darkening based on distance from canvas center.
