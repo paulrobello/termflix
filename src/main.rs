@@ -693,6 +693,10 @@ struct LoopState {
     frame_count: u64,
     actual_fps: f64,
     fps_update: Instant,
+    /// Merged external-control parameters (ndjson stdin/file channel).
+    ext: CurrentState,
+    /// Animation time accumulated with the external speed multiplier applied.
+    virtual_time: f64,
 }
 
 /// Result of one keypress in the main loop.
@@ -992,6 +996,198 @@ fn write_frame(
     }
 }
 
+/// What the event drain wants the main loop to do.
+enum EventOutcome {
+    Continue,
+    Quit,
+}
+
+/// Block up to `timeout` for the next event (this doubles as the frame
+/// timer), then drain every pending event. Returns `Quit` when any event
+/// path requested exit; the caller performs the recording save and teardown.
+fn drain_events(
+    state: &mut LoopState,
+    keybindings: &KeyBindings,
+    screensaver: bool,
+    screensaver_keys: bool,
+    timeout: Duration,
+) -> io::Result<EventOutcome> {
+    if event::poll(timeout)? {
+        // Drain all pending events
+        loop {
+            match event::read()? {
+                Event::Resize(w, h) => {
+                    state.cols = w;
+                    state.rows = h;
+                    state.needs_rebuild = true;
+                    state.resize_cooldown = Instant::now();
+                }
+                Event::Key(KeyEvent {
+                    code,
+                    kind: KeyEventKind::Press,
+                    modifiers,
+                    ..
+                }) => {
+                    match handle_key(
+                        state,
+                        code,
+                        modifiers,
+                        keybindings,
+                        screensaver,
+                        screensaver_keys,
+                    ) {
+                        LoopAction::Quit => return Ok(EventOutcome::Quit),
+                        LoopAction::Switch(idx) => {
+                            state.anim_index = idx;
+                            start_transition(&mut state.transition, state.anim_index);
+                            state.cycle_start = Instant::now();
+                        }
+                        LoopAction::Continue => {}
+                    }
+                }
+                Event::FocusGained if screensaver && !screensaver_keys => {
+                    return Ok(EventOutcome::Quit);
+                }
+                _ => {}
+            }
+            // Check for more events without blocking
+            if !event::poll(Duration::ZERO)? {
+                break;
+            }
+        }
+    }
+    Ok(EventOutcome::Continue)
+}
+
+/// Save the recording: leave the alt screen and drop raw mode so the save
+/// message is visible, write the file, then re-enter so the exit path's own
+/// restore stays symmetric.
+fn save_recording(rec: record::Recorder, path: &str) -> io::Result<()> {
+    let mut stdout = io::stdout();
+    execute!(stdout, cursor::Show, terminal::LeaveAlternateScreen)?;
+    terminal::disable_raw_mode()?;
+    rec.save(path)?;
+    println!("Saved {} frames to {}", rec.frame_count(), path);
+    terminal::enable_raw_mode()?;
+    execute!(stdout, terminal::EnterAlternateScreen, cursor::Hide)?;
+    Ok(())
+}
+
+/// Drain the external-control channel and apply animation/scale/render/color
+/// changes. Called once per frame before the animation update; render/color
+/// changes flag a rebuild which the caller honors by skipping the frame.
+fn apply_external_params(
+    state: &mut LoopState,
+    params_rx: &Option<mpsc::Receiver<ExternalParams>>,
+) {
+    if let Some(rx) = params_rx {
+        while let Ok(p) = rx.try_recv() {
+            state.ext.merge(p);
+        }
+    }
+
+    // Handle animation switch from external params
+    if let Some(name) = state.ext.take_animation_change()
+        && animations::ANIMATION_NAMES.contains(&name.as_str())
+    {
+        state.anim_index = animations::ANIMATION_NAMES
+            .iter()
+            .position(|&n| n == name.as_str())
+            .unwrap_or(state.anim_index);
+        start_transition(&mut state.transition, state.anim_index);
+        state.cycle_start = Instant::now();
+    }
+
+    // Handle scale change from external params
+    if let Some(new_scale) = state.ext.take_scale_change() {
+        state.scale = new_scale.clamp(0.5, 2.0);
+        state.anim = spawn_animation(
+            animations::ANIMATION_NAMES[state.anim_index],
+            state.canvas.width,
+            state.canvas.height,
+            state.scale,
+        );
+        state.prev_grid = None;
+    }
+
+    // Handle render mode change from external params
+    if let Some(render_name) = state.ext.take_render_change()
+        && let Some(new_mode) = parse_render_mode(&render_name)
+    {
+        state.render_mode = new_mode;
+        state.needs_rebuild = true;
+    }
+
+    // Handle color mode change from external params
+    if let Some(color_name) = state.ext.take_color_change()
+        && let Some(new_mode) = parse_color_mode(&color_name)
+    {
+        state.color_mode = new_mode;
+        state.needs_rebuild = true;
+    }
+}
+
+/// Roll the once-per-second fps accounting forward one frame.
+fn tick_fps(state: &mut LoopState) {
+    state.frame_count += 1;
+    if state.fps_update.elapsed() >= Duration::from_secs(1) {
+        state.actual_fps = state.frame_count as f64 / state.fps_update.elapsed().as_secs_f64();
+        state.frame_count = 0;
+        state.fps_update = Instant::now();
+    }
+}
+
+/// The threaded renderer's own write-time measurement when active, else wall
+/// time since `write_start` (the single-threaded path).
+#[cfg(unix)]
+fn frame_write_dur(
+    renderer: Option<&render_sink::ThreadedRenderer>,
+    write_start: Instant,
+) -> Duration {
+    match renderer {
+        Some(r) => Duration::from_secs_f64(r.write_time_secs()),
+        None => write_start.elapsed(),
+    }
+}
+
+/// Record per-frame timings when profiling is on (write time is only known
+/// after the write step).
+fn record_profile(
+    profile: &mut Option<FrameProfile>,
+    update_dur: Duration,
+    render_dur: Duration,
+    write_dur: Duration,
+) {
+    if let Some(p) = profile {
+        let total_dur = update_dur + render_dur + write_dur;
+        p.record(update_dur, render_dur, write_dur, total_dur);
+    }
+}
+
+/// Adaptive frame pacing: adjust frame duration based on actual write
+/// throughput. In tmux, writes block when the buffer is full, so write time
+/// reflects how fast tmux can actually process our output. In unlimited mode,
+/// adaptive pacing prevents flooding the terminal faster than it can drain
+/// (which blocks libc::write() for seconds and makes quit unresponsive); with
+/// frame_dur=ZERO the target becomes write_time_ema*1.1 — no hard cap, but
+/// no terminal flood either.
+fn adapt_pacing(
+    state: &mut LoopState,
+    write_dur: Duration,
+    frame_dur: Duration,
+    is_tmux: bool,
+    unlimited: bool,
+) {
+    if is_tmux || unlimited {
+        state.write_time_ema = state.write_time_ema * 0.8 + write_dur.as_secs_f64() * 0.2;
+        // Target: frame duration = write time + small margin for animation update
+        // This ensures we never write faster than tmux can process
+        let target =
+            Duration::from_secs_f64((state.write_time_ema * 1.1).max(frame_dur.as_secs_f64()));
+        state.adaptive_frame_dur = target.min(Duration::from_millis(200)); // cap at 5fps minimum
+    }
+}
+
 fn run_loop(settings: Settings, keybindings: &KeyBindings) -> io::Result<()> {
     let Settings {
         anim_name,
@@ -1062,6 +1258,8 @@ fn run_loop(settings: Settings, keybindings: &KeyBindings) -> io::Result<()> {
             frame_count: 0,
             actual_fps: 0.0,
             fps_update: Instant::now(),
+            ext: CurrentState::default(),
+            virtual_time: 0.0,
         }
     };
     rebuild_canvas(&mut state, color_quant)?;
@@ -1078,8 +1276,6 @@ fn run_loop(settings: Settings, keybindings: &KeyBindings) -> io::Result<()> {
             None
         }
     };
-    let mut ext_state = CurrentState::default();
-    let mut virtual_time: f64 = 0.0;
     let mut frame_profile = profile.then(|| FrameProfile::new(initial_anim));
     let quit = Arc::new(AtomicBool::new(false));
     #[cfg(unix)]
@@ -1101,62 +1297,21 @@ fn run_loop(settings: Settings, keybindings: &KeyBindings) -> io::Result<()> {
         let time_to_next = state
             .adaptive_frame_dur
             .saturating_sub(last_frame.elapsed());
-        if event::poll(time_to_next)? {
-            // Drain all pending events
-            loop {
-                match event::read()? {
-                    Event::Resize(w, h) => {
-                        state.cols = w;
-                        state.rows = h;
-                        state.needs_rebuild = true;
-                        state.resize_cooldown = Instant::now();
-                    }
-                    Event::Key(KeyEvent {
-                        code,
-                        kind: KeyEventKind::Press,
-                        modifiers,
-                        ..
-                    }) => {
-                        match handle_key(
-                            &mut state,
-                            code,
-                            modifiers,
-                            keybindings,
-                            screensaver,
-                            screensaver_keys,
-                        ) {
-                            LoopAction::Quit => {
-                                if let (Some(rec), Some(path)) = (recorder.take(), record_path) {
-                                    let mut stdout = io::stdout();
-                                    execute!(stdout, cursor::Show, terminal::LeaveAlternateScreen)?;
-                                    terminal::disable_raw_mode()?;
-                                    rec.save(path)?;
-                                    println!("Saved {} frames to {}", rec.frame_count(), path);
-                                    terminal::enable_raw_mode()?;
-                                    execute!(stdout, terminal::EnterAlternateScreen, cursor::Hide)?;
-                                }
-                                quit.store(true, Ordering::Release);
-                                break 'outer Ok(());
-                            }
-                            LoopAction::Switch(idx) => {
-                                state.anim_index = idx;
-                                start_transition(&mut state.transition, state.anim_index);
-                                state.cycle_start = Instant::now();
-                            }
-                            LoopAction::Continue => {}
-                        }
-                    }
-                    Event::FocusGained if screensaver && !screensaver_keys => {
-                        quit.store(true, Ordering::Release);
-                        break 'outer Ok(());
-                    }
-                    _ => {}
-                }
-                // Check for more events without blocking
-                if !event::poll(Duration::ZERO)? {
-                    break;
-                }
+        if matches!(
+            drain_events(
+                &mut state,
+                keybindings,
+                screensaver,
+                screensaver_keys,
+                time_to_next
+            )?,
+            EventOutcome::Quit
+        ) {
+            if let (Some(rec), Some(path)) = (recorder.take(), record_path) {
+                save_recording(rec, path)?;
             }
+            quit.store(true, Ordering::Release);
+            break 'outer Ok(());
         }
 
         // After resize, wait for things to settle before rendering
@@ -1184,52 +1339,8 @@ fn run_loop(settings: Settings, keybindings: &KeyBindings) -> io::Result<()> {
         let dt = now.duration_since(last_frame).as_secs_f64().min(0.1); // Cap dt to avoid huge jumps
         last_frame = now;
 
-        // Drain external params channel
-        if let Some(rx) = &params_rx {
-            while let Ok(p) = rx.try_recv() {
-                ext_state.merge(p);
-            }
-        }
-
-        // Handle animation switch from external params
-        if let Some(name) = ext_state.take_animation_change()
-            && animations::ANIMATION_NAMES.contains(&name.as_str())
-        {
-            state.anim_index = animations::ANIMATION_NAMES
-                .iter()
-                .position(|&n| n == name.as_str())
-                .unwrap_or(state.anim_index);
-            start_transition(&mut state.transition, state.anim_index);
-            state.cycle_start = Instant::now();
-        }
-
-        // Handle state.scale change from external params
-        if let Some(new_scale) = ext_state.take_scale_change() {
-            state.scale = new_scale.clamp(0.5, 2.0);
-            state.anim = spawn_animation(
-                animations::ANIMATION_NAMES[state.anim_index],
-                state.canvas.width,
-                state.canvas.height,
-                state.scale,
-            );
-            state.prev_grid = None;
-        }
-
-        // Handle render mode change from external params
-        if let Some(render_name) = ext_state.take_render_change()
-            && let Some(new_mode) = parse_render_mode(&render_name)
-        {
-            state.render_mode = new_mode;
-            state.needs_rebuild = true;
-        }
-
-        // Handle color mode change from external params
-        if let Some(color_name) = ext_state.take_color_change()
-            && let Some(new_mode) = parse_color_mode(&color_name)
-        {
-            state.color_mode = new_mode;
-            state.needs_rebuild = true;
-        }
+        // Drain external params channel and apply changes
+        apply_external_params(&mut state, &params_rx);
 
         // If a rebuild was triggered by external params, skip this frame
         if state.needs_rebuild {
@@ -1237,18 +1348,18 @@ fn run_loop(settings: Settings, keybindings: &KeyBindings) -> io::Result<()> {
         }
 
         // Virtual time with speed multiplier
-        let speed = ext_state.speed().clamp(0.1, 5.0);
+        let speed = state.ext.speed().clamp(0.1, 5.0);
         let effective_dt = (dt * speed).min(0.5);
-        virtual_time += effective_dt;
+        state.virtual_time += effective_dt;
 
         // Per-animation semantic params
-        state.anim.set_params(ext_state.params());
+        state.anim.set_params(state.ext.params());
 
         // Update animation
         let update_start = Instant::now();
         state
             .anim
-            .update(&mut state.canvas, effective_dt, virtual_time);
+            .update(&mut state.canvas, effective_dt, state.virtual_time);
         let update_dur = update_start.elapsed();
 
         // Temporal brightness smoothing (opt-in). Runs on raw animation output,
@@ -1267,8 +1378,8 @@ fn run_loop(settings: Settings, keybindings: &KeyBindings) -> io::Result<()> {
         }
 
         // Post-process state.canvas with intensity and hue shift
-        let intensity = ext_state.intensity().clamp(0.0, 2.0) * transition_factor;
-        let hue = ext_state.color_shift().clamp(0.0, 1.0);
+        let intensity = state.ext.intensity().clamp(0.0, 2.0) * transition_factor;
+        let hue = state.ext.color_shift().clamp(0.0, 1.0);
         state.canvas.apply_effects(intensity, hue);
         state.canvas.apply_color_assist(&assist);
         state.canvas.post_process(&state.postproc);
@@ -1292,16 +1403,10 @@ fn run_loop(settings: Settings, keybindings: &KeyBindings) -> io::Result<()> {
         frame_buf.extend_from_slice(frame.as_bytes());
 
         // Status bar
-        state.frame_count += 1;
-        if state.fps_update.elapsed() >= Duration::from_secs(1) {
-            state.actual_fps = state.frame_count as f64 / state.fps_update.elapsed().as_secs_f64();
-            state.frame_count = 0;
-            state.fps_update = Instant::now();
-        }
-        let status = status_line(&state, unlimited, recorder.is_some(), &assist);
-        if !status.is_empty() {
-            frame_buf.extend_from_slice(status.as_bytes());
-        }
+        tick_fps(&mut state);
+        frame_buf.extend_from_slice(
+            status_line(&state, unlimited, recorder.is_some(), &assist).as_bytes(),
+        );
 
         // Final size check — if terminal changed since we started rendering, discard frame
         let (final_cols, final_rows) = terminal::size()?;
@@ -1332,42 +1437,14 @@ fn run_loop(settings: Settings, keybindings: &KeyBindings) -> io::Result<()> {
             stdout.flush()?;
         }
 
-        // Profile this frame (write time is only known after the write step).
-        if let Some(ref mut p) = frame_profile {
-            #[cfg(unix)]
-            let write_dur = if !single_threaded {
-                Duration::from_secs_f64(renderer.as_ref().map_or(0.0, |r| r.write_time_secs()))
-            } else {
-                write_start.elapsed()
-            };
-            #[cfg(not(unix))]
-            let write_dur = write_start.elapsed();
-            let total_dur = update_dur + render_dur + write_dur;
-            p.record(update_dur, render_dur, write_dur, total_dur);
-        }
-
-        // Adaptive frame pacing: adjust frame duration based on actual write throughput.
-        // In tmux, writes block when the buffer is full, so write time reflects
-        // how fast tmux can actually process our output.
-        // In unlimited mode, also enable adaptive pacing: without it, we flood the
-        // terminal faster than it can drain, causing libc::write() to block for seconds
-        // and making quit unresponsive. With frame_dur=ZERO, the target becomes
-        // state.write_time_ema*1.1 — no hard cap, but no terminal flood either.
-        if is_tmux || unlimited {
-            #[cfg(unix)]
-            let write_secs = match renderer.as_ref() {
-                Some(r) => r.write_time_secs(),
-                None => write_start.elapsed().as_secs_f64(),
-            };
-            #[cfg(not(unix))]
-            let write_secs = write_start.elapsed().as_secs_f64();
-            state.write_time_ema = state.write_time_ema * 0.8 + write_secs * 0.2;
-            // Target: frame duration = write time + small margin for animation update
-            // This ensures we never write faster than tmux can process
-            let target =
-                Duration::from_secs_f64((state.write_time_ema * 1.1).max(frame_dur.as_secs_f64()));
-            state.adaptive_frame_dur = target.min(Duration::from_millis(200)); // cap at 5fps minimum
-        }
+        // Profile this frame and adapt pacing (write time is only known after
+        // the write step).
+        #[cfg(unix)]
+        let write_dur = frame_write_dur(renderer.as_ref(), write_start);
+        #[cfg(not(unix))]
+        let write_dur = write_start.elapsed();
+        record_profile(&mut frame_profile, update_dur, render_dur, write_dur);
+        adapt_pacing(&mut state, write_dur, frame_dur, is_tmux, unlimited);
     };
     #[cfg(unix)]
     if let Some(r) = renderer {
@@ -1598,6 +1675,8 @@ mod loop_tests {
             frame_count: 0,
             actual_fps: 0.0,
             fps_update: Instant::now(),
+            ext: CurrentState::default(),
+            virtual_time: 0.0,
         }
     }
 
@@ -1840,6 +1919,44 @@ mod loop_tests {
         let mut state = test_state();
         state.hide_status = true;
         assert_eq!(status_line(&state, false, false, &ColorAssist::None), "");
+    }
+
+    #[test]
+    fn external_params_switch_scale_and_modes() {
+        let mut state = test_state();
+        state.ext.merge(ExternalParams {
+            animation: Some("matrix".to_string()),
+            scale: Some(1.5),
+            render: Some("braille".to_string()),
+            color: Some("ansi256".to_string()),
+            ..Default::default()
+        });
+        apply_external_params(&mut state, &None);
+        assert_eq!(animations::ANIMATION_NAMES[state.anim_index], "matrix");
+        assert_eq!(state.scale, 1.5);
+        assert_eq!(state.render_mode, RenderMode::Braille);
+        assert_eq!(state.color_mode, ColorMode::Ansi256);
+        assert!(state.needs_rebuild);
+        assert!(matches!(
+            state.transition,
+            TransitionState::FadingOut { .. }
+        ));
+    }
+
+    #[test]
+    fn external_params_unknown_names_are_ignored() {
+        let mut state = test_state();
+        state.ext.merge(ExternalParams {
+            animation: Some("no-such-anim".to_string()),
+            render: Some("no-such-render".to_string()),
+            color: Some("no-such-color".to_string()),
+            ..Default::default()
+        });
+        apply_external_params(&mut state, &None);
+        assert_eq!(state.anim_index, 0); // fire stays
+        assert_eq!(state.render_mode, RenderMode::HalfBlock);
+        assert_eq!(state.color_mode, ColorMode::TrueColor);
+        assert!(!state.needs_rebuild);
     }
 
     impl LoopState {
