@@ -1,4 +1,4 @@
-.PHONY: build release run test lint fmt typecheck checkall clean deploy ci gallery grind-start grind-start-anthropic grind-start-zai grind-start-grok grind-start-codex grind-start-omp grind-stop grind-clean-logs
+.PHONY: build release run test lint fmt fmt-check typecheck checkall hooks install clean deploy ci gallery grind-start grind-start-anthropic grind-start-zai grind-start-grok grind-start-codex grind-start-omp grind-stop grind-clean-logs
 
 build:
 	cargo build
@@ -13,7 +13,7 @@ test:
 	cargo test
 
 lint:
-	cargo clippy -- -D warnings
+	cargo clippy --all-targets --all-features -- -D warnings
 
 fmt:
 	cargo fmt
@@ -24,7 +24,12 @@ fmt-check:
 typecheck:
 	cargo check
 
-checkall: fmt lint typecheck test build
+checkall: fmt-check lint typecheck test build
+
+# Point git at the repo's hooks dir so .githooks/pre-commit actually runs.
+hooks:
+	git config core.hooksPath .githooks
+	@echo "core.hooksPath=.githooks — pre-commit now runs make checkall"
 
 install:
 	cargo install --path .

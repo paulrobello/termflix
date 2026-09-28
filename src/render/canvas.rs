@@ -533,9 +533,7 @@ mod tests {
     #[test]
     fn test_vignette_darkens_edges() {
         let mut c = Canvas::new(10, 10, RenderMode::HalfBlock, ColorMode::TrueColor);
-        for p in &mut c.pixels {
-            *p = 1.0;
-        }
+        c.pixels.fill(1.0);
         let cfg = PostProcessConfig {
             bloom: 0.0,
             bloom_threshold: 0.6,
@@ -551,9 +549,7 @@ mod tests {
     #[test]
     fn test_scanlines_darkens_even_rows() {
         let mut c = test_canvas();
-        for p in &mut c.pixels {
-            *p = 1.0;
-        }
+        c.pixels.fill(1.0);
         let cfg = PostProcessConfig {
             bloom: 0.0,
             bloom_threshold: 0.6,

@@ -1,41 +1,8 @@
 #!/bin/bash
+# Runs the same gate as CI (fmt-check + clippy + check + test + build).
+# Installed via `make hooks`, which points core.hooksPath at this dir.
 set -e
 
-echo "🔍 Running pre-commit checks..."
-
-# Format check (don't auto-format, just check)
-echo "  Checking formatting..."
-cargo fmt -- --check || {
-    echo "❌ Code not formatted. Run 'cargo fmt' first."
-    exit 1
-}
-
-# Clippy
-echo "  Running clippy..."
-cargo clippy -- -D warnings || {
-    echo "❌ Clippy found warnings."
-    exit 1
-}
-
-# Type check
-echo "  Type checking..."
-cargo check || {
-    echo "❌ Type check failed."
-    exit 1
-}
-
-# Tests
-echo "  Running tests..."
-cargo test --quiet || {
-    echo "❌ Tests failed."
-    exit 1
-}
-
-# Build
-echo "  Building..."
-cargo build --quiet || {
-    echo "❌ Build failed."
-    exit 1
-}
-
+echo "🔍 Running pre-commit gate (make checkall)..."
+make checkall
 echo "✅ All checks passed!"

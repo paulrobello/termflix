@@ -5,15 +5,17 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Build & Development Commands
 
 ```bash
-make checkall          # Full pre-commit suite: fmt + lint + typecheck + test + build
+make checkall          # Full gate: fmt-check + lint + typecheck + test + build (same as CI)
 make test              # cargo test
-make lint              # cargo clippy -- -D warnings (warnings are errors)
+make lint              # cargo clippy --all-targets --all-features -- -D warnings
 make fmt               # cargo fmt
 make build             # cargo build
 make run ARGS="fire"   # cargo run --release -- fire
+make hooks             # install the pre-commit hook (sets core.hooksPath=.githooks)
 ```
 
-Pre-commit hook (`.githooks/pre-commit`) enforces all of `checkall`. Git hooks dir is `.githooks/`.
+Pre-commit hook (`.githooks/pre-commit`) runs `make checkall`. Run `make hooks` once after
+cloning — without it `core.hooksPath` points at `.git/hooks` and the hook never fires.
 
 Run a single test: `cargo test test_name` (e.g., `cargo test test_create_returns_some`)
 
