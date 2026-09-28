@@ -40,7 +40,7 @@ pub struct ReactionDiffusion {
     reset_timer: f64,
     /// Seconds before auto-reset
     reset_duration: f64,
-    rng: rand::rngs::ThreadRng,
+    rng: rand::rngs::StdRng,
 }
 
 impl ReactionDiffusion {
@@ -67,7 +67,7 @@ impl ReactionDiffusion {
             steps_per_tick: 3,
             reset_timer: 0.0,
             reset_duration: 30.0,
-            rng: rand::rng(),
+            rng: crate::rng::new_rng(),
         };
         rd.seed();
         rd

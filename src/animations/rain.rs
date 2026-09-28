@@ -24,12 +24,12 @@ pub struct Rain {
     wind: f64,
     wind_target: f64,
     wind_timer: f64,
-    rng: rand::rngs::ThreadRng,
+    rng: rand::rngs::StdRng,
 }
 
 impl Rain {
     pub fn new(width: usize, height: usize, scale: f64) -> Self {
-        let mut rng = rand::rng();
+        let mut rng = crate::rng::new_rng();
         let num_drops = ((width * height) as f64 / 80.0 * scale) as usize;
         let drops = (0..num_drops)
             .map(|_| {
@@ -93,7 +93,7 @@ impl Rain {
             wind: 0.0,
             wind_target: 0.0,
             wind_timer: 0.0,
-            rng: rand::rng(),
+            rng: crate::rng::new_rng(),
         }
     }
 }

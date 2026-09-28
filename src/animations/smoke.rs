@@ -11,7 +11,7 @@ pub struct Smoke {
     system: ParticleSystem,
     noise: Perlin,
     emit_accum: f64,
-    rng: rand::rngs::ThreadRng,
+    rng: rand::rngs::StdRng,
 }
 
 impl Smoke {
@@ -65,7 +65,7 @@ impl Smoke {
             system: ParticleSystem::new(config, (4000.0 * scale) as usize),
             noise: Perlin::new(123),
             emit_accum: 0.0,
-            rng: rand::rng(),
+            rng: crate::rng::new_rng(),
         }
     }
 }

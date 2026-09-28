@@ -114,7 +114,7 @@ pub struct Rainforest {
     mid_offset: f64,
     fg_offset: f64,
 
-    rng: rand::rngs::ThreadRng,
+    rng: rand::rngs::StdRng,
 }
 
 impl Rainforest {
@@ -136,7 +136,7 @@ impl Rainforest {
             bg_offset: 0.0,
             mid_offset: 0.0,
             fg_offset: 0.0,
-            rng: rand::rng(),
+            rng: crate::rng::new_rng(),
         };
         s.build_scene();
         s

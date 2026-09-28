@@ -48,7 +48,7 @@ pub struct Snake {
     move_interval: f64,
     score: usize,
     game_over_timer: f64,
-    rng: rand::rngs::ThreadRng,
+    rng: rand::rngs::StdRng,
 }
 
 impl Snake {
@@ -58,7 +58,7 @@ impl Snake {
         let cx = grid_w as i32 / 2;
         let cy = grid_h as i32 / 2;
 
-        let mut rng = rand::rng();
+        let mut rng = crate::rng::new_rng();
         let food = (
             rng.random_range(1..grid_w as i32 - 1),
             rng.random_range(1..grid_h as i32 - 1),
@@ -74,7 +74,7 @@ impl Snake {
             move_interval: 0.08,
             score: 0,
             game_over_timer: 0.0,
-            rng: rand::rng(),
+            rng: crate::rng::new_rng(),
         }
     }
 

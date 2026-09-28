@@ -13,7 +13,7 @@ struct Blip {
 pub struct Radar {
     blips: Vec<Blip>,
     sweep_angle: f64,
-    rng: rand::rngs::ThreadRng,
+    rng: rand::rngs::StdRng,
 }
 
 impl Radar {
@@ -22,7 +22,7 @@ impl Radar {
         Radar {
             blips: Vec::new(),
             sweep_angle: 0.0,
-            rng: rand::rng(),
+            rng: crate::rng::new_rng(),
         }
     }
 }

@@ -19,12 +19,12 @@ pub struct Sandstorm {
     wind: f64,
     wind_target: f64,
     wind_timer: f64,
-    rng: rand::rngs::ThreadRng,
+    rng: rand::rngs::StdRng,
 }
 
 impl Sandstorm {
     pub fn new(width: usize, height: usize, scale: f64) -> Self {
-        let mut rng = rand::rng();
+        let mut rng = crate::rng::new_rng();
         let count = ((width * height) as f64 / 60.0 * scale) as usize;
         let particles = (0..count)
             .map(|_| SandParticle {
@@ -44,7 +44,7 @@ impl Sandstorm {
             wind: 10.0,
             wind_target: 10.0,
             wind_timer: 0.0,
-            rng: rand::rng(),
+            rng: crate::rng::new_rng(),
         }
     }
 }

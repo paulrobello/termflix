@@ -17,12 +17,12 @@ pub struct Snow {
     height: usize,
     flakes: Vec<Snowflake>,
     accumulation: Vec<f64>, // height of snow per column
-    rng: rand::rngs::ThreadRng,
+    rng: rand::rngs::StdRng,
 }
 
 impl Snow {
     pub fn new(width: usize, height: usize, scale: f64) -> Self {
-        let mut rng = rand::rng();
+        let mut rng = crate::rng::new_rng();
         let num_flakes = ((width * height) as f64 / 100.0 * scale) as usize;
         let flakes = (0..num_flakes)
             .map(|_| Snowflake {
@@ -40,7 +40,7 @@ impl Snow {
             height,
             flakes,
             accumulation: vec![0.0; width],
-            rng: rand::rng(),
+            rng: crate::rng::new_rng(),
         }
     }
 }

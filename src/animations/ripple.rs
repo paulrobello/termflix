@@ -13,7 +13,7 @@ struct RippleSource {
 pub struct Ripple {
     sources: Vec<RippleSource>,
     spawn_timer: f64,
-    rng: rand::rngs::ThreadRng,
+    rng: rand::rngs::StdRng,
 }
 
 impl Ripple {
@@ -22,7 +22,7 @@ impl Ripple {
         Ripple {
             sources: Vec::new(),
             spawn_timer: 0.0,
-            rng: rand::rng(),
+            rng: crate::rng::new_rng(),
         }
     }
 }
