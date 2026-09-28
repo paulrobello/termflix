@@ -511,6 +511,7 @@ impl FrameProfile {
     }
 }
 
+#[derive(Clone, Copy)]
 enum TransitionState {
     None,
     FadingOut {
@@ -820,6 +821,177 @@ fn rebuild_canvas(state: &mut LoopState, color_quant: u8) -> io::Result<()> {
     Ok(())
 }
 
+/// Advance the cross-fade one frame, respawning the animation when the
+/// fade-out completes. Returns the intensity multiplier for this frame
+/// (1.0 outside a transition).
+fn step_transition(state: &mut LoopState, explicit_render: Option<RenderMode>) -> f64 {
+    match state.transition {
+        TransitionState::None => 1.0,
+        TransitionState::FadingOut {
+            next_anim_index,
+            remaining,
+        } => {
+            let factor = remaining as f64 / TRANSITION_FRAMES as f64;
+            if remaining == 0 {
+                state.anim = spawn_animation(
+                    animations::ANIMATION_NAMES[next_anim_index],
+                    state.canvas.width,
+                    state.canvas.height,
+                    state.scale,
+                );
+                if explicit_render.is_none() {
+                    state.render_mode = state.anim.preferred_render();
+                    state.needs_rebuild = true;
+                }
+                state.prev_grid = None;
+                state.transition = TransitionState::FadingIn {
+                    remaining: TRANSITION_FRAMES,
+                };
+                0.0
+            } else {
+                state.transition = TransitionState::FadingOut {
+                    next_anim_index,
+                    remaining: remaining - 1,
+                };
+                factor
+            }
+        }
+        TransitionState::FadingIn { remaining } => {
+            let factor = 1.0 - remaining as f64 / TRANSITION_FRAMES as f64;
+            if remaining == 0 {
+                state.transition = TransitionState::None;
+                1.0
+            } else {
+                state.transition = TransitionState::FadingIn {
+                    remaining: remaining - 1,
+                };
+                factor
+            }
+        }
+    }
+}
+
+/// Render the canvas to a frame string, choosing a diff against the previous
+/// frame or a full redraw. Updates `prev_grid` to the frame just rendered.
+fn encode_frame(state: &mut LoopState, full_frames: bool, recording: bool) -> String {
+    let always_reset_row_end = !matches!(state.render_mode, RenderMode::HalfBlock);
+    let grid = state.canvas.render_cells();
+    let frame = match &state.prev_grid {
+        Some(p)
+            if p.cols == grid.cols
+                && p.rows == grid.rows
+                && !full_frames
+                && !recording
+                && !render::encoder::grid_has_wide(&grid)
+                && render::encoder::dirty_ratio(p, &grid)
+                    <= render::encoder::FULL_REDRAW_THRESHOLD =>
+        {
+            render::encoder::encode_diff(p, &grid)
+        }
+        _ => render::encoder::encode_full(&grid, always_reset_row_end),
+    };
+    state.prev_grid = Some(grid);
+    frame
+}
+
+/// Build the status bar line (reverse video, positioned at the bottom row),
+/// truncated and padded to the terminal width. Empty when the bar is hidden.
+fn status_line(
+    state: &LoopState,
+    unlimited: bool,
+    recording: bool,
+    assist: &ColorAssist,
+) -> String {
+    if state.hide_status {
+        return String::new();
+    }
+    let rec_indicator = if recording { " [REC]" } else { "" };
+    let fps_str = if unlimited {
+        "∞ fps".to_string()
+    } else {
+        format!("{:.0} fps", state.actual_fps)
+    };
+    let bloom_str = if state.postproc.bloom > 0.0 {
+        "ON"
+    } else {
+        "off"
+    };
+    let smooth_str = if state.smoothing_tau > 0.0 {
+        "ON"
+    } else {
+        "off"
+    };
+    let dither_str = if state.dither { "ON" } else { "off" };
+    let assist_str = match assist {
+        ColorAssist::None => String::new(),
+        ColorAssist::Remap(p) => format!(" | pal:{}", p.name()),
+        ColorAssist::Daltonize(d) => format!(" | cb:{}", d.name()),
+    };
+    let status = format!(
+        " {} | {:?} | {:?} | {}{} | bloom:{} | smooth:{} | dither:{}{assist_str} | [←/→] anim  [b] bloom  [s] smooth  [d] dither  [r] render  [c] color  [h] hide  [q] quit ",
+        state.anim.name(),
+        state.render_mode,
+        state.color_mode,
+        fps_str,
+        rec_indicator,
+        bloom_str,
+        smooth_str,
+        dither_str,
+    );
+    let w = state.cols as usize;
+    let truncated: String = status.chars().take(w).collect();
+    let padded = format!("{truncated:<width$}", width = w);
+    format!("\x1b[{};1H\x1b[7m{}\x1b[0m", state.rows, padded)
+}
+
+/// Outcome of handing an assembled frame to the output path.
+#[cfg(unix)]
+enum FrameWrite {
+    Complete,
+    QuitSignaled,
+    WriterDied,
+}
+
+/// Write one assembled frame buffer: through the threaded renderer when
+/// available, else inline chunked writes with quit checks between chunks.
+#[cfg(unix)]
+fn write_frame(
+    frame_buf: Vec<u8>,
+    renderer: &mut Option<render_sink::ThreadedRenderer>,
+    quit: &AtomicBool,
+    quit_keys: &[KeyCode],
+) -> io::Result<FrameWrite> {
+    if let Some(r) = renderer {
+        return match r.submit(frame_buf, quit, quit_keys) {
+            Ok(render_sink::SubmitResult::Ok) => Ok(FrameWrite::Complete),
+            Ok(render_sink::SubmitResult::Quit) => Ok(FrameWrite::QuitSignaled),
+            Ok(render_sink::SubmitResult::WriterDied) => Ok(FrameWrite::WriterDied),
+            Err(e) => Err(e),
+        };
+    }
+    use std::os::unix::io::AsRawFd;
+    let fd = io::stdout().as_raw_fd();
+    match render_sink::write_chunked(fd, &frame_buf, || {
+        if event::poll(Duration::ZERO)?
+            && let Event::Key(KeyEvent {
+                code,
+                kind: KeyEventKind::Press,
+                modifiers,
+                ..
+            }) = event::read()?
+            && render_sink::is_quit_key(code, modifiers, quit_keys)
+        {
+            quit.store(true, Ordering::Release);
+            return Ok(true);
+        }
+        Ok(false)
+    }) {
+        Ok(render_sink::WriteOutcome::Complete) => Ok(FrameWrite::Complete),
+        Ok(render_sink::WriteOutcome::QuitSignaled) => Ok(FrameWrite::QuitSignaled),
+        Err(e) => Err(e),
+    }
+}
+
 fn run_loop(settings: Settings, keybindings: &KeyBindings) -> io::Result<()> {
     let Settings {
         anim_name,
@@ -1088,45 +1260,7 @@ fn run_loop(settings: Settings, keybindings: &KeyBindings) -> io::Result<()> {
         }
 
         // Transition fade processing
-        let transition_factor = match &mut state.transition {
-            TransitionState::None => 1.0,
-            TransitionState::FadingOut {
-                next_anim_index,
-                remaining,
-            } => {
-                let factor = *remaining as f64 / TRANSITION_FRAMES as f64;
-                if *remaining == 0 {
-                    state.anim = spawn_animation(
-                        animations::ANIMATION_NAMES[*next_anim_index],
-                        state.canvas.width,
-                        state.canvas.height,
-                        state.scale,
-                    );
-                    if explicit_render.is_none() {
-                        state.render_mode = state.anim.preferred_render();
-                        state.needs_rebuild = true;
-                    }
-                    state.prev_grid = None;
-                    state.transition = TransitionState::FadingIn {
-                        remaining: TRANSITION_FRAMES,
-                    };
-                    0.0
-                } else {
-                    *remaining -= 1;
-                    factor
-                }
-            }
-            TransitionState::FadingIn { remaining } => {
-                let factor = 1.0 - *remaining as f64 / TRANSITION_FRAMES as f64;
-                if *remaining == 0 {
-                    state.transition = TransitionState::None;
-                    1.0
-                } else {
-                    *remaining -= 1;
-                    factor
-                }
-            }
-        };
+        let transition_factor = step_transition(&mut state, explicit_render);
 
         if state.needs_rebuild {
             continue;
@@ -1141,23 +1275,7 @@ fn run_loop(settings: Settings, keybindings: &KeyBindings) -> io::Result<()> {
 
         // Render to string
         let render_start = Instant::now();
-        let always_reset_row_end = !matches!(state.render_mode, RenderMode::HalfBlock);
-        let grid = state.canvas.render_cells();
-        let frame = match &state.prev_grid {
-            Some(p)
-                if p.cols == grid.cols
-                    && p.rows == grid.rows
-                    && !full_frames
-                    && recorder.is_none()
-                    && !render::encoder::grid_has_wide(&grid)
-                    && render::encoder::dirty_ratio(p, &grid)
-                        <= render::encoder::FULL_REDRAW_THRESHOLD =>
-            {
-                render::encoder::encode_diff(p, &grid)
-            }
-            _ => render::encoder::encode_full(&grid, always_reset_row_end),
-        };
-        state.prev_grid = Some(grid);
+        let frame = encode_frame(&mut state, full_frames, recorder.is_some());
         let render_dur = render_start.elapsed();
 
         // Record if active
@@ -1180,46 +1298,9 @@ fn run_loop(settings: Settings, keybindings: &KeyBindings) -> io::Result<()> {
             state.frame_count = 0;
             state.fps_update = Instant::now();
         }
-        if !state.hide_status {
-            let rec_indicator = if recorder.is_some() { " [REC]" } else { "" };
-            let fps_str = if unlimited {
-                "∞ fps".to_string()
-            } else {
-                format!("{:.0} fps", state.actual_fps)
-            };
-            let bloom_str = if state.postproc.bloom > 0.0 {
-                "ON"
-            } else {
-                "off"
-            };
-            let smooth_str = if state.smoothing_tau > 0.0 {
-                "ON"
-            } else {
-                "off"
-            };
-            let dither_str = if state.canvas.dither { "ON" } else { "off" };
-            let assist_str = match &assist {
-                ColorAssist::None => String::new(),
-                ColorAssist::Remap(p) => format!(" | pal:{}", p.name()),
-                ColorAssist::Daltonize(d) => format!(" | cb:{}", d.name()),
-            };
-            let status = format!(
-                " {} | {:?} | {:?} | {}{} | bloom:{} | smooth:{} | dither:{}{assist_str} | [←/→] anim  [b] bloom  [s] smooth  [d] dither  [r] render  [c] color  [h] hide  [q] quit ",
-                state.anim.name(),
-                state.render_mode,
-                state.color_mode,
-                fps_str,
-                rec_indicator,
-                bloom_str,
-                smooth_str,
-                dither_str,
-            );
-            let w = state.cols as usize;
-            let truncated: String = status.chars().take(w).collect();
-            let padded = format!("{:<width$}", truncated, width = w);
-            frame_buf.extend_from_slice(
-                format!("\x1b[{};1H\x1b[7m{}\x1b[0m", state.rows, padded).as_bytes(),
-            );
+        let status = status_line(&state, unlimited, recorder.is_some(), &assist);
+        if !status.is_empty() {
+            frame_buf.extend_from_slice(status.as_bytes());
         }
 
         // Final size check — if terminal changed since we started rendering, discard frame
@@ -1239,41 +1320,9 @@ fn run_loop(settings: Settings, keybindings: &KeyBindings) -> io::Result<()> {
         // so 'q' is responsive even when tmux's buffer is full.
         let write_start = Instant::now();
         #[cfg(unix)]
-        {
-            let outcome = if let Some(ref mut r) = renderer {
-                // Threaded: hand the owned frame buffer to the writer thread.
-                match r.submit(frame_buf, &quit, &keybindings.quit) {
-                    Ok(render_sink::SubmitResult::Ok) => render_sink::WriteOutcome::Complete,
-                    Ok(render_sink::SubmitResult::Quit) => render_sink::WriteOutcome::QuitSignaled,
-                    Ok(render_sink::SubmitResult::WriterDied) => break 'outer Ok(()),
-                    Err(e) => break 'outer Err(e),
-                }
-            } else {
-                // Inline (--single-threaded): today's exact behavior via the shared core.
-                use std::os::unix::io::AsRawFd;
-                let fd = io::stdout().as_raw_fd();
-                match render_sink::write_chunked(fd, &frame_buf, || {
-                    if event::poll(Duration::ZERO)?
-                        && let Event::Key(KeyEvent {
-                            code,
-                            kind: KeyEventKind::Press,
-                            modifiers,
-                            ..
-                        }) = event::read()?
-                        && render_sink::is_quit_key(code, modifiers, &keybindings.quit)
-                    {
-                        quit.store(true, Ordering::Release);
-                        return Ok(true);
-                    }
-                    Ok(false)
-                }) {
-                    Ok(o) => o,
-                    Err(e) => break 'outer Err(e),
-                }
-            };
-            if matches!(outcome, render_sink::WriteOutcome::QuitSignaled) {
-                break 'outer Ok(());
-            }
+        match write_frame(frame_buf, &mut renderer, &quit, &keybindings.quit)? {
+            FrameWrite::QuitSignaled | FrameWrite::WriterDied => break 'outer Ok(()),
+            FrameWrite::Complete => {}
         }
         #[cfg(not(unix))]
         {
@@ -1746,6 +1795,51 @@ mod loop_tests {
             LoopAction::Continue
         ));
         assert_eq!(state.clone_values(), before);
+    }
+
+    #[test]
+    fn status_line_shows_state_and_truncates_to_width() {
+        let mut state = test_state();
+        state.cols = 200; // wide enough that nothing is truncated
+        state.actual_fps = 41.7;
+        state.postproc.bloom = 0.4;
+        state.smoothing_tau = 0.1;
+        state.dither = true;
+        let line = status_line(&state, false, false, &ColorAssist::None);
+        assert!(line.starts_with("\x1b[11;1H\x1b[7m"));
+        assert!(line.contains("fire"));
+        assert!(line.contains("42 fps"));
+        assert!(line.contains("bloom:ON"));
+        assert!(line.contains("smooth:ON"));
+        assert!(line.contains("dither:ON"));
+        assert!(line.ends_with("\x1b[0m"));
+        // Visible width (between the SGR wrappers) never exceeds cols.
+        let visible = line
+            .trim_start_matches("\x1b[11;1H\x1b[7m")
+            .trim_end_matches("\x1b[0m");
+        assert!(visible.chars().count() <= state.cols as usize);
+
+        // Narrow terminal truncates; unlimited + recording markers show wide.
+        state.cols = 10;
+        let narrow = status_line(&state, true, true, &ColorAssist::None);
+        let visible = narrow
+            .trim_start_matches("\x1b[11;1H\x1b[7m")
+            .trim_end_matches("\x1b[0m");
+        assert_eq!(visible.chars().count(), 10);
+        state.cols = 200;
+        let wide = status_line(&state, true, true, &ColorAssist::None);
+        let wide_visible = wide
+            .trim_start_matches("\x1b[11;1H\x1b[7m")
+            .trim_end_matches("\x1b[0m");
+        assert!(wide_visible.contains("∞ fps"));
+        assert!(wide_visible.contains("[REC]"));
+    }
+
+    #[test]
+    fn status_line_hidden_is_empty() {
+        let mut state = test_state();
+        state.hide_status = true;
+        assert_eq!(status_line(&state, false, false, &ColorAssist::None), "");
     }
 
     impl LoopState {
