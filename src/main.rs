@@ -659,23 +659,55 @@ fn resolve_settings(cli: &Cli, cfg: &config::Config) -> Settings {
     }
 }
 
+/// Mutable runtime state for the main loop. Everything here changes while the
+/// loop runs; startup values come from `Settings`.
+struct LoopState {
+    cols: u16,
+    rows: u16,
+    /// Status bar hidden (`clean` startup or the `h` key).
+    hide_status: bool,
+    /// Live dither state — the `d` key toggles this; canvas rebuilds re-apply it.
+    dither: bool,
+    render_mode: RenderMode,
+    color_mode: ColorMode,
+    scale: f64,
+    postproc: PostProcessConfig,
+    smoothing_tau: f64,
+    canvas: Canvas,
+    anim: Box<dyn Animation>,
+    anim_index: usize,
+    transition: TransitionState,
+    cycle_start: Instant,
+    prev_grid: Option<render::cell::CellGrid>,
+    needs_rebuild: bool,
+    /// Resize cooldown — skip frames after resize.
+    resize_cooldown: Instant,
+    /// Adaptive frame pacing — adjusts to actual terminal throughput.
+    adaptive_frame_dur: Duration,
+    /// Exponential moving average of write time in secs.
+    write_time_ema: f64,
+    frame_count: u64,
+    actual_fps: f64,
+    fps_update: Instant,
+}
+
 fn run_loop(settings: Settings, keybindings: &KeyBindings) -> io::Result<()> {
     let Settings {
         anim_name,
         render_override: explicit_render,
-        mut color_mode,
+        color_mode,
         color_quant,
         unlimited,
         frame_dur,
-        mut scale,
+        scale,
         cycle,
         clean,
         screensaver,
         screensaver_keys,
         record_path,
         data_file,
-        mut postproc,
-        mut smoothing_tau,
+        postproc,
+        smoothing_tau,
         default_smoothing_tau,
         default_bloom,
         assist,
@@ -687,42 +719,54 @@ fn run_loop(settings: Settings, keybindings: &KeyBindings) -> io::Result<()> {
     // Keep the body's historical names for the two settings that changed shape.
     let initial_anim = anim_name.as_str();
     let record_path = record_path.as_deref();
-    let (mut cols, mut rows) = terminal::size()?;
     let is_tmux = std::env::var("TMUX").is_ok();
-    let mut hide_status = clean;
-    // Live dither state — the `d` key toggles this; canvas rebuilds re-apply it.
-    let mut dither = dither;
-    // Adaptive frame pacing — adjusts to actual terminal throughput
-    let mut adaptive_frame_dur = frame_dur;
-    let mut write_time_ema: f64 = 0.0; // exponential moving average of write time in secs
 
-    let display_rows = if hide_status {
-        rows as usize
-    } else {
-        (rows as usize).saturating_sub(1)
+    let mut state = {
+        let (cols, rows) = terminal::size()?;
+        let render_mode =
+            explicit_render.unwrap_or_else(|| animations::preferred_render(initial_anim));
+        let display_rows = if clean {
+            rows as usize
+        } else {
+            (rows as usize).saturating_sub(1)
+        };
+        let mut canvas = Canvas::new(cols as usize, display_rows, render_mode, color_mode);
+        canvas.color_quant = color_quant;
+        canvas.dither = dither;
+        let anim: Box<dyn Animation> =
+            spawn_animation(initial_anim, canvas.width, canvas.height, scale);
+        let anim_index = animations::ANIMATION_NAMES
+            .iter()
+            .position(|&n| n == initial_anim)
+            .unwrap_or(0);
+        LoopState {
+            cols,
+            rows,
+            hide_status: clean,
+            dither,
+            render_mode,
+            color_mode,
+            scale,
+            postproc,
+            smoothing_tau,
+            canvas,
+            anim,
+            anim_index,
+            transition: TransitionState::None,
+            cycle_start: Instant::now(),
+            prev_grid: None,
+            needs_rebuild: false,
+            resize_cooldown: Instant::now(),
+            adaptive_frame_dur: frame_dur,
+            write_time_ema: 0.0,
+            frame_count: 0,
+            actual_fps: 0.0,
+            fps_update: Instant::now(),
+        }
     };
-    let mut render_mode =
-        explicit_render.unwrap_or_else(|| animations::preferred_render(initial_anim));
-    let mut canvas = Canvas::new(cols as usize, display_rows, render_mode, color_mode);
-    canvas.color_quant = color_quant;
-    canvas.dither = dither;
-    let mut anim: Box<dyn Animation> =
-        spawn_animation(initial_anim, canvas.width, canvas.height, scale);
-
-    let mut anim_index = animations::ANIMATION_NAMES
-        .iter()
-        .position(|&n| n == initial_anim)
-        .unwrap_or(0);
 
     let mut last_frame = Instant::now();
-    let mut cycle_start = Instant::now();
-    let mut frame_count: u64 = 0;
-    let mut actual_fps: f64 = 0.0;
-    let mut fps_update = Instant::now();
     let mut recorder = record_path.map(|_| record::Recorder::new());
-    let mut needs_rebuild = false;
-    // Resize cooldown — skip frames after resize
-    let mut resize_cooldown = Instant::now();
     // External control channel setup
     let params_rx: Option<mpsc::Receiver<ExternalParams>> = {
         if let Some(path) = data_file {
@@ -734,7 +778,6 @@ fn run_loop(settings: Settings, keybindings: &KeyBindings) -> io::Result<()> {
         }
     };
     let mut ext_state = CurrentState::default();
-    let mut transition = TransitionState::None;
     let mut virtual_time: f64 = 0.0;
     let mut frame_profile = profile.then(|| FrameProfile::new(initial_anim));
     let quit = Arc::new(AtomicBool::new(false));
@@ -752,20 +795,20 @@ fn run_loop(settings: Settings, keybindings: &KeyBindings) -> io::Result<()> {
     // isn't flagged as an unused parameter.
     #[cfg(not(unix))]
     let _ = single_threaded;
-    use render::cell::CellGrid;
-    let mut prev_grid: Option<CellGrid> = None;
     let result: io::Result<()> = 'outer: loop {
         // Use event::poll as frame timer — properly yields to OS for signal handling
-        let time_to_next = adaptive_frame_dur.saturating_sub(last_frame.elapsed());
+        let time_to_next = state
+            .adaptive_frame_dur
+            .saturating_sub(last_frame.elapsed());
         if event::poll(time_to_next)? {
             // Drain all pending events
             loop {
                 match event::read()? {
                     Event::Resize(w, h) => {
-                        cols = w;
-                        rows = h;
-                        needs_rebuild = true;
-                        resize_cooldown = Instant::now();
+                        state.cols = w;
+                        state.rows = h;
+                        state.needs_rebuild = true;
+                        state.resize_cooldown = Instant::now();
                     }
                     Event::Key(KeyEvent {
                         code,
@@ -797,56 +840,57 @@ fn run_loop(settings: Settings, keybindings: &KeyBindings) -> io::Result<()> {
                                 break 'outer Ok(());
                             }
                             kc if keybindings.next.contains(&kc) => {
-                                anim_index = (anim_index + 1) % animations::ANIMATION_NAMES.len();
-                                start_transition(&mut transition, anim_index);
-                                cycle_start = Instant::now();
+                                state.anim_index =
+                                    (state.anim_index + 1) % animations::ANIMATION_NAMES.len();
+                                start_transition(&mut state.transition, state.anim_index);
+                                state.cycle_start = Instant::now();
                             }
                             kc if keybindings.prev.contains(&kc) => {
-                                anim_index = if anim_index == 0 {
+                                state.anim_index = if state.anim_index == 0 {
                                     animations::ANIMATION_NAMES.len() - 1
                                 } else {
-                                    anim_index - 1
+                                    state.anim_index - 1
                                 };
-                                start_transition(&mut transition, anim_index);
-                                cycle_start = Instant::now();
+                                start_transition(&mut state.transition, state.anim_index);
+                                state.cycle_start = Instant::now();
                             }
                             kc if keybindings.render.contains(&kc) => {
                                 let idx = RENDER_MODES
                                     .iter()
-                                    .position(|&m| m == render_mode)
+                                    .position(|&m| m == state.render_mode)
                                     .unwrap_or(0);
-                                render_mode = RENDER_MODES[(idx + 1) % RENDER_MODES.len()];
-                                needs_rebuild = true;
+                                state.render_mode = RENDER_MODES[(idx + 1) % RENDER_MODES.len()];
+                                state.needs_rebuild = true;
                             }
                             kc if keybindings.color.contains(&kc) => {
                                 let idx = COLOR_MODES
                                     .iter()
-                                    .position(|&m| m == color_mode)
+                                    .position(|&m| m == state.color_mode)
                                     .unwrap_or(0);
-                                color_mode = COLOR_MODES[(idx + 1) % COLOR_MODES.len()];
-                                needs_rebuild = true;
+                                state.color_mode = COLOR_MODES[(idx + 1) % COLOR_MODES.len()];
+                                state.needs_rebuild = true;
                             }
                             kc if keybindings.status.contains(&kc) => {
-                                hide_status = !hide_status;
-                                needs_rebuild = true;
+                                state.hide_status = !state.hide_status;
+                                state.needs_rebuild = true;
                             }
                             KeyCode::Char('b') => {
-                                postproc.bloom = if postproc.bloom > 0.0 {
+                                state.postproc.bloom = if state.postproc.bloom > 0.0 {
                                     0.0
                                 } else {
                                     default_bloom
                                 };
                             }
                             KeyCode::Char('s') => {
-                                smoothing_tau = if smoothing_tau > 0.0 {
+                                state.smoothing_tau = if state.smoothing_tau > 0.0 {
                                     0.0
                                 } else {
                                     default_smoothing_tau
                                 };
                             }
                             KeyCode::Char('d') => {
-                                dither = !dither;
-                                canvas.dither = dither;
+                                state.dither = !state.dither;
+                                state.canvas.dither = state.dither;
                             }
                             // Screensaver with keybindings active: any unbound key still dismisses.
                             // (Plain screensaver already exited above; reaching here means keys are on.)
@@ -872,47 +916,52 @@ fn run_loop(settings: Settings, keybindings: &KeyBindings) -> io::Result<()> {
         }
 
         // After resize, wait for things to settle before rendering
-        if resize_cooldown.elapsed() < Duration::from_millis(100) {
-            needs_rebuild = true;
+        if state.resize_cooldown.elapsed() < Duration::from_millis(100) {
+            state.needs_rebuild = true;
             continue;
         }
 
-        // Rebuild canvas
-        if needs_rebuild {
+        // Rebuild state.canvas
+        if state.needs_rebuild {
             // Get the CURRENT size (may have changed since event)
             let (cur_cols, cur_rows) = terminal::size()?;
             if cur_cols >= MIN_TERM_COLS && cur_rows >= MIN_TERM_ROWS {
-                cols = cur_cols;
-                rows = cur_rows;
-                let display_rows = if hide_status {
-                    rows as usize
+                state.cols = cur_cols;
+                state.rows = cur_rows;
+                let display_rows = if state.hide_status {
+                    state.rows as usize
                 } else {
-                    (rows as usize).saturating_sub(1)
+                    (state.rows as usize).saturating_sub(1)
                 };
-                canvas = Canvas::new(cols as usize, display_rows, render_mode, color_mode);
-                canvas.color_quant = color_quant;
-                canvas.dither = dither;
-                anim = spawn_animation(
-                    animations::ANIMATION_NAMES[anim_index],
-                    canvas.width,
-                    canvas.height,
-                    scale,
+                state.canvas = Canvas::new(
+                    state.cols as usize,
+                    display_rows,
+                    state.render_mode,
+                    state.color_mode,
+                );
+                state.canvas.color_quant = color_quant;
+                state.canvas.dither = state.dither;
+                state.anim = spawn_animation(
+                    animations::ANIMATION_NAMES[state.anim_index],
+                    state.canvas.width,
+                    state.canvas.height,
+                    state.scale,
                 );
                 // No clear screen — next frame overwrites everything.
                 // Clearing here with a blocking flush can lock up in tmux
                 // when the output buffer is full from the previous frame.
             }
-            prev_grid = None;
-            needs_rebuild = false;
+            state.prev_grid = None;
+            state.needs_rebuild = false;
             last_frame = Instant::now();
             continue; // Skip this frame, render fresh next iteration
         }
 
         // Auto-cycle
-        if cycle > 0 && cycle_start.elapsed() >= Duration::from_secs(cycle as u64) {
-            anim_index = (anim_index + 1) % animations::ANIMATION_NAMES.len();
-            start_transition(&mut transition, anim_index);
-            cycle_start = Instant::now();
+        if cycle > 0 && state.cycle_start.elapsed() >= Duration::from_secs(cycle as u64) {
+            state.anim_index = (state.anim_index + 1) % animations::ANIMATION_NAMES.len();
+            start_transition(&mut state.transition, state.anim_index);
+            state.cycle_start = Instant::now();
         }
 
         // Timing
@@ -931,44 +980,44 @@ fn run_loop(settings: Settings, keybindings: &KeyBindings) -> io::Result<()> {
         if let Some(name) = ext_state.take_animation_change()
             && animations::ANIMATION_NAMES.contains(&name.as_str())
         {
-            anim_index = animations::ANIMATION_NAMES
+            state.anim_index = animations::ANIMATION_NAMES
                 .iter()
                 .position(|&n| n == name.as_str())
-                .unwrap_or(anim_index);
-            start_transition(&mut transition, anim_index);
-            cycle_start = Instant::now();
+                .unwrap_or(state.anim_index);
+            start_transition(&mut state.transition, state.anim_index);
+            state.cycle_start = Instant::now();
         }
 
-        // Handle scale change from external params
+        // Handle state.scale change from external params
         if let Some(new_scale) = ext_state.take_scale_change() {
-            scale = new_scale.clamp(0.5, 2.0);
-            anim = spawn_animation(
-                animations::ANIMATION_NAMES[anim_index],
-                canvas.width,
-                canvas.height,
-                scale,
+            state.scale = new_scale.clamp(0.5, 2.0);
+            state.anim = spawn_animation(
+                animations::ANIMATION_NAMES[state.anim_index],
+                state.canvas.width,
+                state.canvas.height,
+                state.scale,
             );
-            prev_grid = None;
+            state.prev_grid = None;
         }
 
         // Handle render mode change from external params
         if let Some(render_name) = ext_state.take_render_change()
             && let Some(new_mode) = parse_render_mode(&render_name)
         {
-            render_mode = new_mode;
-            needs_rebuild = true;
+            state.render_mode = new_mode;
+            state.needs_rebuild = true;
         }
 
         // Handle color mode change from external params
         if let Some(color_name) = ext_state.take_color_change()
             && let Some(new_mode) = parse_color_mode(&color_name)
         {
-            color_mode = new_mode;
-            needs_rebuild = true;
+            state.color_mode = new_mode;
+            state.needs_rebuild = true;
         }
 
         // If a rebuild was triggered by external params, skip this frame
-        if needs_rebuild {
+        if state.needs_rebuild {
             continue;
         }
 
@@ -978,21 +1027,25 @@ fn run_loop(settings: Settings, keybindings: &KeyBindings) -> io::Result<()> {
         virtual_time += effective_dt;
 
         // Per-animation semantic params
-        anim.set_params(ext_state.params());
+        state.anim.set_params(ext_state.params());
 
         // Update animation
         let update_start = Instant::now();
-        anim.update(&mut canvas, effective_dt, virtual_time);
+        state
+            .anim
+            .update(&mut state.canvas, effective_dt, virtual_time);
         let update_dur = update_start.elapsed();
 
         // Temporal brightness smoothing (opt-in). Runs on raw animation output,
         // before effects/post-process, so intentional changes stay responsive.
-        if smoothing_tau > 0.0 {
-            canvas.apply_smoothing(smoothing_alpha(effective_dt, smoothing_tau));
+        if state.smoothing_tau > 0.0 {
+            state
+                .canvas
+                .apply_smoothing(smoothing_alpha(effective_dt, state.smoothing_tau));
         }
 
         // Transition fade processing
-        let transition_factor = match &mut transition {
+        let transition_factor = match &mut state.transition {
             TransitionState::None => 1.0,
             TransitionState::FadingOut {
                 next_anim_index,
@@ -1000,18 +1053,18 @@ fn run_loop(settings: Settings, keybindings: &KeyBindings) -> io::Result<()> {
             } => {
                 let factor = *remaining as f64 / TRANSITION_FRAMES as f64;
                 if *remaining == 0 {
-                    anim = spawn_animation(
+                    state.anim = spawn_animation(
                         animations::ANIMATION_NAMES[*next_anim_index],
-                        canvas.width,
-                        canvas.height,
-                        scale,
+                        state.canvas.width,
+                        state.canvas.height,
+                        state.scale,
                     );
                     if explicit_render.is_none() {
-                        render_mode = anim.preferred_render();
-                        needs_rebuild = true;
+                        state.render_mode = state.anim.preferred_render();
+                        state.needs_rebuild = true;
                     }
-                    prev_grid = None;
-                    transition = TransitionState::FadingIn {
+                    state.prev_grid = None;
+                    state.transition = TransitionState::FadingIn {
                         remaining: TRANSITION_FRAMES,
                     };
                     0.0
@@ -1023,7 +1076,7 @@ fn run_loop(settings: Settings, keybindings: &KeyBindings) -> io::Result<()> {
             TransitionState::FadingIn { remaining } => {
                 let factor = 1.0 - *remaining as f64 / TRANSITION_FRAMES as f64;
                 if *remaining == 0 {
-                    transition = TransitionState::None;
+                    state.transition = TransitionState::None;
                     1.0
                 } else {
                     *remaining -= 1;
@@ -1032,22 +1085,22 @@ fn run_loop(settings: Settings, keybindings: &KeyBindings) -> io::Result<()> {
             }
         };
 
-        if needs_rebuild {
+        if state.needs_rebuild {
             continue;
         }
 
-        // Post-process canvas with intensity and hue shift
+        // Post-process state.canvas with intensity and hue shift
         let intensity = ext_state.intensity().clamp(0.0, 2.0) * transition_factor;
         let hue = ext_state.color_shift().clamp(0.0, 1.0);
-        canvas.apply_effects(intensity, hue);
-        canvas.apply_color_assist(&assist);
-        canvas.post_process(&postproc);
+        state.canvas.apply_effects(intensity, hue);
+        state.canvas.apply_color_assist(&assist);
+        state.canvas.post_process(&state.postproc);
 
         // Render to string
         let render_start = Instant::now();
-        let always_reset_row_end = !matches!(render_mode, RenderMode::HalfBlock);
-        let grid = canvas.render_cells();
-        let frame = match &prev_grid {
+        let always_reset_row_end = !matches!(state.render_mode, RenderMode::HalfBlock);
+        let grid = state.canvas.render_cells();
+        let frame = match &state.prev_grid {
             Some(p)
                 if p.cols == grid.cols
                     && p.rows == grid.rows
@@ -1061,7 +1114,7 @@ fn run_loop(settings: Settings, keybindings: &KeyBindings) -> io::Result<()> {
             }
             _ => render::encoder::encode_full(&grid, always_reset_row_end),
         };
-        prev_grid = Some(grid);
+        state.prev_grid = Some(grid);
         let render_dur = render_start.elapsed();
 
         // Record if active
@@ -1078,52 +1131,61 @@ fn run_loop(settings: Settings, keybindings: &KeyBindings) -> io::Result<()> {
         frame_buf.extend_from_slice(frame.as_bytes());
 
         // Status bar
-        frame_count += 1;
-        if fps_update.elapsed() >= Duration::from_secs(1) {
-            actual_fps = frame_count as f64 / fps_update.elapsed().as_secs_f64();
-            frame_count = 0;
-            fps_update = Instant::now();
+        state.frame_count += 1;
+        if state.fps_update.elapsed() >= Duration::from_secs(1) {
+            state.actual_fps = state.frame_count as f64 / state.fps_update.elapsed().as_secs_f64();
+            state.frame_count = 0;
+            state.fps_update = Instant::now();
         }
-        if !hide_status {
+        if !state.hide_status {
             let rec_indicator = if recorder.is_some() { " [REC]" } else { "" };
             let fps_str = if unlimited {
                 "∞ fps".to_string()
             } else {
-                format!("{:.0} fps", actual_fps)
+                format!("{:.0} fps", state.actual_fps)
             };
-            let bloom_str = if postproc.bloom > 0.0 { "ON" } else { "off" };
-            let smooth_str = if smoothing_tau > 0.0 { "ON" } else { "off" };
-            let dither_str = if canvas.dither { "ON" } else { "off" };
+            let bloom_str = if state.postproc.bloom > 0.0 {
+                "ON"
+            } else {
+                "off"
+            };
+            let smooth_str = if state.smoothing_tau > 0.0 {
+                "ON"
+            } else {
+                "off"
+            };
+            let dither_str = if state.canvas.dither { "ON" } else { "off" };
             let assist_str = match &assist {
                 ColorAssist::None => String::new(),
                 ColorAssist::Remap(p) => format!(" | pal:{}", p.name()),
                 ColorAssist::Daltonize(d) => format!(" | cb:{}", d.name()),
             };
             let status = format!(
-                " {} | {:?} | {:?} | {}{} | bloom:{} | smooth:{} | dither:{}{assist_str} | [←/→] anim  [b] bloom  [s] smooth  [d] dither  [r] render  [c] color  [h] hide  [q] quit ",
-                anim.name(),
-                render_mode,
-                color_mode,
+                " {} | {:?} | {:?} | {}{} | bloom:{} | smooth:{} | state.dither:{}{assist_str} | [←/→] state.anim  [b] bloom  [s] smooth  [d] state.dither  [r] render  [c] color  [h] hide  [q] quit ",
+                state.anim.name(),
+                state.render_mode,
+                state.color_mode,
                 fps_str,
                 rec_indicator,
                 bloom_str,
                 smooth_str,
                 dither_str,
             );
-            let w = cols as usize;
+            let w = state.cols as usize;
             let truncated: String = status.chars().take(w).collect();
             let padded = format!("{:<width$}", truncated, width = w);
-            frame_buf
-                .extend_from_slice(format!("\x1b[{};1H\x1b[7m{}\x1b[0m", rows, padded).as_bytes());
+            frame_buf.extend_from_slice(
+                format!("\x1b[{};1H\x1b[7m{}\x1b[0m", state.rows, padded).as_bytes(),
+            );
         }
 
         // Final size check — if terminal changed since we started rendering, discard frame
         let (final_cols, final_rows) = terminal::size()?;
-        if final_cols != cols || final_rows != rows {
-            cols = final_cols;
-            rows = final_rows;
-            needs_rebuild = true;
-            resize_cooldown = Instant::now();
+        if final_cols != state.cols || final_rows != state.rows {
+            state.cols = final_cols;
+            state.rows = final_rows;
+            state.needs_rebuild = true;
+            state.resize_cooldown = Instant::now();
             continue; // Discard frame_buf, don't write anything
         }
 
@@ -1198,7 +1260,7 @@ fn run_loop(settings: Settings, keybindings: &KeyBindings) -> io::Result<()> {
         // In unlimited mode, also enable adaptive pacing: without it, we flood the
         // terminal faster than it can drain, causing libc::write() to block for seconds
         // and making quit unresponsive. With frame_dur=ZERO, the target becomes
-        // write_time_ema*1.1 — no hard cap, but no terminal flood either.
+        // state.write_time_ema*1.1 — no hard cap, but no terminal flood either.
         if is_tmux || unlimited {
             #[cfg(unix)]
             let write_secs = match renderer.as_ref() {
@@ -1207,12 +1269,12 @@ fn run_loop(settings: Settings, keybindings: &KeyBindings) -> io::Result<()> {
             };
             #[cfg(not(unix))]
             let write_secs = write_start.elapsed().as_secs_f64();
-            write_time_ema = write_time_ema * 0.8 + write_secs * 0.2;
+            state.write_time_ema = state.write_time_ema * 0.8 + write_secs * 0.2;
             // Target: frame duration = write time + small margin for animation update
             // This ensures we never write faster than tmux can process
             let target =
-                Duration::from_secs_f64((write_time_ema * 1.1).max(frame_dur.as_secs_f64()));
-            adaptive_frame_dur = target.min(Duration::from_millis(200)); // cap at 5fps minimum
+                Duration::from_secs_f64((state.write_time_ema * 1.1).max(frame_dur.as_secs_f64()));
+            state.adaptive_frame_dur = target.min(Duration::from_millis(200)); // cap at 5fps minimum
         }
     };
     #[cfg(unix)]
