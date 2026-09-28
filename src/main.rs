@@ -1191,7 +1191,7 @@ fn run_loop(
 fn detect_recording_size(frames: &[record::Frame]) -> (usize, usize) {
     let mut max_row = 24usize;
     let mut max_col = 80usize;
-    if let Some(frame) = frames.first() {
+    for frame in frames {
         let bytes = frame.content.as_bytes();
         let mut i = 0;
         while i < bytes.len() {
@@ -1363,5 +1363,15 @@ mod detect_size_tests {
     fn keeps_normal_cursor_moves() {
         let frames = [frame("\x1b[10;120H")];
         assert_eq!(detect_recording_size(&frames), (120, 24));
+    }
+
+    #[test]
+    fn scans_all_frames_for_max_extents() {
+        let frames = [
+            frame("\x1b[10;20H"),
+            frame("\x1b[50;100H"),
+            frame("\x1b[30;60H"),
+        ];
+        assert_eq!(detect_recording_size(&frames), (100, 50));
     }
 }

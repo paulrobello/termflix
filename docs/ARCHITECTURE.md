@@ -671,7 +671,7 @@ flowchart LR
 
 **Pipeline stages:**
 
-1. **Load and detect size** — The `.asciianim` file is loaded, and `detect_recording_size()` scans ANSI cursor-position sequences in the first frame to determine terminal dimensions.
+1. **Load and detect size** — The `.asciianim` file is loaded, and `detect_recording_size()` scans ANSI cursor-position sequences across all frames (taking the maximum extents) to determine terminal dimensions.
 
 2. **ANSI decoding** — A built-in `VirtualTerminal` processes each frame's ANSI escape sequences (cursor positioning, SGR color codes) into a grid of colored cells. BSU sync markers and other unrecognized sequences are ignored.
 
