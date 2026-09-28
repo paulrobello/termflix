@@ -460,7 +460,7 @@ Terminals that support this feature buffer all output between the markers and fl
 
 Two optimizations reduce the bytes written per frame and keep the UI responsive under backpressure:
 
-- **Dirty-cell (differential) rendering** (`render/encoder.rs`): each frame is built into a `CellGrid` (`render/cell.rs`). When the grid dimensions match the previous frame, the encoder compares the two and emits only the cells that changed via `encode_diff(prev, grid)`, using cursor moves between dirty runs. If `dirty_ratio(prev, grid)` exceeds `FULL_REDRAW_THRESHOLD` (0.6) a full redraw via `encode_full` is cheaper and is emitted instead. Diffing is disabled when recording (`--record`), when `--full-frames` is set, or after a resize.
+- **Dirty-cell (differential) rendering** (`render/encoder.rs`): each frame is built into a `CellGrid` (`render/cell.rs`). When the grid dimensions match the previous frame, the encoder compares the two and emits only the cells that changed via `encode_diff(prev, grid)`, using cursor moves between dirty runs. If `dirty_ratio(prev, grid)` exceeds `FULL_REDRAW_THRESHOLD` (0.6) a full redraw via `encode_full` is cheaper and is emitted instead. Diffing is disabled when `--full-frames` is set, after a resize, or for grids containing wide glyphs (recording captures the grid itself, so it no longer forces full frames).
 - **Threaded writer** (`render_sink.rs`): by default the chunked `libc::write()` runs on a dedicated writer thread via `ThreadedRenderer::submit()`, so a blocking write to a full tmux pane does not stall the simulation. `--single-threaded` disables the thread and writes inline on the main loop. The writer checks the quit flag between 16 KB chunks so `q` remains responsive either way.
 
 ### Resize Handling
@@ -594,21 +594,21 @@ The file source reads the entire file on startup (last non-empty line), then wat
 
 ## Recording Subsystem
 
-The `--record FILE` flag captures rendered ANSI frames with millisecond timestamps. `--play FILE` replays them at the original pace, recreating the exact visual output independent of terminal animation support. `--play FILE --export-gif OUTPUT.gif` converts a recording to an animated GIF.
+The `--record FILE` flag captures the rendered cell grid of each frame with millisecond timestamps (v2 format). `--play FILE` replays them at the original pace, re-encoding each grid through the standard full-frame encoder so playback emits only escape sequences termflix itself produces. `--play FILE --export-gif OUTPUT.gif` converts a recording to an animated GIF. Older v1 recordings (stored ANSI text) still load, play, and export.
 
 ```mermaid
 flowchart LR
     subgraph "Recording (--record)"
-        REC_ANIM["Animation renders\nANSI frame string"]
-        REC_CAP["Recorder.capture()\nstores frame + timestamp"]
+        REC_ANIM["Animation renders\ninto CellGrid"]
+        REC_CAP["Recorder.capture_grid()\nRLE-encodes grid + timestamp"]
         REC_QUIT["User presses q"]
-        REC_SAVE["Recorder.save(path)\nwrites .asciianim"]
+        REC_SAVE["Recorder.save(path)\nwrites .asciianim v2"]
     end
 
     subgraph "Playback (--play)"
         PL_LOAD["Player.load(path)\nparses .asciianim"]
         PL_WAIT["thread::sleep until\ntarget timestamp"]
-        PL_WRITE["stdout.write_all(frame)"]
+        PL_WRITE["v2: encode_full(grid)\nv1: stored ANSI text"]
         PL_DONE["Playback complete"]
     end
 
@@ -626,21 +626,26 @@ flowchart LR
     style PL_DONE fill:#880e4f,stroke:#c2185b,stroke-width:2px,color:#ffffff
 ```
 
-**`.asciianim` file format:**
+**`.asciianim` v2 file format:**
 
 ```
-ASCIIANIM v1
+ASCIIANIM v2
+SIZE <cols> <rows>
 FRAMES <count>
 ---
 T <timestamp_ms>
-<base64-encoded frame ANSI content>
+<base64-encoded binary cell grid>
 ---
 T <timestamp_ms>
-<base64-encoded frame ANSI content>
+<base64-encoded binary cell grid>
 ...
 ```
 
-Frame content is base64-encoded using a self-contained implementation with no external dependencies. Base64 encoding prevents the `---` delimiter from appearing inside frame data (ANSI escape sequences are binary-safe ASCII but base64 guarantees no ambiguity).
+The binary cell encoding is a sequence of runs of identical consecutive cells: a `u16` run count, then per cell a flags byte (fg/bg present), the char's UTF-8 length and bytes, and 3-byte RGB triples for the colors that are present. Colors normalize to RGB regardless of the color mode that produced them. `SIZE` is bounded (1000×500) and `FRAMES` capped (100,000) at load, so a crafted header cannot request a huge allocation; a frame whose decoded cell count does not match `SIZE` is rejected. The first captured grid fixes the recording's size — a mid-recording resize is cropped or padded to match.
+
+The legacy v1 format (base64 ANSI text per frame, no `SIZE` line) is still read by `Player::load` and dispatched on the header; its frames are written verbatim on playback.
+
+Frame content is base64-encoded using a self-contained implementation with no external dependencies. Base64 encoding prevents the `---` delimiter from appearing inside frame data.
 
 During playback, `Player.play()` reconstructs the original timing using `thread::sleep` against each frame's recorded timestamp relative to the playback start. Pressing `q` or `Esc` during playback exits cleanly.
 
@@ -673,9 +678,9 @@ flowchart LR
 
 **Pipeline stages:**
 
-1. **Load and detect size** — The `.asciianim` file is loaded, and `detect_recording_size()` scans ANSI cursor-position sequences across all frames (taking the maximum extents) to determine terminal dimensions.
+1. **Load and detect size** — The `.asciianim` file is loaded. A v2 recording carries its dimensions in the `SIZE` header line. A v1 recording has none, so `detect_recording_size()` scans ANSI cursor-position sequences across all frames (taking the maximum extents) to determine terminal dimensions.
 
-2. **ANSI decoding** — A built-in `VirtualTerminal` processes each frame's ANSI escape sequences (cursor positioning, SGR color codes) into a grid of colored cells. BSU sync markers and other unrecognized sequences are ignored.
+2. **ANSI decoding** — A v1 recording is decoded by a built-in `VirtualTerminal` that processes each frame's ANSI escape sequences (cursor positioning, SGR color codes) into a grid of colored cells. BSU sync markers and other unrecognized sequences are ignored. A v2 recording needs no parsing: its frames are cell grids already, and `render_cells_to_pixels()` maps them straight to RGB pixels (empty cells black, otherwise the foreground color) for the pixel-based export path below.
 
 3. **Color quantization** — True-color RGB values are mapped to a 6x7x6 uniform palette (252 entries + 4 reserved safety colors: black, dark gray, light gray, white). Nearest-neighbor matching finds the closest palette entry.
 

@@ -207,6 +207,8 @@ termflix matrix --record session.asciianim
 
 # Play back a recording
 termflix --play session.asciianim
+# Recordings use the v2 cell-grid format (terminal size in the header);
+# older v1 (ANSI text) recordings still play and export.
 
 # Post-processing: bloom, vignette, scanlines
 termflix fire --bloom-intensity 0.5 --bloom-threshold 0.6 --vignette 0.4 --scanlines

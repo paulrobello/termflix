@@ -6,6 +6,9 @@
 
 use std::io::Write;
 
+use crate::color::ansi256_to_rgb;
+use crate::render::cell::CellGrid;
+
 /// Upper bounds on recording-derived dimensions accepted by the GIF exporters.
 /// GIF dimension fields are u16; these tighter limits also cap the per-frame
 /// pixel buffers, so a crafted recording cannot request gigabytes of cells.
@@ -221,61 +224,6 @@ impl VirtualTerminal {
                 _ => {}
             }
             i += 1;
-        }
-    }
-}
-
-// ---------------------------------------------------------------------------
-// 256-color to RGB conversion
-// ---------------------------------------------------------------------------
-
-fn ansi256_to_rgb(idx: u8) -> (u8, u8, u8) {
-    match idx {
-        0..=7 => {
-            // Standard 8 colors
-            const C: [(u8, u8, u8); 8] = [
-                (0, 0, 0),
-                (128, 0, 0),
-                (0, 128, 0),
-                (128, 128, 0),
-                (0, 0, 128),
-                (128, 0, 128),
-                (0, 128, 128),
-                (192, 192, 192),
-            ];
-            C[idx as usize]
-        }
-        8..=15 => {
-            // High-intensity 8 colors
-            const C: [(u8, u8, u8); 8] = [
-                (128, 128, 128),
-                (255, 0, 0),
-                (0, 255, 0),
-                (255, 255, 0),
-                (0, 0, 255),
-                (255, 0, 255),
-                (0, 255, 255),
-                (255, 255, 255),
-            ];
-            C[(idx - 8) as usize]
-        }
-        16..=231 => {
-            // 6x6x6 color cube
-            let n = idx - 16;
-            let b_val = n % 6;
-            let g_val = (n / 6) % 6;
-            let r_val = n / 36;
-            const LEVEL: [u8; 6] = [0, 95, 135, 175, 215, 255];
-            (
-                LEVEL[r_val as usize],
-                LEVEL[g_val as usize],
-                LEVEL[b_val as usize],
-            )
-        }
-        _ => {
-            // Grayscale ramp 232-255
-            let v = 8 + 10 * (idx as u32 - 232);
-            (v as u8, v as u8, v as u8)
         }
     }
 }
@@ -706,6 +654,23 @@ pub struct PixelFrame {
     pub pixels: Vec<(u8, u8, u8)>,
 }
 
+/// Convert a v2 recording frame's cell grid into RGB pixels for
+/// [`export_gif_pixels`]: empty cells are black, everything else takes its
+/// foreground color. Mirrors what the v1 `VirtualTerminal` path produces
+/// after parsing a frame.
+pub fn render_cells_to_pixels(grid: &CellGrid) -> Vec<(u8, u8, u8)> {
+    grid.cells
+        .iter()
+        .map(|c| {
+            if c.ch == ' ' {
+                (0, 0, 0)
+            } else {
+                c.fg.map_or((0, 0, 0), crate::color::color_to_rgb)
+            }
+        })
+        .collect()
+}
+
 /// Export RGB pixel frames as an animated GIF.
 ///
 /// `width` / `height` are the native pixel dimensions of each frame.
@@ -1129,6 +1094,44 @@ mod tests {
 #[cfg(test)]
 mod sec001_tests {
     use super::*;
+
+    #[test]
+    fn render_cells_to_pixels_maps_space_to_black_and_fg_to_rgb() {
+        use crate::render::cell::{Cell, CellGrid};
+        let grid = CellGrid {
+            cols: 3,
+            rows: 1,
+            cells: vec![
+                Cell {
+                    ch: ' ',
+                    fg: Some(crossterm::style::Color::Rgb {
+                        r: 90,
+                        g: 90,
+                        b: 90,
+                    }),
+                    bg: None,
+                },
+                Cell {
+                    ch: '▀',
+                    fg: Some(crossterm::style::Color::Rgb {
+                        r: 10,
+                        g: 20,
+                        b: 30,
+                    }),
+                    bg: None,
+                },
+                Cell {
+                    ch: '▀',
+                    fg: None,
+                    bg: None,
+                },
+            ],
+        };
+        assert_eq!(
+            render_cells_to_pixels(&grid),
+            vec![(0, 0, 0), (10, 20, 30), (0, 0, 0)]
+        );
+    }
 
     #[test]
     fn export_gif_rejects_oversize_dims() {

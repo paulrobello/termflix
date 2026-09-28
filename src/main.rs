@@ -241,16 +241,35 @@ fn main() -> io::Result<()> {
     if let Some(ref play_path) = cli.play {
         if let Some(ref gif_path) = cli.export_gif {
             let player = record::Player::load(play_path)?;
-            if player.frames().is_empty() {
+            let frame_count = match player.frames() {
+                record::Frames::V1(frames) => frames.len(),
+                record::Frames::V2 { frames, .. } => frames.len(),
+            };
+            if frame_count == 0 {
                 eprintln!("No frames to export.");
                 std::process::exit(1);
             }
-            let (cols, rows) = detect_recording_size(player.frames());
             let file = std::fs::File::create(gif_path)?;
             let mut writer = std::io::BufWriter::new(file);
-            match gif::export_gif(&mut writer, player.frames(), cols, rows) {
+            let result = match player.frames() {
+                record::Frames::V1(frames) => {
+                    let (cols, rows) = detect_recording_size(frames);
+                    gif::export_gif(&mut writer, frames, cols, rows)
+                }
+                record::Frames::V2 { cols, rows, frames } => {
+                    let pixel_frames: Vec<gif::PixelFrame> = frames
+                        .iter()
+                        .map(|f| gif::PixelFrame {
+                            timestamp_ms: f.timestamp_ms,
+                            pixels: gif::render_cells_to_pixels(&f.grid),
+                        })
+                        .collect();
+                    gif::export_gif_pixels(&mut writer, &pixel_frames, *cols, *rows, 1)
+                }
+            };
+            match result {
                 Ok(()) => {
-                    println!("Exported {} frames to {}", player.frames().len(), gif_path);
+                    println!("Exported {} frames to {}", frame_count, gif_path);
                 }
                 Err(e) => {
                     eprintln!("GIF export failed: {}", e);
@@ -880,7 +899,9 @@ fn step_transition(state: &mut LoopState, explicit_render: Option<RenderMode>) -
 
 /// Render the canvas to a frame string, choosing a diff against the previous
 /// frame or a full redraw. Updates `prev_grid` to the frame just rendered.
-fn encode_frame(state: &mut LoopState, full_frames: bool, recording: bool) -> String {
+/// (Recording no longer forces full frames: the recorder captures the grid
+/// itself, and v2 playback re-encodes full frames from it.)
+fn encode_frame(state: &mut LoopState, full_frames: bool) -> String {
     let always_reset_row_end = !matches!(state.render_mode, RenderMode::HalfBlock);
     let grid = state.canvas.render_cells();
     let frame = match &state.prev_grid {
@@ -888,7 +909,6 @@ fn encode_frame(state: &mut LoopState, full_frames: bool, recording: bool) -> St
             if p.cols == grid.cols
                 && p.rows == grid.rows
                 && !full_frames
-                && !recording
                 && !render::encoder::grid_has_wide(&grid)
                 && render::encoder::dirty_ratio(p, &grid)
                     <= render::encoder::FULL_REDRAW_THRESHOLD =>
@@ -1387,12 +1407,13 @@ fn run_loop(settings: Settings, keybindings: &KeyBindings) -> io::Result<()> {
 
         // Render to string
         let render_start = Instant::now();
-        let frame = encode_frame(&mut state, full_frames, recorder.is_some());
+        let frame = encode_frame(&mut state, full_frames);
         let render_dur = render_start.elapsed();
 
-        // Record if active
-        if let Some(ref mut rec) = recorder {
-            rec.capture(&frame);
+        // Record if active — capture the rendered grid (encode_frame just
+        // stored it in prev_grid), not the diff-encoded string.
+        if let (Some(rec), Some(grid)) = (&mut recorder, state.prev_grid.as_ref()) {
+            rec.capture_grid(grid);
         }
 
         // Build frame buffer with synchronized output
