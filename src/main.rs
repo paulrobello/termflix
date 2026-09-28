@@ -638,6 +638,8 @@ fn run_loop(
     let (mut cols, mut rows) = terminal::size()?;
     let is_tmux = std::env::var("TMUX").is_ok();
     let mut hide_status = clean;
+    // Live dither state — the `d` key toggles this; canvas rebuilds re-apply it.
+    let mut dither = dither;
     // Adaptive frame pacing — adjusts to actual terminal throughput
     let mut adaptive_frame_dur = frame_dur;
     let mut write_time_ema: f64 = 0.0; // exponential moving average of write time in secs
@@ -800,7 +802,8 @@ fn run_loop(
                                 };
                             }
                             KeyCode::Char('d') => {
-                                canvas.dither = !canvas.dither;
+                                dither = !dither;
+                                canvas.dither = dither;
                             }
                             // Screensaver with keybindings active: any unbound key still dismisses.
                             // (Plain screensaver already exited above; reaching here means keys are on.)
