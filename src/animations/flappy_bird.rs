@@ -86,7 +86,13 @@ impl FlappyBird {
         let h = self.height as f64;
         let half_gap = self.gap_size * 0.5;
         let margin = half_gap + 2.0;
-        let gap_center = self.rng.random_range(margin..h - margin);
+        // On canvases shorter than twice the margin the random range is empty;
+        // center the gap so the pipe still renders instead of panicking.
+        let gap_center = if h > margin * 2.0 {
+            self.rng.random_range(margin..h - margin)
+        } else {
+            h * 0.5
+        };
         self.pipes.push(Pipe {
             x,
             gap_center,

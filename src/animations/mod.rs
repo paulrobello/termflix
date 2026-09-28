@@ -212,6 +212,46 @@ mod tests {
     }
 
     #[test]
+    fn every_animation_survives_all_sizes() {
+        const SIZES: &[(usize, usize)] = &[(10, 5), (10, 8), (80, 24), (300, 100)];
+        const MODES: &[crate::render::RenderMode] = &[
+            crate::render::RenderMode::Braille,
+            crate::render::RenderMode::HalfBlock,
+            crate::render::RenderMode::Ascii,
+        ];
+
+        for &name in ANIMATION_NAMES {
+            for &mode in MODES {
+                for &(cols, rows) in SIZES {
+                    let mut canvas = crate::render::Canvas::new(
+                        cols,
+                        rows,
+                        mode,
+                        crate::render::ColorMode::TrueColor,
+                    );
+                    let Some(mut anim) = create(name, canvas.width, canvas.height, 1.0) else {
+                        panic!("create({name:?}) returned None");
+                    };
+                    anim.on_resize(canvas.width, canvas.height);
+                    for step in 0..30 {
+                        anim.update(&mut canvas, 1.0 / 60.0, f64::from(step) / 60.0);
+                    }
+                    for &p in &canvas.pixels {
+                        assert!(
+                            p.is_finite(),
+                            "{name} at {cols}x{rows} produced a non-finite pixel"
+                        );
+                        assert!(
+                            (0.0..=1.0).contains(&p),
+                            "{name} at {cols}x{rows} produced pixel {p} outside [0,1]"
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
     fn test_fire_supported_params_includes_intensity() {
         let anim = create("fire", 80, 24, 1.0).unwrap();
         let params = anim.supported_params();

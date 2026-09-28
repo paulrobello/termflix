@@ -143,9 +143,11 @@ impl Matrix {
         let mid_count = ((width as f64 * 0.5) * scale) as usize;
         let near_count = ((width as f64 * 0.25) * scale) as usize;
 
-        let far_len = (3, 5.min(height / 2));
-        let mid_len = (5, 8.min(height / 2));
-        let near_len = (8, 12.min(height / 2));
+        // Keep every range non-empty: at tiny heights `height / 2` would drop
+        // below the minimum length and `random_range(lo..hi)` would panic.
+        let far_len = (3, 5.min(height / 2).max(4));
+        let mid_len = (5, 8.min(height / 2).max(6));
+        let near_len = (8, 12.min(height / 2).max(9));
 
         let far = Layer {
             drops: Layer::create_drops(
@@ -257,9 +259,9 @@ impl Animation for Matrix {
         let mid_count = ((width as f64 * 0.5) * self.scale) as usize;
         let near_count = ((width as f64 * 0.25) * self.scale) as usize;
 
-        self.far_len = (3, 5.min(height / 2));
-        self.mid_len = (5, 8.min(height / 2));
-        self.near_len = (8, 12.min(height / 2));
+        self.far_len = (3, 5.min(height / 2).max(4));
+        self.mid_len = (5, 8.min(height / 2).max(6));
+        self.near_len = (8, 12.min(height / 2).max(9));
 
         self.far.drops = Layer::create_drops(
             &mut self.rng,

@@ -80,7 +80,10 @@ impl NBody {
     fn spawn_body(&mut self) {
         let mut rng = rand::rng();
         let angle = rng.random_range(0.0..std::f64::consts::TAU);
-        let dist = rng.random_range(5.0..(self.width.min(self.height) as f64 * 0.4));
+        // Below 15 cells the 0.4 factor undercuts the 5.0 minimum; keep the
+        // range non-empty so tiny canvases don't panic on respawn.
+        let max_dist = (self.width.min(self.height) as f64 * 0.4).max(6.0);
+        let dist = rng.random_range(5.0..max_dist);
         let cx = self.width as f64 * 0.5;
         let cy = self.height as f64 * 0.5;
         let x = cx + angle.cos() * dist;

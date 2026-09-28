@@ -80,8 +80,9 @@ impl Animation for Atom {
                 let rotated_x = ox * cos_tilt - oy * sin_tilt;
                 let rotated_y = ox * sin_tilt + oy * cos_tilt;
 
-                // 3D perspective: use rotated_y for depth
-                let depth = (rotated_y / ry + 1.0) * 0.5;
+                // 3D perspective: use rotated_y for depth. Tilted orbits swing
+                // rotated_y beyond ±ry, so clamp to keep brightness in [0.1, 0.2].
+                let depth = ((rotated_y / ry + 1.0) * 0.5).clamp(0.0, 1.0);
                 let brightness = 0.1 + depth * 0.1;
 
                 let px = (cx + rotated_x) as usize;
