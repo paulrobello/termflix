@@ -19,7 +19,13 @@ cloning — without it `core.hooksPath` points at `.git/hooks` and the hook neve
 
 Run a single test: `cargo test test_name` (e.g., `cargo test test_create_returns_some`)
 
-Golden-frame tests hash every animation's deterministic output against `src/animations/golden_hashes.txt`. An intentional visual change requires regenerating the goldens and reviewing their diff like any other code change: `TERMFLIX_UPDATE_GOLDEN=1 cargo test golden`
+Golden-frame tests hash every animation's deterministic output against per-OS files
+(`golden_hashes.txt` is macOS, plus `golden_hashes_linux.txt` and
+`golden_hashes_windows.txt`) — `globe`'s land/grid membership tests flip a few pixels
+between Apple libm and glibc/ucrt via asin/atan2. The test selects the right file at
+compile time; an intentional visual change requires regenerating the goldens on the
+platform whose file changed and reviewing their diff like any other code change:
+`TERMFLIX_UPDATE_GOLDEN=1 cargo test golden`
 
 ## Architecture
 

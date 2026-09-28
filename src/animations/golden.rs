@@ -16,6 +16,14 @@
 //! platforms via libm (`sin`, `exp`), so pixel brightness is rounded to a
 //! 1/1024 grid first. The cell-grid hash needs no quantization — chars and
 //! 8-bit color triples are already discrete.
+//!
+//! Quantization cannot protect membership decisions, though: animations whose
+//! transcendental results (asin/atan2) drive binary pixel choices — currently
+//! only `globe` (land mass and 30° grid-line tests) — flip a few pixels
+//! between Apple libm and glibc/ucrt. Those animations therefore carry
+//! per-OS hashes: `golden_hashes.txt` (macOS, canonical), and
+//! `golden_hashes_linux.txt` / `golden_hashes_windows.txt`, regenerated on
+//! the matching platform with the same env var.
 
 use super::{ANIMATION_NAMES, create, preferred_render};
 use crate::color::color_to_rgb;
@@ -28,7 +36,28 @@ const ROWS: usize = 12;
 const FRAMES: u32 = 48;
 const DT: f64 = 1.0 / 24.0;
 
-const GOLDEN_PATH: &str = concat!(
+/// Platform golden data: glibc/ucrt disagree with Apple libm on asin/atan2,
+/// so `globe`'s membership-based pixels (and only those) get per-OS hashes.
+#[cfg(target_os = "linux")]
+const GOLDEN_DATA: &str = include_str!("golden_hashes_linux.txt");
+#[cfg(target_os = "windows")]
+const GOLDEN_DATA: &str = include_str!("golden_hashes_windows.txt");
+#[cfg(not(any(target_os = "linux", target_os = "windows")))]
+const GOLDEN_DATA: &str = include_str!("golden_hashes.txt");
+
+/// Path of this platform's golden file, for `TERMFLIX_UPDATE_GOLDEN` writes.
+#[cfg(target_os = "linux")]
+const GOLDEN_PLATFORM_PATH: &str = concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/src/animations/golden_hashes_linux.txt"
+);
+#[cfg(target_os = "windows")]
+const GOLDEN_PLATFORM_PATH: &str = concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "\\src\\animations\\golden_hashes_windows.txt"
+);
+#[cfg(not(any(target_os = "linux", target_os = "windows")))]
+const GOLDEN_PLATFORM_PATH: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/src/animations/golden_hashes.txt"
 );
@@ -92,12 +121,16 @@ fn golden_frames_match() {
     if std::env::var_os("TERMFLIX_UPDATE_GOLDEN").is_some() {
         let mut out = lines.join("\n");
         out.push('\n');
-        std::fs::write(GOLDEN_PATH, out).unwrap_or_else(|e| panic!("write {GOLDEN_PATH}: {e}"));
-        eprintln!("rewrote {} golden lines into {GOLDEN_PATH}", lines.len());
+        std::fs::write(GOLDEN_PLATFORM_PATH, out)
+            .unwrap_or_else(|e| panic!("write {GOLDEN_PLATFORM_PATH}: {e}"));
+        eprintln!(
+            "rewrote {} golden lines into {GOLDEN_PLATFORM_PATH}",
+            lines.len()
+        );
         return;
     }
 
-    let golden: std::collections::HashMap<&str, &str> = include_str!("golden_hashes.txt")
+    let golden: std::collections::HashMap<&str, &str> = GOLDEN_DATA
         .lines()
         .filter(|l| !l.trim().is_empty())
         .map(|l| match l.split_whitespace().collect::<Vec<_>>()[..] {
