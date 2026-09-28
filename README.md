@@ -97,13 +97,13 @@ A terminal animation player with 60 procedurally generated animations, multiple 
 ### Quick Install (Linux / macOS / WSL)
 
 ```bash
-curl -sL https://raw.githubusercontent.com/paulrobello/termflix/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/paulrobello/termflix/main/install.sh | bash
 ```
 
 Installs the latest release binary to `/usr/local/bin`. Custom install location:
 
 ```bash
-curl -sL https://raw.githubusercontent.com/paulrobello/termflix/main/install.sh | INSTALL_DIR=~/.local/bin bash
+curl -fsSL https://raw.githubusercontent.com/paulrobello/termflix/main/install.sh | INSTALL_DIR=~/.local/bin bash
 ```
 
 ### From crates.io

@@ -2,7 +2,7 @@
 set -e
 
 # termflix installer
-# Usage: curl -sL https://raw.githubusercontent.com/paulrobello/termflix/main/install.sh | bash
+# Usage: curl -fsSL https://raw.githubusercontent.com/paulrobello/termflix/main/install.sh | bash
 
 REPO="paulrobello/termflix"
 BINARY="termflix"
@@ -57,7 +57,7 @@ get_artifact_name() {
 get_latest_version() {
     local url="https://api.github.com/repos/${REPO}/releases/latest"
     if command -v curl &>/dev/null; then
-        curl -sL "$url" | grep '"tag_name"' | head -1 | sed 's/.*"tag_name": *"\([^"]*\)".*/\1/'
+        curl -fsSL "$url" | grep '"tag_name"' | head -1 | sed 's/.*"tag_name": *"\([^"]*\)".*/\1/'
     elif command -v wget &>/dev/null; then
         wget -qO- "$url" | grep '"tag_name"' | head -1 | sed 's/.*"tag_name": *"\([^"]*\)".*/\1/'
     else
@@ -69,7 +69,7 @@ get_latest_version() {
 download() {
     local url="$1" dest="$2"
     if command -v curl &>/dev/null; then
-        curl -sL -o "$dest" "$url"
+        curl -fsSL -o "$dest" "$url"
     elif command -v wget &>/dev/null; then
         wget -qO "$dest" "$url"
     fi
@@ -96,6 +96,9 @@ main() {
     if [ -z "$version" ]; then
         error "Could not determine latest version. Check https://github.com/${REPO}/releases"
     fi
+    if [[ ! "$version" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+        error "Refusing unexpected version tag from GitHub API: '${version}' (expected vX.Y.Z)"
+    fi
     ok "Latest version: ${version}"
 
     # Download
@@ -104,13 +107,49 @@ main() {
     tmp_file=$(mktemp)
 
     info "Downloading ${artifact}..."
-    download "$download_url" "$tmp_file"
+    download "$download_url" "$tmp_file" || {
+        rm -f "$tmp_file"
+        error "Download failed. Check https://github.com/${REPO}/releases"
+    }
 
     if [ ! -s "$tmp_file" ]; then
         rm -f "$tmp_file"
-        error "Download failed. Check https://github.com/${REPO}/releases"
+        error "Download failed (empty file). Check https://github.com/${REPO}/releases"
     fi
     ok "Downloaded successfully"
+
+    # Verify checksum against the release's SHA256SUMS before installing
+    local sums_file
+    sums_file=$(mktemp)
+    info "Downloading SHA256SUMS..."
+    download "https://github.com/${REPO}/releases/download/${version}/SHA256SUMS" "$sums_file" || {
+        rm -f "$tmp_file" "$sums_file"
+        error "Could not download SHA256SUMS for ${version}. Refusing to install an unverified binary."
+    }
+
+    local expected
+    expected=$(awk -v f="$artifact" '$2 == f {print $1}' "$sums_file")
+    if [ -z "$expected" ]; then
+        rm -f "$tmp_file" "$sums_file"
+        error "No checksum found for ${artifact} in SHA256SUMS. Refusing to install."
+    fi
+
+    local actual
+    if command -v sha256sum &>/dev/null; then
+        actual=$(sha256sum "$tmp_file" | awk '{print $1}')
+    elif command -v shasum &>/dev/null; then
+        actual=$(shasum -a 256 "$tmp_file" | awk '{print $1}')
+    else
+        rm -f "$tmp_file" "$sums_file"
+        error "Neither sha256sum nor shasum is available. Cannot verify the binary."
+    fi
+
+    if [ "$actual" != "$expected" ]; then
+        rm -f "$tmp_file" "$sums_file"
+        error "Checksum mismatch for ${artifact}: expected ${expected}, got ${actual}."
+    fi
+    rm -f "$sums_file"
+    ok "Checksum verified"
 
     # Install
     local dest="${INSTALL_DIR}/${BINARY}"
@@ -125,7 +164,7 @@ main() {
             use_sudo="sudo"
             warn "Need sudo to install to ${INSTALL_DIR}"
         else
-            error "Cannot write to ${INSTALL_DIR} and sudo is not available. Set INSTALL_DIR to a writable location:\n  INSTALL_DIR=~/.local/bin curl -sL ... | bash"
+            error "Cannot write to ${INSTALL_DIR} and sudo is not available. Set INSTALL_DIR to a writable location:\n  INSTALL_DIR=~/.local/bin curl -fsSL ... | bash"
         fi
     fi
 
@@ -135,15 +174,6 @@ main() {
     # Move binary
     $use_sudo mv "$tmp_file" "$dest"
     $use_sudo chmod +x "$dest"
-
-    # macOS: remove quarantine attribute
-    if [ "$(uname -s)" = "Darwin" ]; then
-        info "Removing macOS quarantine flag..."
-        $use_sudo xattr -d com.apple.quarantine "$dest" 2>/dev/null || true
-        # Also clear any Gatekeeper flags
-        $use_sudo xattr -cr "$dest" 2>/dev/null || true
-        ok "Gatekeeper quarantine cleared"
-    fi
 
     # Verify
     if command -v "$BINARY" &>/dev/null; then

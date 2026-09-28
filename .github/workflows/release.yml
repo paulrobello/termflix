@@ -4,13 +4,35 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
-  id-token: write
+  contents: read
 
 env:
   RUST_VERSION: "1.93.1"
 
 jobs:
+  # Test gate before publish
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@02cb101ec7c40f2c49e1d9714d64511d8e1b74de # pinned 2026-09-27
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+          components: rustfmt, clippy
+
+      - name: Check formatting
+        run: cargo fmt -- --check
+
+      - name: Run clippy
+        run: cargo clippy --all-targets --all-features -- -D warnings
+
+      - name: Run tests
+        run: cargo test
+
   # Build Linux ARM64 using cross
   build-linux-arm64:
     name: Build - Linux ARM64
@@ -20,13 +42,13 @@ jobs:
       - uses: actions/checkout@v7
 
       - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@master
+        uses: dtolnay/rust-toolchain@02cb101ec7c40f2c49e1d9714d64511d8e1b74de # pinned 2026-09-27
         with:
           toolchain: ${{ env.RUST_VERSION }}
           targets: aarch64-unknown-linux-gnu
 
       - name: Install cross
-        run: cargo install cross --git https://github.com/cross-rs/cross
+        run: cargo install cross --locked --version 0.2.5
 
       - name: Build with cross
         run: cross build --release --target aarch64-unknown-linux-gnu
@@ -52,7 +74,7 @@ jobs:
       - uses: actions/checkout@v7
 
       - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@master
+        uses: dtolnay/rust-toolchain@02cb101ec7c40f2c49e1d9714d64511d8e1b74de # pinned 2026-09-27
         with:
           toolchain: ${{ env.RUST_VERSION }}
           targets: x86_64-unknown-linux-gnu
@@ -84,7 +106,7 @@ jobs:
       - uses: actions/checkout@v7
 
       - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@master
+        uses: dtolnay/rust-toolchain@02cb101ec7c40f2c49e1d9714d64511d8e1b74de # pinned 2026-09-27
         with:
           toolchain: ${{ env.RUST_VERSION }}
           targets: x86_64-pc-windows-msvc
@@ -114,7 +136,7 @@ jobs:
       - uses: actions/checkout@v7
 
       - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@master
+        uses: dtolnay/rust-toolchain@02cb101ec7c40f2c49e1d9714d64511d8e1b74de # pinned 2026-09-27
         with:
           toolchain: ${{ env.RUST_VERSION }}
           targets: x86_64-apple-darwin
@@ -143,7 +165,7 @@ jobs:
       - uses: actions/checkout@v7
 
       - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@master
+        uses: dtolnay/rust-toolchain@02cb101ec7c40f2c49e1d9714d64511d8e1b74de # pinned 2026-09-27
         with:
           toolchain: ${{ env.RUST_VERSION }}
           targets: aarch64-apple-darwin
@@ -168,12 +190,12 @@ jobs:
     name: Publish to crates.io
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    needs: [build-linux-arm64, build-linux-x86_64, build-windows-x86_64, build-macos-x86_64, build-macos-arm64]
+    needs: [test, build-linux-arm64, build-linux-x86_64, build-windows-x86_64, build-macos-x86_64, build-macos-arm64]
     steps:
       - uses: actions/checkout@v7
 
       - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@master
+        uses: dtolnay/rust-toolchain@02cb101ec7c40f2c49e1d9714d64511d8e1b74de # pinned 2026-09-27
         with:
           toolchain: ${{ env.RUST_VERSION }}
 
@@ -227,14 +249,14 @@ jobs:
     name: Create GitHub Release
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    needs: [build-linux-arm64, build-linux-x86_64, build-windows-x86_64, build-macos-x86_64, build-macos-arm64]
+    needs: [test, build-linux-arm64, build-linux-x86_64, build-windows-x86_64, build-macos-x86_64, build-macos-arm64]
     permissions:
       contents: write
     steps:
       - uses: actions/checkout@v7
 
       - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@master
+        uses: dtolnay/rust-toolchain@02cb101ec7c40f2c49e1d9714d64511d8e1b74de # pinned 2026-09-27
         with:
           toolchain: ${{ env.RUST_VERSION }}
 
@@ -254,18 +276,27 @@ jobs:
       - name: List binaries
         run: ls -lh binaries/
 
+      - name: Generate SHA256SUMS
+        run: |
+          cd binaries
+          rm -f SHA256SUMS
+          sha256sum * > SHA256SUMS
+          cat SHA256SUMS
+
       - name: Create or update GitHub Release
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
           VERSION="v${{ steps.get_version.outputs.version }}"
           if gh release view "$VERSION" --repo '${{ github.repository }}' >/dev/null 2>&1; then
-            gh release delete "$VERSION" --repo '${{ github.repository }}' --yes
+            echo "Release $VERSION exists — keeping notes and re-uploading assets with --clobber."
+            gh release edit "$VERSION" --repo '${{ github.repository }}' --latest
+          else
+            gh release create "$VERSION" \
+              --repo '${{ github.repository }}' \
+              --generate-notes \
+              --latest
           fi
-          gh release create "$VERSION" \
-            --repo '${{ github.repository }}' \
-            --generate-notes \
-            --latest
 
       - name: Upload binaries to Release
         env:
@@ -280,7 +311,15 @@ jobs:
         if: success()
         env:
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
-        uses: Ilshidur/action-discord@master
-        with:
-          args: '🎬 termflix v${{ steps.get_version.outputs.version }} released! https://github.com/${{ github.repository }}/releases/tag/v${{ steps.get_version.outputs.version }}'
+          RELEASE_URL: https://github.com/${{ github.repository }}/releases/tag/v${{ steps.get_version.outputs.version }}
+          VERSION: v${{ steps.get_version.outputs.version }}
+        run: |
+          if [ -z "$DISCORD_WEBHOOK" ]; then
+            echo "DISCORD_WEBHOOK not set; skipping notification."
+            exit 0
+          fi
+          curl -fsSL -X POST \
+            -H 'Content-Type: application/json' \
+            -d "{\"content\":\"🎬 termflix ${VERSION} released! ${RELEASE_URL}\"}" \
+            "$DISCORD_WEBHOOK"
         continue-on-error: true
