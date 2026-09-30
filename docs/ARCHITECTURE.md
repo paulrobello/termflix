@@ -57,6 +57,7 @@ graph TD
     anim_impls["animations/*.rs\n60 animation modules"]
     render_mod["render/mod.rs\nre-exports Canvas · ColorMode · RenderMode\nColorAssist · smoothing_alpha"]
     canvas["render/canvas.rs\nCanvas · pixel buffer\napply_effects · post_process\napply_color_assist · build_grid"]
+    pipeline["render/pipeline.rs\nproduce_frame · FrameEffects\nshared frame pipeline"]
     braille["render/braille.rs\nBraille renderer\nU+2800–U+28FF"]
     halfblock["render/halfblock.rs\nHalfBlock renderer\n▀ / ▄ / █"]
     cell["render/cell.rs\nCell · CellGrid\nterminal-cell grid"]
@@ -79,6 +80,8 @@ graph TD
     anim_impls --> generators
     anim_impls --> canvas
     render_mod --> canvas
+    render_mod --> pipeline
+    pipeline --> canvas
     render_mod --> braille
     render_mod --> halfblock
     render_mod --> cell
@@ -100,6 +103,7 @@ graph TD
     style anim_impls fill:#0d47a1,stroke:#2196f3,stroke-width:1px,color:#ffffff
     style render_mod fill:#880e4f,stroke:#c2185b,stroke-width:2px,color:#ffffff
     style canvas fill:#880e4f,stroke:#c2185b,stroke-width:2px,color:#ffffff
+    style pipeline fill:#880e4f,stroke:#c2185b,stroke-width:2px,color:#ffffff
     style braille fill:#880e4f,stroke:#c2185b,stroke-width:1px,color:#ffffff
     style halfblock fill:#880e4f,stroke:#c2185b,stroke-width:1px,color:#ffffff
     style cell fill:#880e4f,stroke:#c2185b,stroke-width:1px,color:#ffffff
@@ -118,15 +122,23 @@ src/
 ├── external.rs        — External control: ExternalParams, CurrentState, spawn_reader
 ├── record.rs          — Recording (Recorder) and playback (Player), .asciianim format
 ├── gif.rs             — Hand-written GIF89a encoder with LZW compression
+├── png.rs             — PNG export used by the gallery capture
 ├── gallery.rs         — Offscreen gallery capture (PNG + GIF + index.html)
 ├── render_sink.rs     — ThreadedRenderer, chunked/dirty-cell write path
+├── color.rs           — Shared color helpers (hsv_to_rgb, color_to_rgb)
+├── rng.rs             — Thread-local seeded RNG for deterministic output (--seed / config seed)
 ├── generators/
 │   └── mod.rs         — Shared: Particle, ParticleSystem, ColorGradient, EmitterConfig
 ├── animations/
 │   ├── mod.rs         — Animation trait + create() factory + ANIMATION_NAMES/ANIMATIONS
+│   ├── golden.rs      — Golden-frame regression tests (hashed deterministic renders)
+│   ├── golden_hashes.txt          — Golden hashes, macOS (canonical)
+│   ├── golden_hashes_linux.txt    — Golden hashes, glibc (globe's asin/atan2 pixels differ)
+│   ├── golden_hashes_windows.txt  — Golden hashes, ucrt
 │   └── *.rs           — 60 individual animation modules
 └── render/
     ├── mod.rs          — Re-exports Canvas, ColorMode, PostProcessConfig, RenderMode, ColorAssist, smoothing_alpha
+    ├── pipeline.rs     — produce_frame(): the one shared clear → update → effects pipeline
     ├── canvas.rs       — Canvas struct, pixel/color buffers, apply_effects, post_process, apply_color_assist, build_grid
     ├── braille.rs      — Braille renderer (2×4 sub-cell, Unicode U+2800–U+28FF)
     ├── halfblock.rs    — Half-block renderer (▀/▄/█, foreground+background color pairs)
@@ -146,26 +158,30 @@ pub trait Animation {
     fn name(&self) -> &str;
     fn update(&mut self, canvas: &mut Canvas, dt: f64, time: f64);
     fn preferred_render(&self) -> RenderMode { RenderMode::HalfBlock }  // default
-    fn set_params(&mut self, _params: &ExternalParams) {}               // default no-op
+    fn set_params(&mut self, _params: &ExternalParams) {}               // default no-op (legacy global overloads)
     fn on_resize(&mut self, _width: usize, _height: usize) {}           // default no-op
-    fn supported_params(&self) -> &'static [(&'static str, f64, f64)] { &[] }  // default empty
+    fn param_specs(&self) -> &'static [ParamSpec] { &[] }               // default empty
+    fn set_param(&mut self, _name: &str, _value01: f64) {}              // default no-op
 }
 ```
+
+`ParamSpec` (also in `animations/mod.rs`) describes one named parameter: `name`, `min`, `max`, `default`, and a one-line `help` string surfaced by `--list-params`. Its `lerp(value01)` maps a normalized 0..1 external value onto the declared range.
 
 | Method | Purpose |
 |--------|---------|
 | `name()` | Human-readable display name shown in the status bar |
 | `update()` | Advance simulation state and write pixels/colors to the canvas |
 | `preferred_render()` | Declares the render mode that suits this animation best; used when no `-r` flag is given |
-| `set_params()` | Receives external control parameters once per frame before `update()`; most animations inherit the no-op default |
+| `set_params()` | Legacy hook receiving the pre-named-params `ExternalParams` global fields (speed/intensity/color_shift doubling as per-animation knobs) before `update()`; most animations inherit the no-op default |
 | `on_resize()` | Called when the canvas is rebuilt with new dimensions; animations use this to update stored dimensions and rebuild size-dependent state |
-| `supported_params()` | Returns a list of `(param_name, min_value, max_value)` tuples describing which external parameters the animation responds to |
+| `param_specs()` | Declares the named parameters the animation responds to |
+| `set_param()` | Applies one named parameter as a normalized 0..1 value; the caller validates the name against `param_specs()` first |
 
 **Parameter semantics:**
 
 - `dt` — frame delta time in seconds, capped at 0.1 s, then multiplied by the external speed multiplier. Prevents large simulation jumps after pauses or slow frames.
 - `time` — virtual elapsed time (not wall-clock). Increases by `dt × speed` each frame, so external speed control stretches or compresses perceived animation velocity without breaking physics.
-- `set_params` — `fire`, `plasma`, `boids`, `particles`, `wave`, `sort`, `snake`, and `pong` provide semantic overrides (e.g., flame intensity, plasma frequency). All other animations silently ignore external params through the default no-op.
+- `set_params` / named params — `fire`, `plasma`, `boids`, `particles`, `wave`, `sort`, `snake`, and `pong` declare semantic parameters via `param_specs()` (e.g., flame intensity, plasma frequency) applied through `set_param()`. All other animations silently ignore external params through the default no-ops.
 
 The factory function `create(name, width, height, scale)` in `animations/mod.rs` maps a name string to a concrete animation instance. The `scale` parameter adjusts particle counts and element densities proportionally.
 
@@ -221,6 +237,7 @@ pub struct Canvas {
     pub color_mode: ColorMode,
     pub color_quant: u8,            // color quantization step (0 = off)
     pub dither: bool,               // 4×4 Bayer ordered dithering (ANSI-256 mode)
+    pub prev_pixels: Option<Vec<f64>>, // previous-frame brightness for smoothing; not touched by clear()
 }
 ```
 
@@ -530,6 +547,7 @@ All `Config` struct fields are `Option<T>` and deserialized from TOML. A missing
 | `palette` | string | — | Colorblind-safe remap palette (`viridis`/`magma`/`inferno`/`plasma`/`okabe-ito`) |
 | `colorblind` | string | — | Daltonization deficiency (`protanopia`/`deuteranopia`/`tritanopia`); mutually exclusive with `palette` |
 | `dither` | bool | `false` | 4×4 Bayer ordered dithering in ANSI-256 mode |
+| `seed` | integer | — (OS entropy) | RNG seed for deterministic output (also `--seed`); transitions between animations do not reseed |
 | `data_file` | string | — | Path to ndjson external control file |
 | `keybindings` | table | — | Custom keybindings (maps action names to key names) |
 | `postproc.bloom` | float | — (off) | Bloom/glow intensity (0.0–1.0); unset means bloom stays off until the `b` key toggles it on (at 0.4 when no value is configured) |
@@ -583,8 +601,9 @@ sequenceDiagram
 | `speed` | float | Persistent: multiplies `dt` (0.1–5.0) |
 | `intensity` | float | Persistent: brightness multiplier (0.0–2.0) |
 | `color_shift` | float | Persistent: hue rotation (0.0–1.0) |
+| `params` | map (name → float) | Persistent: named per-animation parameters, each normalized to 0..1 against the animation's `param_specs()` range and applied via `set_param()` |
 
-**Merge semantics**: `CurrentState.merge()` applies incoming params with partial-update semantics — only `Some` fields update state. One-shot fields (`animation`, `scale`, `render`, `color`) are stored as `_pending` variants and consumed via `take_*()` methods on the next frame; persistent fields (`speed`, `intensity`, `color_shift`) remain in effect until overridden by a subsequent message.
+**Merge semantics**: `CurrentState.merge()` applies incoming params with partial-update semantics — only `Some` fields update state. One-shot fields (`animation`, `scale`, `render`, `color`) are stored as `_pending` variants and consumed via `take_*()` methods on the next frame; persistent fields (`speed`, `intensity`, `color_shift`) remain in effect until overridden by a subsequent message. The named `params` map is accumulated and applied through the animation's `param_specs()`/`set_param()`; once any named parameter has arrived, the legacy global overloads (`speed`/`intensity`/`color_shift` doubling as per-animation knobs) stop being forwarded to `set_params()`, so the two paths cannot fight over the same field.
 
 The file source reads the entire file on startup (last non-empty line), then watches for modifications and re-reads the last non-empty line on each change event. This allows external scripts to simply overwrite or append to a control file.
 
