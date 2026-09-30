@@ -191,7 +191,7 @@ sequenceDiagram
     ML->>ML: ext_state.merge(params)
     ML->>ML: handle pending changes<br/>(animation, scale, render, color)
     ML->>ML: virtual_time += dt * speed
-    ML->>AN: set_params(&ext_state.params)
+    ML->>AN: set_params(&legacy_overloads())
     AN->>AN: apply semantic overrides
     ML->>CV: update(canvas, effective_dt, virtual_time)
     ML->>CV: apply_effects(intensity, hue_shift)
@@ -461,6 +461,8 @@ Keyboard shortcuts remain fully active during external control. The keyboard and
 | `r` | Cycle render mode |
 | `c` | Cycle color mode |
 | `b` | Toggle bloom post-processing |
+| `s` | Toggle brightness smoothing |
+| `d` | Toggle ANSI-256 dithering |
 | `h` | Toggle status bar |
 
 > **📝 Note:** When using stdin mode, the keyboard still works because keyboard events are read by crossterm through the terminal device (`/dev/tty`), not through stdin. Stdin is consumed separately by the background reader thread.
